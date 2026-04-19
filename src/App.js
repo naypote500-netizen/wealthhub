@@ -428,6 +428,17 @@ function BudgetPage({data,stats,persist,t}){
 }
 
 /* ═══ CASH FLOW DETAIL (งบกระแสเงินสดละเอียด ตามแบบมาตรฐานไทย) ═══ */
+/* NOTE: sub-components ต้องอยู่ระดับ module — ถ้าประกาศใน parent จะ unmount ทุกครั้งที่ re-render ทำให้ input เสีย focus */
+function CFRow({item,row,setVal,pct,t}){
+  return(<tr style={{borderBottom:`1px solid ${t.cb}`}}>
+    <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>{item.l}</td>
+    <td style={{padding:"4px 6px",width:130}}><input type="number" value={row[item.k]??""} onChange={e=>setVal(item.k,e.target.value)} style={{width:"100%",padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"right"}}/></td>
+    <td style={{padding:"6px 10px",fontSize:11,color:t.tm,width:60,textAlign:"right"}}>{(+row[item.k])?pct(+row[item.k]).toFixed(2):"0"}</td>
+  </tr>);
+}
+function CFHead({children,t}){return(<tr style={{background:t.thBg}}><th colSpan={3} style={{padding:"8px 10px",textAlign:"left",fontSize:12,fontWeight:600,color:t.text,borderBottom:`2px solid ${t.cb}`}}>{children}</th></tr>)}
+function CFTotal({label,val,color,totalIn,pct,fmt}){return(<tr style={{background:`${color}10`}}><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color}}>{label}</td><td style={{padding:"8px 10px",fontSize:12,fontWeight:600,color,textAlign:"right"}}>{fmt(val)}</td><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color,textAlign:"right"}}>{totalIn>0?pct(val).toFixed(2):"0"}</td></tr>)}
+
 function CashFlowDetailPage({data,persist,t}){
   const[period,setPeriod]=useState("monthly");
   const[mKey,setMKey]=useState(mk(td()));
@@ -448,18 +459,6 @@ function CashFlowDetailPage({data,persist,t}){
   const curYear=new Date().getFullYear();
   const years=[];for(let y=curYear+1;y>=curYear-5;y--)years.push(String(y));
   const months=[];for(let i=0;i<24;i++){const d=new Date();d.setMonth(d.getMonth()-i);months.push(mk(d.toISOString().slice(0,10)))}
-
-  const Row=({item,section,color})=>{
-    const v=+row[item.k]||0;
-    return(<tr style={{borderBottom:`1px solid ${t.cb}`}}>
-      <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>{item.l}</td>
-      <td style={{padding:"4px 6px",width:130}}><input type="number" value={row[item.k]||""} onChange={e=>setVal(item.k,e.target.value)} style={{width:"100%",padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"right"}}/></td>
-      <td style={{padding:"6px 10px",fontSize:11,color:t.tm,width:60,textAlign:"right"}}>{v?pct(v).toFixed(2):"0"}</td>
-    </tr>);
-  };
-
-  const TH=({children})=>(<tr style={{background:t.thBg}}><th colSpan={3} style={{padding:"8px 10px",textAlign:"left",fontSize:12,fontWeight:600,color:t.text,borderBottom:`2px solid ${t.cb}`}}>{children}</th></tr>);
-  const TFooter=({label,val,color})=>(<tr style={{background:`${color}10`}}><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color}}>{label}</td><td style={{padding:"8px 10px",fontSize:12,fontWeight:600,color,textAlign:"right"}}>{fmt(val)}</td><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color,textAlign:"right"}}>{totalIn>0?pct(val).toFixed(2):"0"}</td></tr>);
 
   const exportPDF=()=>{
     const title=period==="monthly"?`งบกระแสเงินสด เดือน ${fm(mKey)}`:`งบกระแสเงินสด ปี ${yKey}`;
@@ -538,14 +537,14 @@ function CashFlowDetailPage({data,persist,t}){
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><TH>กระแสเงินสดรับ</TH><tr style={{background:t.bg}}><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"left",borderBottom:`1px solid ${t.cb}`}}>หัวข้อ</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>บาท</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>ร้อยละ</th></tr></thead>
-            <tbody>{CFI.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g}/></tbody>
+            <thead><CFHead t={t}>กระแสเงินสดรับ</CFHead><tr style={{background:t.bg}}><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"left",borderBottom:`1px solid ${t.cb}`}}>หัวข้อ</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>บาท</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>ร้อยละ</th></tr></thead>
+            <tbody>{CFI.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><TH>กระแสเงินสดจ่ายคงที่</TH></thead>
-            <tbody>{CFF.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am}/></tbody>
+            <thead><CFHead t={t}>กระแสเงินสดจ่ายคงที่</CFHead></thead>
+            <tbody>{CFF.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
       </div>
@@ -554,20 +553,20 @@ function CashFlowDetailPage({data,persist,t}){
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><TH>กระแสเงินสดจ่ายผันแปร</TH></thead>
-            <tbody>{CFV.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r}/></tbody>
+            <thead><CFHead t={t}>กระแสเงินสดจ่ายผันแปร</CFHead></thead>
+            <tbody>{CFV.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><TH>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</TH></thead>
-            <tbody>{CFS.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac}/></tbody>
+            <thead><CFHead t={t}>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</CFHead></thead>
+            <tbody>{CFS.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <tbody>
-              <TFooter label="กระแสเงินสดจ่ายรวม" val={totalOut} color={t.r}/>
+              <CFTotal label="กระแสเงินสดจ่ายรวม" val={totalOut} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/>
               <tr style={{background:net>=0?`${t.g}15`:`${t.r}15`}}><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r}}>กระแสเงินสดสุทธิ</td><td style={{padding:"10px",fontSize:14,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{net>=0?"":"-"}{fmt(Math.abs(net))}</td><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{totalIn>0?pct(net).toFixed(2):"0"}</td></tr>
             </tbody>
           </table>
