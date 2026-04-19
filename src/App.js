@@ -15,6 +15,7 @@ const CFI=[{k:"salary",l:"เงินเดือน (รวมค่าล่�
 const CFF=[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
 const CFV=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค (ค่าไฟฟ้า, ค่าน้ำประปา, อื่นๆ)"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้าและค่าใช้จ่ายในการบำรุงรักษาตนเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
 const CFS=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
+const CF_DEFAULTS={inflow:CFI,fixed:CFF,variable:CFV,saving:CFS};
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const fB=n=>`฿${Math.abs(n).toLocaleString("th-TH",{maximumFractionDigits:0})}`;
@@ -24,8 +25,8 @@ const mk=d=>d.slice(0,7);
 const fm=d=>new Date(d+"-01").toLocaleDateString("th-TH",{month:"short",year:"2-digit"});
 
 const SK="wealthhub-v6";const OSK="wealthhub-v5";
-const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},cashFlow:{monthly:{},yearly:{}},balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
-function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{},cashFlow:{monthly:{...(d.cashFlow?.monthly||{})},yearly:{...(d.cashFlow?.yearly||{})}}}}catch{return null}}
+const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},cashFlow:{monthly:{},yearly:{}},cfItems:null,balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
+function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{},cashFlow:{monthly:{...(d.cashFlow?.monthly||{})},yearly:{...(d.cashFlow?.yearly||{})}},cfItems:d.cfItems||null}}catch{return null}}
 function sv(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){console.error(e)}}
 
 /* Process recurring: generate txn for current month if day-of-month has passed and not yet run this month */
@@ -429,15 +430,21 @@ function BudgetPage({data,stats,persist,t}){
 
 /* ═══ CASH FLOW DETAIL (งบกระแสเงินสดละเอียด ตามแบบมาตรฐานไทย) ═══ */
 /* NOTE: sub-components ต้องอยู่ระดับ module — ถ้าประกาศใน parent จะ unmount ทุกครั้งที่ re-render ทำให้ input เสีย focus */
-function CFRow({item,row,setVal,pct,t}){
+function CFRow({item,row,setVal,pct,t,onRename,onDelete}){
   return(<tr style={{borderBottom:`1px solid ${t.cb}`}}>
-    <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>{item.l}</td>
+    <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <span style={{flex:1,cursor:"pointer"}} onClick={onRename} title="คลิกเพื่อเปลี่ยนชื่อ">{item.l}</span>
+        <button onClick={onDelete} title="ลบหัวข้อ" style={{fontSize:11,padding:"2px 6px",border:"none",borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm,lineHeight:1}}>✕</button>
+      </div>
+    </td>
     <td style={{padding:"4px 6px",width:130}}><input type="number" value={row[item.k]??""} onChange={e=>setVal(item.k,e.target.value)} style={{width:"100%",padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"right"}}/></td>
     <td style={{padding:"6px 10px",fontSize:11,color:t.tm,width:60,textAlign:"right"}}>{(+row[item.k])?pct(+row[item.k]).toFixed(2):"0"}</td>
   </tr>);
 }
 function CFHead({children,t}){return(<tr style={{background:t.thBg}}><th colSpan={3} style={{padding:"8px 10px",textAlign:"left",fontSize:12,fontWeight:600,color:t.text,borderBottom:`2px solid ${t.cb}`}}>{children}</th></tr>)}
 function CFTotal({label,val,color,totalIn,pct,fmt}){return(<tr style={{background:`${color}10`}}><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color}}>{label}</td><td style={{padding:"8px 10px",fontSize:12,fontWeight:600,color,textAlign:"right"}}>{fmt(val)}</td><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color,textAlign:"right"}}>{totalIn>0?pct(val).toFixed(2):"0"}</td></tr>)}
+function CFAddRow({onAdd,t}){return(<tr><td colSpan={3} style={{padding:"6px 10px",background:t.bg}}><button onClick={onAdd} style={{fontSize:11,padding:"4px 12px",border:`1px dashed ${t.ac}`,borderRadius:6,background:"transparent",cursor:"pointer",color:t.ac,fontWeight:500}}>+ เพิ่มหัวข้อ</button></td></tr>)}
 
 function CashFlowDetailPage({data,persist,t}){
   const[period,setPeriod]=useState("monthly");
@@ -449,8 +456,16 @@ function CashFlowDetailPage({data,persist,t}){
   const setVal=(k,v)=>{const n=+v||0;persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:{...store,[key]:{...row,[k]:n}}}})};
   const delPeriod=()=>{if(!window.confirm(`ลบข้อมูล ${key}?`))return;const n={...store};delete n[key];persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:n}})};
 
+  /* Dynamic items (user can add/rename/delete) */
+  const itemsFor=s=>(data.cfItems&&data.cfItems[s])||CF_DEFAULTS[s];
+  const inflow=itemsFor("inflow"),fixed=itemsFor("fixed"),variable=itemsFor("variable"),saving=itemsFor("saving");
+  const persistItems=(section,newList)=>{const full={inflow:itemsFor("inflow"),fixed:itemsFor("fixed"),variable:itemsFor("variable"),saving:itemsFor("saving"),[section]:newList};persist({...data,cfItems:full})};
+  const addItem=section=>{const name=window.prompt("ชื่อหัวข้อใหม่:");if(!name||!name.trim())return;persistItems(section,[...itemsFor(section),{k:uid(),l:name.trim()}])};
+  const renameItem=(section,k)=>{const cur=itemsFor(section).find(it=>it.k===k);const name=window.prompt("แก้ไขชื่อหัวข้อ:",cur?.l);if(name===null||!name.trim())return;persistItems(section,itemsFor(section).map(it=>it.k===k?{...it,l:name.trim()}:it))};
+  const delItem=(section,k)=>{const cur=itemsFor(section).find(it=>it.k===k);if(!window.confirm(`ลบ "${cur?.l}"? ข้อมูลตัวเลขของหัวข้อนี้ในทุกช่วงเวลาจะหายไปด้วย`))return;persistItems(section,itemsFor(section).filter(it=>it.k!==k))};
+
   const sum=items=>items.reduce((s,it)=>s+(+row[it.k]||0),0);
-  const totalIn=sum(CFI);const totalFixed=sum(CFF);const totalVar=sum(CFV);const totalSave=sum(CFS);const totalOut=totalFixed+totalVar+totalSave;const net=totalIn-totalOut;
+  const totalIn=sum(inflow);const totalFixed=sum(fixed);const totalVar=sum(variable);const totalSave=sum(saving);const totalOut=totalFixed+totalVar+totalSave;const net=totalIn-totalOut;
   const pct=v=>totalIn>0?(v/totalIn*100):0;
   const fmt=v=>v?v.toLocaleString("th-TH",{maximumFractionDigits:0}):"0";
 
@@ -484,21 +499,21 @@ function CashFlowDetailPage({data,persist,t}){
         <div>
           <table>
             <thead><tr class="sec"><th>กระแสเงินสดรับ</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(CFI)}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody>
+            <tbody>${mkRows(inflow)}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody>
           </table>
           <table>
             <thead><tr class="sec"><th>กระแสเงินสดจ่ายคงที่</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(CFF)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody>
+            <tbody>${mkRows(fixed)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody>
           </table>
         </div>
         <div>
           <table>
             <thead><tr class="sec"><th>กระแสเงินสดจ่ายผันแปร</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(CFV)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody>
+            <tbody>${mkRows(variable)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody>
           </table>
           <table>
             <thead><tr class="sec"><th>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(CFS)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายเพื่อการออม / การลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody>
+            <tbody>${mkRows(saving)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายเพื่อการออม / การลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody>
           </table>
           <table>
             <tbody>
@@ -538,13 +553,13 @@ function CashFlowDetailPage({data,persist,t}){
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><CFHead t={t}>กระแสเงินสดรับ</CFHead><tr style={{background:t.bg}}><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"left",borderBottom:`1px solid ${t.cb}`}}>หัวข้อ</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>บาท</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>ร้อยละ</th></tr></thead>
-            <tbody>{CFI.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
+            <tbody>{inflow.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("inflow",it.k)} onDelete={()=>delItem("inflow",it.k)}/>)}<CFAddRow onAdd={()=>addItem("inflow")} t={t}/><CFTotal label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายคงที่</CFHead></thead>
-            <tbody>{CFF.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
+            <tbody>{fixed.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("fixed",it.k)} onDelete={()=>delItem("fixed",it.k)}/>)}<CFAddRow onAdd={()=>addItem("fixed")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
       </div>
@@ -554,13 +569,13 @@ function CashFlowDetailPage({data,persist,t}){
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายผันแปร</CFHead></thead>
-            <tbody>{CFV.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
+            <tbody>{variable.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("variable",it.k)} onDelete={()=>delItem("variable",it.k)}/>)}<CFAddRow onAdd={()=>addItem("variable")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</CFHead></thead>
-            <tbody>{CFS.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t}/>)}<CFTotal label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
+            <tbody>{saving.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("saving",it.k)} onDelete={()=>delItem("saving",it.k)}/>)}<CFAddRow onAdd={()=>addItem("saving")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
@@ -574,7 +589,7 @@ function CashFlowDetailPage({data,persist,t}){
       </div>
     </div>
 
-    <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ข้อมูลจะถูกบันทึกอัตโนมัติเมื่อพิมพ์ • ร้อยละคำนวณจากกระแสเงินสดรับรวม</div>
+    <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ข้อมูลบันทึกอัตโนมัติ • คลิกชื่อหัวข้อเพื่อเปลี่ยนชื่อ • ✕ เพื่อลบ • "+ เพิ่มหัวข้อ" เพื่อเพิ่ม • ร้อยละคำนวณจากกระแสเงินสดรับรวม</div>
   </div>);
 }
 
