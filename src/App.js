@@ -51,7 +51,7 @@ function processRecurring(data){
 const NAV=[
   {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
-  {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
+  {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
 ];
 
 /* ═══ COMPONENTS ═══ */
@@ -428,6 +428,265 @@ function BudgetPage({data,stats,persist,t}){
   </div>);
 }
 
+/* ═══ TAX CALCULATOR (ภาษีเงินได้บุคคลธรรมดา ระบบไทย) ═══ */
+/* ประเภทเงินได้ ม.40 พร้อมอัตราหักค่าใช้จ่าย */
+const TAX_INC_TYPES=[
+  {v:"401",l:"ม.40(1)+(2) เงินเดือน/รับจ้างทำงาน",expPct:50,expMax:100000},
+  {v:"403",l:"ม.40(3) ค่าลิขสิทธิ์/สิทธิบัตร",expPct:50,expMax:100000},
+  {v:"404a",l:"ม.40(4)(ก) ดอกเบี้ย",expPct:0,expMax:0},
+  {v:"404b",l:"ม.40(4)(ข) เงินปันผล (ถือหุ้นไทย)",expPct:0,expMax:0},
+  {v:"405a",l:"ม.40(5)(ก) ค่าเช่าบ้าน/อาคาร",expPct:30,expMax:null},
+  {v:"405b",l:"ม.40(5)(ข) ค่าเช่ายานพาหนะ",expPct:30,expMax:null},
+  {v:"406a",l:"ม.40(6) วิชาชีพ (แพทย์/ทนาย/บัญชี/วิศวกร)",expPct:60,expMax:null},
+  {v:"406b",l:"ม.40(6) วิชาชีพอื่น (สถาปนิก/ช่างภาพ ฯลฯ)",expPct:30,expMax:null},
+  {v:"407",l:"ม.40(7) รับเหมาก่อสร้าง",expPct:70,expMax:null},
+  {v:"408",l:"ม.40(8) อื่นๆ/ธุรกิจทั่วไป",expPct:60,expMax:null},
+];
+/* อัตราภาษีบันได 2567 */
+const TAX_BRACKETS=[
+  {min:0,max:150000,rate:0},
+  {min:150000,max:300000,rate:5},
+  {min:300000,max:500000,rate:10},
+  {min:500000,max:750000,rate:15},
+  {min:750000,max:1000000,rate:20},
+  {min:1000000,max:2000000,rate:25},
+  {min:2000000,max:5000000,rate:30},
+  {min:5000000,max:Infinity,rate:35},
+];
+
+function calcTax(net){
+  let tax=0;const detail=[];
+  for(const b of TAX_BRACKETS){
+    if(net<=b.min)break;
+    const taxable=Math.min(net,b.max)-b.min;
+    const t=taxable*(b.rate/100);
+    detail.push({...b,taxable,tax:t});
+    tax+=t;
+  }
+  return{tax:Math.max(0,tax),detail};
+}
+
+function TaxPage({t}){
+  const[incomes,setIncomes]=useState([{id:"i1",type:"401",amount:""}]);
+  const[ded,setDed]=useF({
+    spouse:false,children:"0",parents:"0",disabledDep:"0",
+    lifeIns:"",healthIns:"",parentHealthIns:"",socSec:"",
+    rmf:"",ssf:"",tesg:"",pvd:"",
+    homeLoan:"",donate:"",donateDouble:"",
+    withheld:"",
+  });
+  const[year,setYear]=useState("2567");
+
+  /* Income + expense deduction */
+  const incomeData=useMemo(()=>incomes.map(inc=>{
+    const tp=TAX_INC_TYPES.find(x=>x.v===inc.type)||TAX_INC_TYPES[0];
+    const gross=+inc.amount||0;
+    const exp=tp.expMax!==null?Math.min(gross*tp.expPct/100,tp.expMax):gross*tp.expPct/100;
+    return{...inc,gross,exp,net:gross-exp,label:tp.l};
+  }),[incomes]);
+  const totalGross=incomeData.reduce((s,x)=>s+x.gross,0);
+  const totalExp=incomeData.reduce((s,x)=>s+x.exp,0);
+  const totalIncNet=incomeData.reduce((s,x)=>s+x.net,0);
+
+  /* Deduction caps */
+  const d={
+    personal:60000,
+    spouse:ded.spouse?60000:0,
+    children:Math.min(+ded.children||0,10)*30000,
+    parents:Math.min(+ded.parents||0,4)*30000,
+    disabledDep:Math.min(+ded.disabledDep||0,4)*60000,
+    lifeIns:Math.min(+ded.lifeIns||0,100000),
+    healthIns:Math.min(+ded.healthIns||0,25000),
+    parentHealthIns:Math.min(+ded.parentHealthIns||0,15000),
+    socSec:Math.min(+ded.socSec||0,9000),
+    rmf:Math.min(+ded.rmf||0,totalGross*0.30,500000),
+    ssf:Math.min(+ded.ssf||0,totalGross*0.30,200000),
+    tesg:Math.min(+ded.tesg||0,totalGross*0.30,300000),
+    pvd:Math.min(+ded.pvd||0,totalGross*0.15,500000),
+    homeLoan:Math.min(+ded.homeLoan||0,100000),
+    donate:Math.min(+ded.donate||0,(totalIncNet-0)*0.10),
+    donateDouble:Math.min((+ded.donateDouble||0)*2,(totalIncNet-0)*0.10),
+  };
+  const totalDed=Object.values(d).reduce((s,v)=>s+v,0);
+  const netIncome=Math.max(0,totalIncNet-totalDed);
+  const {tax,detail}=calcTax(netIncome);
+  const withHeld=+ded.withheld||0;
+  const payOrRefund=tax-withHeld;
+
+  const addIncome=()=>setIncomes(p=>[...p,{id:uid(),type:"401",amount:""}]);
+  const updateIncome=(id,k,v)=>setIncomes(p=>p.map(i=>i.id===id?{...i,[k]:v}:i));
+  const delIncome=id=>setIncomes(p=>p.filter(i=>i.id!==id));
+
+  const fN=v=>v.toLocaleString("th-TH",{maximumFractionDigits:0});
+  const DedRow=({label,val,cap,note})=>(
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${t.cb}`,gap:8}}>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,color:t.text}}>{label}</div>{note&&<div style={{fontSize:9,color:t.tm}}>{note}</div>}</div>
+      <span style={{fontSize:12,fontWeight:500,color:val>0?t.g:t.tm,minWidth:70,textAlign:"right"}}>฿{fN(val)}</span>
+      {cap!==undefined&&<span style={{fontSize:9,color:t.tm,width:70,textAlign:"right"}}>max {fN(cap)}</span>}
+    </div>
+  );
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Summary */}
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💰" label="เงินได้รวม" value={`฿${fN(totalGross)}`} t={t}/>
+      <MC icon="📋" label="ค่าใช้จ่าย+ลดหย่อน" value={`฿${fN(totalExp+totalDed)}`} t={t} color={t.g}/>
+      <MC icon="📊" label="เงินได้สุทธิ" value={`฿${fN(netIncome)}`} t={t} color={t.am}/>
+      <MC icon={payOrRefund>=0?"💸":"🎉"} label={payOrRefund>=0?"ภาษีที่ต้องจ่าย":"ภาษีที่ได้คืน"} value={`฿${fN(Math.abs(payOrRefund))}`} t={t} color={payOrRefund>=0?t.r:t.g}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,380px)",gap:14,alignItems:"start"}}>
+      {/* LEFT: เงินได้ + ลดหย่อน */}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {/* เงินได้ */}
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:600}}>💰 เงินได้ (ปี พ.ศ. <input value={year} onChange={e=>setYear(e.target.value)} style={{width:52,padding:"2px 6px",borderRadius:5,border:`1px solid ${t.ibr}`,fontSize:13,background:t.ib,color:t.text,textAlign:"center"}}/>)</div>
+            <Btn small primary t={t} onClick={addIncome}>+ เพิ่มแหล่งเงินได้</Btn>
+          </div>
+          {incomeData.map((inc,i)=>(
+            <div key={inc.id} style={{marginBottom:10,padding:10,borderRadius:8,border:`1px solid ${t.cb}`,background:t.bg}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+                <select value={inc.type} onChange={e=>updateIncome(inc.id,"type",e.target.value)} style={{flex:1,padding:"6px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text}}>
+                  {TAX_INC_TYPES.map(tp=><option key={tp.v} value={tp.v}>{tp.l}</option>)}
+                </select>
+                {incomes.length>1&&<button onClick={()=>delIncome(inc.id)} style={{padding:"4px 8px",border:"none",borderRadius:5,background:t.rL,color:t.r,cursor:"pointer",fontSize:11}}>✕</button>}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <Inp label="เงินได้รวมทั้งปี (฿)" t={t} type="number" value={inc.amount} onChange={e=>updateIncome(inc.id,"amount",e.target.value)} style={{flex:1}}/>
+                <div style={{fontSize:10,color:t.tm,textAlign:"right",whiteSpace:"nowrap"}}>
+                  <div>หักค่าใช้จ่าย</div>
+                  <div style={{color:t.g,fontWeight:500}}>฿{fN(inc.exp)}</div>
+                  <div style={{color:t.tm,fontSize:9}}>{TAX_INC_TYPES.find(x=>x.v===inc.type)?.expPct||0}%{TAX_INC_TYPES.find(x=>x.v===inc.type)?.expMax?" max "+fN(TAX_INC_TYPES.find(x=>x.v===inc.type).expMax):""}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:16,padding:"8px 0 0",borderTop:`1px solid ${t.cb}`,fontSize:11}}>
+            <span style={{color:t.ts}}>เงินได้รวม ฿{fN(totalGross)}</span>
+            <span style={{color:t.g}}>หักค่าใช้จ่าย ฿{fN(totalExp)}</span>
+            <span style={{color:t.ac,fontWeight:600}}>เงินได้หลังหัก ฿{fN(totalIncNet)}</span>
+          </div>
+        </div>
+
+        {/* ค่าลดหย่อน */}
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>📋 ค่าลดหย่อน</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            {/* คอลัมน์ซ้าย */}
+            <div>
+              <div style={{fontSize:11,fontWeight:600,color:t.ac,marginBottom:8}}>👤 ส่วนตัวและครอบครัว</div>
+              <DedRow label="ค่าลดหย่อนส่วนตัว" val={d.personal}/>
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${t.cb}`}}>
+                <input type="checkbox" checked={ded.spouse} onChange={e=>setDed("spouse",e.target.checked)} id="spouse"/>
+                <label htmlFor="spouse" style={{fontSize:11,cursor:"pointer",flex:1}}>คู่สมรสไม่มีเงินได้</label>
+                <span style={{fontSize:12,fontWeight:500,color:ded.spouse?t.g:t.tm}}>฿{fN(d.spouse)}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 0",borderBottom:`1px solid ${t.cb}`}}>
+                <Inp label="บุตร (คน, max 10)" t={t} type="number" min="0" max="10" value={ded.children} onChange={e=>setDed("children",e.target.value)}/>
+                <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end"}}><span style={{fontSize:11,color:t.tm}}>= ฿{fN(d.children)}</span><span style={{fontSize:9,color:t.tm}}>30,000/คน</span></div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 0",borderBottom:`1px solid ${t.cb}`}}>
+                <Inp label="พ่อแม่ (คน, max 4)" t={t} type="number" min="0" max="4" value={ded.parents} onChange={e=>setDed("parents",e.target.value)}/>
+                <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end"}}><span style={{fontSize:11,color:t.tm}}>= ฿{fN(d.parents)}</span><span style={{fontSize:9,color:t.tm}}>30,000/คน (อายุ 60+)</span></div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 0",borderBottom:`1px solid ${t.cb}`}}>
+                <Inp label="ผู้พิการ/ทุพพลภาพ (คน)" t={t} type="number" min="0" max="4" value={ded.disabledDep} onChange={e=>setDed("disabledDep",e.target.value)}/>
+                <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end"}}><span style={{fontSize:11,color:t.tm}}>= ฿{fN(d.disabledDep)}</span><span style={{fontSize:9,color:t.tm}}>60,000/คน</span></div>
+              </div>
+
+              <div style={{fontSize:11,fontWeight:600,color:t.ac,margin:"12px 0 8px"}}>🏦 ประกันและกองทุน</div>
+              <Inp label="เบี้ยประกันชีวิต ฿ (max 100,000)" t={t} type="number" value={ded.lifeIns} onChange={e=>setDed("lifeIns",e.target.value)}/>
+              <div style={{height:6}}/>
+              <Inp label="ประกันสุขภาพตัวเอง ฿ (max 25,000)" t={t} type="number" value={ded.healthIns} onChange={e=>setDed("healthIns",e.target.value)}/>
+              <div style={{height:6}}/>
+              <Inp label="ประกันสุขภาพพ่อแม่ ฿ (max 15,000)" t={t} type="number" value={ded.parentHealthIns} onChange={e=>setDed("parentHealthIns",e.target.value)}/>
+              <div style={{height:6}}/>
+              <Inp label="เงินสมทบประกันสังคม ฿ (max 9,000)" t={t} type="number" value={ded.socSec} onChange={e=>setDed("socSec",e.target.value)}/>
+            </div>
+
+            {/* คอลัมน์ขวา */}
+            <div>
+              <div style={{fontSize:11,fontWeight:600,color:t.ac,marginBottom:8}}>📈 กองทุนเพื่อการลงทุน</div>
+              <Inp label="กองทุน RMF ฿ (max 30% เงินได้, 500K)" t={t} type="number" value={ded.rmf} onChange={e=>setDed("rmf",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.rmf)}</div>
+              <Inp label="กองทุน SSF ฿ (max 30%, 200K)" t={t} type="number" value={ded.ssf} onChange={e=>setDed("ssf",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.ssf)}</div>
+              <Inp label="กองทุน TESG ฿ (max 30%, 300K)" t={t} type="number" value={ded.tesg} onChange={e=>setDed("tesg",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.tesg)}</div>
+              <Inp label="กองทุนสำรองเลี้ยงชีพ PVD ฿ (max 15%, 500K)" t={t} type="number" value={ded.pvd} onChange={e=>setDed("pvd",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.pvd)}</div>
+
+              <div style={{fontSize:11,fontWeight:600,color:t.ac,margin:"8px 0"}}>🏠 อื่นๆ</div>
+              <Inp label="ดอกเบี้ยเงินกู้บ้าน ฿ (max 100,000)" t={t} type="number" value={ded.homeLoan} onChange={e=>setDed("homeLoan",e.target.value)}/>
+              <div style={{height:6}}/>
+              <Inp label="เงินบริจาคทั่วไป ฿ (max 10% เงินได้สุทธิ)" t={t} type="number" value={ded.donate} onChange={e=>setDed("donate",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.donate)}</div>
+              <Inp label="บริจาคการศึกษา/สาธารณสุข ฿ (ลด 2 เท่า)" t={t} type="number" value={ded.donateDouble} onChange={e=>setDed("donateDouble",e.target.value)}/>
+              <div style={{fontSize:9,color:t.tm,marginBottom:6}}>ใช้ได้จริง: ฿{fN(d.donateDouble)} (×2)</div>
+              <div style={{marginTop:8}}>
+                <Inp label="ภาษีหัก ณ ที่จ่ายทั้งปี ฿" t={t} type="number" value={ded.withheld} onChange={e=>setDed("withheld",e.target.value)}/>
+              </div>
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",padding:"10px 0 0",borderTop:`1px solid ${t.cb}`,marginTop:8}}>
+            <span style={{fontSize:13,fontWeight:600,color:t.g}}>ค่าลดหย่อนรวม ฿{fN(totalDed)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT: สรุปภาษี + บันได */}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {/* สรุป */}
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>📊 สรุปการคำนวณ</div>
+          {[
+            {l:"เงินได้รวม",v:totalGross,c:t.text},
+            {l:"หัก ค่าใช้จ่าย",v:-totalExp,c:t.g},
+            {l:"เงินได้หลังหักค่าใช้จ่าย",v:totalIncNet,c:t.text,bold:true},
+            {l:"หัก ค่าลดหย่อน",v:-totalDed,c:t.g},
+            {l:"เงินได้สุทธิ",v:netIncome,c:t.am,bold:true},
+            {l:`ภาษีที่คำนวณได้ (${year})`,v:tax,c:t.r,bold:true},
+            {l:"หัก ภาษีหัก ณ ที่จ่าย",v:-withHeld,c:t.g},
+          ].map(({l,v,c,bold},i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${t.cb}`,fontSize:12,fontWeight:bold?600:400}}>
+            <span style={{color:t.ts}}>{l}</span>
+            <span style={{color:c}}>{v<0?"-":""} ฿{fN(Math.abs(v))}</span>
+          </div>))}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0 0",fontSize:15,fontWeight:700}}>
+            <span style={{color:payOrRefund>=0?t.r:t.g}}>{payOrRefund>=0?"ภาษีที่ต้องจ่าย":"ภาษีที่ได้คืน"}</span>
+            <span style={{color:payOrRefund>=0?t.r:t.g}}>฿{fN(Math.abs(payOrRefund))}</span>
+          </div>
+          {totalGross>0&&<div style={{marginTop:6,fontSize:10,color:t.tm}}>อัตราภาษีที่แท้จริง {(tax/totalGross*100).toFixed(2)}% ของเงินได้รวม</div>}
+        </div>
+
+        {/* บันไดภาษี */}
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>📐 บันไดภาษี {year}</div>
+          <div style={{display:"flex",gap:4,marginBottom:8,fontSize:9,color:t.tm,justifyContent:"space-between",padding:"0 4px"}}><span>ขั้น</span><span>เงินได้สุทธิ</span><span>อัตรา</span><span>ภาษีขั้นนี้</span></div>
+          {TAX_BRACKETS.map((b,i)=>{
+            const hit=detail.find(d=>d.min===b.min);
+            const active=hit&&hit.taxable>0;
+            return(<div key={i} style={{display:"flex",gap:4,alignItems:"center",padding:"5px 4px",borderRadius:5,marginBottom:2,background:active?`${t.ac}12`:"transparent",border:`1px solid ${active?t.ac:t.cb}`}}>
+              <Badge color={b.rate===0?t.g:b.rate<=15?t.am:t.r}>{b.rate}%</Badge>
+              <span style={{flex:1,fontSize:10,color:t.ts}}>{fN(b.min+1)}–{b.max===Infinity?"∞":fN(b.max)}</span>
+              <span style={{fontSize:10,color:t.tm,width:60,textAlign:"right"}}>{active?`฿${fN(hit.taxable)}`:"-"}</span>
+              <span style={{fontSize:11,fontWeight:active?600:400,color:active?t.r:t.tm,width:70,textAlign:"right"}}>{active?`฿${fN(Math.round(hit.tax))}`:"-"}</span>
+            </div>);
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 4px 0",borderTop:`1px solid ${t.cb}`,marginTop:4}}>
+            <span style={{fontSize:12,fontWeight:600}}>รวมภาษี</span>
+            <span style={{fontSize:13,fontWeight:700,color:t.r}}>฿{fN(Math.round(tax))}</span>
+          </div>
+        </div>
+
+        <div style={{background:`${t.am}10`,border:`1px solid ${t.am}30`,borderRadius:10,padding:12,fontSize:10,color:t.tm,lineHeight:1.6}}>
+          ⚠️ <b>หมายเหตุ:</b> การคำนวณนี้เป็นการประมาณการเบื้องต้น ตัวเลขจริงอาจต่างกันขึ้นอยู่กับรายละเอียดของแต่ละบุคคล กรุณาตรวจสอบกับสรรพากรหรือนักบัญชีก่อนยื่นแบบ
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
 /* ═══ CASH FLOW DETAIL (งบกระแสเงินสดละเอียด ตามแบบมาตรฐานไทย) ═══ */
 /* NOTE: sub-components ต้องอยู่ระดับ module — ถ้าประกาศใน parent จะ unmount ทุกครั้งที่ re-render ทำให้ input เสีย focus */
 function CFRow({item,row,setVal,pct,t,onRename,onDelete}){
@@ -657,7 +916,7 @@ function WealthHub(){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div><h1 style={{margin:0,fontSize:20,fontWeight:600}}>{pl}</h1><div style={{fontSize:11,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>
-          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -713,6 +972,7 @@ function WealthHub(){
       {page==="dca"&&<DCAPage t={t}/>}
       {page==="retire"&&<RetirePage t={t}/>}
       {page==="plan"&&<PlanPage data={data} stats={stats} t={t}/>}
+      {page==="tax"&&<TaxPage t={t}/>}
 
       {page==="reports"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:22}}>
         <div style={{fontSize:15,fontWeight:600,marginBottom:14}}>📄 รายงานสรุป</div>
