@@ -55,23 +55,28 @@ const NAV=[
 ];
 
 /* ═══ COMPONENTS ═══ */
-function Sidebar({page,setPage,dark,setDark,t}){
+function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose}){
   const groups=[...new Set(NAV.map(n=>n.g))];
-  return(<div style={{width:220,minHeight:"100vh",background:t.sidebar,padding:"16px 0",display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,zIndex:100,borderRight:`1px solid ${dark?"#1E293B":"#1a2744"}`,overflowY:"auto"}}>
-    <div style={{padding:"0 20px 16px",borderBottom:`1px solid ${dark?"#1E293B":"#1a2744"}`}}>
-      <div style={{fontSize:19,fontWeight:600}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.sidebarText}}>Hub</span></div>
-      <div style={{fontSize:9,color:t.sidebarText,marginTop:2}}>ระบบจัดการการเงินส่วนบุคคล</div>
+  const visible=!isMobile||open;
+  const go=k=>{setPage(k);if(isMobile)onClose&&onClose()};
+  return(<>
+    {isMobile&&open&&<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:99}}/>}
+    <div style={{width:220,height:"100vh",background:t.sidebar,padding:"16px 0",display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${dark?"#1E293B":"#1a2744"}`,overflowY:"auto",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none"}}>
+    <div style={{padding:"0 20px 16px",borderBottom:`1px solid ${dark?"#1E293B":"#1a2744"}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+      <div><div style={{fontSize:19,fontWeight:600}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.sidebarText}}>Hub</span></div>
+        <div style={{fontSize:9,color:t.sidebarText,marginTop:2}}>ระบบจัดการการเงินส่วนบุคคล</div></div>
+      {isMobile&&<button onClick={onClose} style={{background:"none",border:"none",color:t.sidebarText,fontSize:20,cursor:"pointer",lineHeight:1,padding:0}}>✕</button>}
     </div>
     <div style={{padding:"10px 10px",flex:1}}>
       {groups.map(g=>(<div key={g}>
         <div style={{fontSize:9,color:t.sidebarText,textTransform:"uppercase",letterSpacing:1.2,padding:"10px 8px 4px",fontWeight:600}}>{g}</div>
-        {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>setPage(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?(dark?"#1E293B":"#162035"):"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?500:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
+        {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?(dark?"#1E293B":"#162035"):"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?500:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
       </div>))}
     </div>
     <div style={{padding:"10px 20px",borderTop:`1px solid ${dark?"#1E293B":"#1a2744"}`}}>
       <button onClick={()=>setDark(!dark)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.sidebarText,cursor:"pointer",fontSize:11,padding:0}}><span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>{dark?"Light":"Dark"} Mode</button>
     </div>
-  </div>);
+  </div></>);
 }
 
 function MC({icon,label,value,sub,color,t}){return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:"14px 16px",flex:"1 1 140px",minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}><div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:color?`${color}18`:t.acL,fontSize:14}}>{icon}</div><span style={{fontSize:11,color:t.ts}}>{label}</span></div><div style={{fontSize:19,fontWeight:600,color:color||t.text,letterSpacing:-0.5}}>{value}</div>{sub&&<div style={{fontSize:10,color:color||t.tm,marginTop:1}}>{sub}</div>}</div>)}
@@ -91,6 +96,8 @@ function Inp({label,t,...p}){return(<label style={{fontSize:11,color:t.ts,displa
 function Sel({label,children,t,...p}){return(<label style={{fontSize:11,color:t.ts,display:"block"}}>{label}<select {...p} style={{width:"100%",marginTop:2,padding:"8px 10px",borderRadius:7,border:`1px solid ${t.ibr}`,fontSize:12,background:t.ib,color:t.text,boxSizing:"border-box",...p.style}}>{children}</select></label>)}
 
 function useF(ini){const[f,setF]=useState(ini);const set=(k,v)=>setF(p=>({...p,[k]:v}));return[f,set,setF]}
+
+function useIsMobile(){const[m,setM]=useState(()=>typeof window!=="undefined"&&window.matchMedia("(max-width: 767px)").matches);useEffect(()=>{const mq=window.matchMedia("(max-width: 767px)");const h=e=>setM(e.matches);if(mq.addEventListener)mq.addEventListener("change",h);else mq.addListener(h);return()=>{if(mq.removeEventListener)mq.removeEventListener("change",h);else mq.removeListener(h)}},[]);return m}
 
 /* ═══ BALANCE SHEET (งบดุลส่วนบุคคล) ═══ */
 function BalancePage({data,stats,persist,t}){
@@ -131,7 +138,7 @@ function BalancePage({data,stats,persist,t}){
       <MC icon="👑" label="ความมั่งคั่งสุทธิ (Net Worth)" value={fB(netWorth)} t={t} color={netWorth>=0?t.ac:t.r} sub={totalAssets>0?`หนี้/สินทรัพย์ = ${(totalLiab/totalAssets*100).toFixed(1)}%`:""}/>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr) minmax(0,auto)",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr) minmax(0,auto)",gap:16}}>
       {/* สินทรัพย์ */}
       <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
         <div style={{fontSize:14,fontWeight:600,color:t.g,marginBottom:12}}>📗 สินทรัพย์ (Assets)</div>
@@ -218,7 +225,7 @@ function CashFlowPage({data,stats,t}){
       <MC icon="📊" label="อัตราการออม" value={`${savingRate.toFixed(1)}%`} sub={savingRate>=20?"ดีมาก":savingRate>=10?"พอใช้":"ควรปรับปรุง"} t={t} color={savingRate>=20?t.g:savingRate>=10?t.am:t.r}/>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:16}}>
       {/* กระแสเงินสดเข้า */}
       <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
         <div style={{fontSize:14,fontWeight:600,color:t.g,marginBottom:12}}>⬆️ กระแสเงินสดเข้า (เดือนนี้)</div>
@@ -283,7 +290,7 @@ function DCAPage({t}){
   const data=useMemo(()=>{const a=+f.amount,m=+f.months,r=+f.returnRate/100/12;if(!a||!m)return{total:0,invested:0,profit:0,chart:[]};let bal=0;const chart=[];for(let i=1;i<=m;i++){bal=(bal+a)*(1+r);if(i%6===0||i===m)chart.push({month:i,value:Math.round(bal),invested:a*i})}return{total:Math.round(bal),invested:a*m,profit:Math.round(bal-a*m),chart}},[f]);
   return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:20}}>
     <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>⟳ คำนวณ DCA</div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:16}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr 1fr":"1fr 1fr 1fr 1fr",gap:12,marginBottom:16}}>
       <Inp label="ชื่อหุ้น/กองทุน" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/>
       <Inp label="เงินลงทุน/เดือน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/>
       <Inp label="จำนวนเดือน" t={t} type="number" value={f.months} onChange={e=>set("months",e.target.value)}/>
@@ -300,7 +307,7 @@ function RetirePage({t}){
   const res=useMemo(()=>{const age=+f.age,ra=+f.retireAge,le=+f.lifeExpect,me=+f.monthlyExpense,cs=+f.currentSaving,mi=+f.monthlyInvest,rr=+f.returnRate/100;if(!age||!ra||!le||!me)return null;const ytr=ra-age;const yir=le-ra;const fe=me*Math.pow(1+(+f.inflationRate/100),ytr);const need=fe*12*yir;let proj=cs;const chart=[];for(let y=0;y<=ytr;y++){chart.push({year:age+y,value:Math.round(proj),needed:Math.round(need)});proj=(proj+mi*12)*(1+rr)}const gap=need-proj;return{ytr,yir,fe:Math.round(fe),need:Math.round(need),proj:Math.round(proj),gap:Math.round(gap),ok:proj>=need,chart}},[f]);
   return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:20}}>
     <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>☰ วางแผนเกษียณ</div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr 1fr":"repeat(4,1fr)",gap:12,marginBottom:16}}>
       <Inp label="อายุปัจจุบัน" t={t} type="number" value={f.age} onChange={e=>set("age",e.target.value)}/><Inp label="อายุเกษียณ" t={t} type="number" value={f.retireAge} onChange={e=>set("retireAge",e.target.value)}/><Inp label="อายุคาดหมาย" t={t} type="number" value={f.lifeExpect} onChange={e=>set("lifeExpect",e.target.value)}/><Inp label="ค่าใช้จ่าย/เดือน (฿)" t={t} type="number" value={f.monthlyExpense} onChange={e=>set("monthlyExpense",e.target.value)}/>
       <Inp label="เงินออมปัจจุบัน" t={t} type="number" value={f.currentSaving} onChange={e=>set("currentSaving",e.target.value)}/><Inp label="ลงทุน/เดือน" t={t} type="number" value={f.monthlyInvest} onChange={e=>set("monthlyInvest",e.target.value)}/><Inp label="ผลตอบแทน (%/ปี)" t={t} type="number" step="0.5" value={f.returnRate} onChange={e=>set("returnRate",e.target.value)}/><Inp label="เงินเฟ้อ (%/ปี)" t={t} type="number" step="0.5" value={f.inflationRate} onChange={e=>set("inflationRate",e.target.value)}/>
     </div>
@@ -535,7 +542,7 @@ function TaxPage({t}){
       <MC icon={payOrRefund>=0?"💸":"🎉"} label={payOrRefund>=0?"ภาษีที่ต้องจ่าย":"ภาษีที่ได้คืน"} value={`฿${fN(Math.abs(payOrRefund))}`} t={t} color={payOrRefund>=0?t.r:t.g}/>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(320px,380px)",gap:14,alignItems:"start"}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(320px,380px)",gap:14,alignItems:"start"}}>
       {/* LEFT: เงินได้ + ลดหย่อน */}
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {/* เงินได้ */}
@@ -572,7 +579,7 @@ function TaxPage({t}){
         {/* ค่าลดหย่อน */}
         <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
           <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>📋 ค่าลดหย่อน</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr",gap:16}}>
             {/* คอลัมน์ซ้าย */}
             <div>
               <div style={{fontSize:11,fontWeight:600,color:t.ac,marginBottom:8}}>👤 ส่วนตัวและครอบครัว</div>
@@ -806,17 +813,17 @@ function CashFlowDetailPage({data,persist,t}){
     </div>
 
     {/* Tables - 2 columns */}
-    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
       {/* LEFT: รับ + จ่ายคงที่ */}
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:360}}>
             <thead><CFHead t={t}>กระแสเงินสดรับ</CFHead><tr style={{background:t.bg}}><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"left",borderBottom:`1px solid ${t.cb}`}}>หัวข้อ</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>บาท</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>ร้อยละ</th></tr></thead>
             <tbody>{inflow.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("inflow",it.k)} onDelete={()=>delItem("inflow",it.k)}/>)}<CFAddRow onAdd={()=>addItem("inflow")} t={t}/><CFTotal label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:360}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายคงที่</CFHead></thead>
             <tbody>{fixed.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("fixed",it.k)} onDelete={()=>delItem("fixed",it.k)}/>)}<CFAddRow onAdd={()=>addItem("fixed")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
@@ -825,20 +832,20 @@ function CashFlowDetailPage({data,persist,t}){
 
       {/* RIGHT: ผันแปร + ออม + สุทธิ */}
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:360}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายผันแปร</CFHead></thead>
             <tbody>{variable.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("variable",it.k)} onDelete={()=>delItem("variable",it.k)}/>)}<CFAddRow onAdd={()=>addItem("variable")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:360}}>
             <thead><CFHead t={t}>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</CFHead></thead>
             <tbody>{saving.map(it=><CFRow key={it.k} item={it} row={row} setVal={setVal} pct={pct} t={t} onRename={()=>renameItem("saving",it.k)} onDelete={()=>delItem("saving",it.k)}/>)}<CFAddRow onAdd={()=>addItem("saving")} t={t}/><CFTotal label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac} totalIn={totalIn} pct={pct} fmt={fmt}/></tbody>
           </table>
         </div>
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:360}}>
             <tbody>
               <CFTotal label="กระแสเงินสดจ่ายรวม" val={totalOut} color={t.r} totalIn={totalIn} pct={pct} fmt={fmt}/>
               <tr style={{background:net>=0?`${t.g}15`:`${t.r}15`}}><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r}}>กระแสเงินสดสุทธิ</td><td style={{padding:"10px",fontSize:14,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{net>=0?"":"-"}{fmt(Math.abs(net))}</td><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{totalIn>0?pct(net).toFixed(2):"0"}</td></tr>
@@ -860,8 +867,9 @@ return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);
-  const t=dark?Dk:L;
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);
+  const isMobile=useIsMobile();
+  const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
   useEffect(()=>{const loaded=ld()||DF;const processed=processRecurring(loaded);if(processed!==loaded)sv(processed);setData(processed);try{setDark(localStorage.getItem("wealthhub-dark")==="1")}catch{}setLoading(false)},[]);
   useEffect(()=>{try{localStorage.setItem("wealthhub-dark",dark?"1":"0")}catch{}},[dark]);
   const persist=useCallback(nd=>{setData(nd);sv(nd)},[]);
@@ -911,11 +919,15 @@ function WealthHub(){
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>
-    <Sidebar page={page} setPage={setPage} dark={dark} setDark={setDark} t={t}/>
-    <div style={{marginLeft:220,flex:1,padding:"20px 28px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div><h1 style={{margin:0,fontSize:20,fontWeight:600}}>{pl}</h1><div style={{fontSize:11,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>
+    <Sidebar page={page} setPage={setPage} dark={dark} setDark={setDark} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)}/>
+    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px":"20px 28px",minWidth:0}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
+          {isMobile&&<button onClick={()=>setSbOpen(true)} aria-label="menu" style={{background:t.card,border:`1px solid ${t.cb}`,color:t.text,fontSize:18,padding:"6px 10px",borderRadius:8,cursor:"pointer",lineHeight:1}}>☰</button>}
+          <div style={{minWidth:0}}><h1 style={{margin:0,fontSize:isMobile?17:20,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl}</h1><div style={{fontSize:10,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
@@ -926,13 +938,13 @@ function WealthHub(){
         {/* Portfolio on dashboard */}
         {data.assets.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:600}}>📊 พอร์ตลงทุน</span><button onClick={()=>setPage("portfolio")} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>ดูทั้งหมด →</button></div>
-          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,auto)",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,auto)",gap:16}}>
             <div>{stats.allocation.slice(0,4).map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;return(<div key={a.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12}}>{tp2.i}</span><span style={{fontSize:12,fontWeight:500}}>{a.name}</span><Badge color={a.currency==="USD"?t.ac:t.tl}>{a.currency||"THB"}</Badge></div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12,fontWeight:500}}>{fB(a.value)}</span><Badge color={a.pl>=0?t.g:t.r}>{fP(pp2)}</Badge></div></div><PB pct={a.pct} color={a.color} height={3} t={t}/></div>)})}</div>
             <div><ResponsiveContainer width={140} height={140}><PieChart><Pie data={stats.allocation} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>{stats.allocation.map((d,i)=><Cell key={i} fill={d.color}/>)}</Pie></PieChart></ResponsiveContainer></div>
           </div>
         </div>)}
         {/* Currency + alerts */}
-        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
             <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>💱 แปลงสกุลเงิน</div>
             <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>1 USD =</span><input value={rate} onChange={e=>setRate(+e.target.value)} type="number" step="0.1" style={{width:60,padding:"4px 6px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"center"}}/><span style={{fontSize:11,color:t.tm}}>บาท</span></div>
@@ -949,7 +961,7 @@ function WealthHub(){
       {page==="portfolio"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="💰" label="มูลค่ารวม" value={fB(stats.totalPortfolio)} t={t}/><MC icon="📈" label="P&L" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="🏷️" label="ต้นทุน" value={fB(stats.totalCost)} t={t}/></div>
         {data.assets.length===0?<Empty icon="📊" title="ยังไม่มีสินทรัพย์" sub="เพิ่มหุ้น กองทุน คริปโต" action="+ เพิ่ม" onAction={()=>setModal({type:"addAsset"})} t={t}/>:(
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
+          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
       </div>)}
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
@@ -961,7 +973,7 @@ function WealthHub(){
 
       {page==="goals"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="🎯" label="เป้าหมายรวม" value={fB(stats.totalGoalTarget)} t={t}/><MC icon="💰" label="ออมแล้ว" value={fB(stats.totalGoalSaved)} t={t} color={t.g}/><MC icon="📊" label="เหลือ" value={fB(stats.totalGoalTarget-stats.totalGoalSaved)} t={t} color={t.am}/></div>
-        {data.goals.length===0?<Empty icon="🎯" title="ยังไม่มีเป้าหมาย" sub="ตั้งเป้าออม" action="+ ตั้งเป้า" onAction={()=>setModal({type:"addGoal"})} t={t}/>:(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{data.goals.map(g=>{const p=g.target>0?(g.saved/g.target)*100:0;return(<div key={g.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:600}}>{g.icon} {g.name}</span><Badge color={p>=100?t.g:t.ac}>{p>=100?"สำเร็จ!":`${Math.round(p)}%`}</Badge></div><PB pct={p} color={p>=100?t.g:t.ac} height={8} t={t}/><div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:t.ts}}><span>{fB(g.saved)}</span><span>{fB(g.target)}</span></div><div style={{display:"flex",gap:3,marginTop:8}}><Btn small t={t} onClick={()=>setModal({type:"editGoal",goal:g})}>แก้ไข</Btn><Btn small t={t} onClick={()=>{const a=window.prompt("เพิ่มเงินออม?");if(a&&+a>0)updateGoal(g.id,{...g,saved:g.saved+ +a})}}>+เพิ่ม</Btn><Btn small danger t={t} onClick={()=>{if(window.confirm("ลบ?"))delGoal(g.id)}}>ลบ</Btn></div></div>)})}</div>)}
+        {data.goals.length===0?<Empty icon="🎯" title="ยังไม่มีเป้าหมาย" sub="ตั้งเป้าออม" action="+ ตั้งเป้า" onAction={()=>setModal({type:"addGoal"})} t={t}/>:(<div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr",gap:12}}>{data.goals.map(g=>{const p=g.target>0?(g.saved/g.target)*100:0;return(<div key={g.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:600}}>{g.icon} {g.name}</span><Badge color={p>=100?t.g:t.ac}>{p>=100?"สำเร็จ!":`${Math.round(p)}%`}</Badge></div><PB pct={p} color={p>=100?t.g:t.ac} height={8} t={t}/><div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:t.ts}}><span>{fB(g.saved)}</span><span>{fB(g.target)}</span></div><div style={{display:"flex",gap:3,marginTop:8}}><Btn small t={t} onClick={()=>setModal({type:"editGoal",goal:g})}>แก้ไข</Btn><Btn small t={t} onClick={()=>{const a=window.prompt("เพิ่มเงินออม?");if(a&&+a>0)updateGoal(g.id,{...g,saved:g.saved+ +a})}}>+เพิ่ม</Btn><Btn small danger t={t} onClick={()=>{if(window.confirm("ลบ?"))delGoal(g.id)}}>ลบ</Btn></div></div>)})}</div>)}
       </div>)}
 
       {page==="debts"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -976,7 +988,7 @@ function WealthHub(){
 
       {page==="reports"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:22}}>
         <div style={{fontSize:15,fontWeight:600,marginBottom:14}}>📄 รายงานสรุป</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}><div style={{padding:12,borderRadius:8,background:`${t.ac}10`}}><div style={{fontSize:10,color:t.ts}}>Net Worth</div><div style={{fontSize:18,fontWeight:600,color:t.ac}}>{fB(stats.netWorth)}</div></div><div style={{padding:12,borderRadius:8,background:`${t.g}10`}}><div style={{fontSize:10,color:t.ts}}>รายรับ</div><div style={{fontSize:18,fontWeight:600,color:t.g}}>{fB(stats.incomeThisMonth)}</div></div><div style={{padding:12,borderRadius:8,background:`${t.r}10`}}><div style={{fontSize:10,color:t.ts}}>รายจ่าย</div><div style={{fontSize:18,fontWeight:600,color:t.r}}>{fB(stats.expenseThisMonth)}</div></div></div>
+        <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr 1fr",gap:10,marginBottom:16}}><div style={{padding:12,borderRadius:8,background:`${t.ac}10`}}><div style={{fontSize:10,color:t.ts}}>Net Worth</div><div style={{fontSize:18,fontWeight:600,color:t.ac}}>{fB(stats.netWorth)}</div></div><div style={{padding:12,borderRadius:8,background:`${t.g}10`}}><div style={{fontSize:10,color:t.ts}}>รายรับ</div><div style={{fontSize:18,fontWeight:600,color:t.g}}>{fB(stats.incomeThisMonth)}</div></div><div style={{padding:12,borderRadius:8,background:`${t.r}10`}}><div style={{fontSize:10,color:t.ts}}>รายจ่าย</div><div style={{fontSize:18,fontWeight:600,color:t.r}}>{fB(stats.expenseThisMonth)}</div></div></div>
         <Btn primary t={t} onClick={()=>{const w=window.open("","_blank");w.document.write(`<html><head><title>WealthHub</title><style>body{font-family:Segoe UI,sans-serif;padding:40px;color:#1e293b}h1{color:#0ea5e9}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px}th{background:#f8fafc}</style></head><body><h1>WealthHub — รายงาน</h1><p>${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</p><table><tr><td>Net Worth</td><td>${fB(stats.netWorth)}</td></tr><tr><td>พอร์ต</td><td>${fB(stats.totalPortfolio)}</td></tr><tr><td>P&L</td><td>${fB(stats.portfolioPL)}</td></tr><tr><td>รายรับ</td><td>${fB(stats.incomeThisMonth)}</td></tr><tr><td>รายจ่าย</td><td>${fB(stats.expenseThisMonth)}</td></tr><tr><td>หนี้</td><td>${fB(stats.debtRemaining)}</td></tr></table>`);if(data.assets.length){w.document.write(`<h2>พอร์ต</h2><table><tr><th>ชื่อ</th><th>สกุล</th><th>มูลค่า</th><th>P&L</th></tr>`);stats.allocation.forEach(a=>{w.document.write(`<tr><td>${a.name}</td><td>${a.currency||"THB"}</td><td>${fB(a.value)}</td><td>${fB(a.pl)}</td></tr>`)});w.document.write(`</table>`)}w.document.write(`<p style="color:#94a3b8;font-size:11px;margin-top:30px">WealthHub</p></body></html>`);w.document.close();w.print()}}>🖨️ พิมพ์ / PDF</Btn>
       </div>)}
 
