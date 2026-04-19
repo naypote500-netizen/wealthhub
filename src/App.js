@@ -10,6 +10,12 @@ const AT=[{v:"stock_th",l:"หุ้นไทย",i:"📊"},{v:"stock_us",l:"ห
 const EC=[{v:"food",l:"อาหาร",i:"🍜"},{v:"transport",l:"เดินทาง",i:"🚗"},{v:"shopping",l:"ช้อปปิ้ง",i:"🛍️"},{v:"bills",l:"ค่าบิล",i:"💡"},{v:"health",l:"สุขภาพ",i:"💊"},{v:"entertainment",l:"บันเทิง",i:"🎬"},{v:"education",l:"การศึกษา",i:"📚"},{v:"other",l:"อื่นๆ",i:"📦"}];
 const IC=[{v:"salary",l:"เงินเดือน",i:"💰"},{v:"freelance",l:"ฟรีแลนซ์",i:"💻"},{v:"investment",l:"ผลตอบแทนลงทุน",i:"📈"},{v:"bonus",l:"โบนัส",i:"🎁"},{v:"other",l:"อื่นๆ",i:"📦"}];
 
+/* Cash-flow statement line items (มาตรฐานไทย) */
+const CFI=[{k:"salary",l:"เงินเดือน (รวมค่าล่วงเวลา, ค่าคอมมิชชั่น, โบนัส)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
+const CFF=[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
+const CFV=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค (ค่าไฟฟ้า, ค่าน้ำประปา, อื่นๆ)"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้าและค่าใช้จ่ายในการบำรุงรักษาตนเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
+const CFS=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
+
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const fB=n=>`฿${Math.abs(n).toLocaleString("th-TH",{maximumFractionDigits:0})}`;
 const fP=n=>`${n>=0?"+":""}${n.toFixed(1)}%`;
@@ -18,8 +24,8 @@ const mk=d=>d.slice(0,7);
 const fm=d=>new Date(d+"-01").toLocaleDateString("th-TH",{month:"short",year:"2-digit"});
 
 const SK="wealthhub-v6";const OSK="wealthhub-v5";
-const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
-function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{}}}catch{return null}}
+const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},cashFlow:{monthly:{},yearly:{}},balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
+function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{},cashFlow:{monthly:{...(d.cashFlow?.monthly||{})},yearly:{...(d.cashFlow?.yearly||{})}}}}catch{return null}}
 function sv(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){console.error(e)}}
 
 /* Process recurring: generate txn for current month if day-of-month has passed and not yet run this month */
@@ -43,7 +49,7 @@ function processRecurring(data){
 /* ═══ NAV ═══ */
 const NAV=[
   {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},
-  {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},
+  {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
   {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
 ];
 
@@ -421,6 +427,158 @@ function BudgetPage({data,stats,persist,t}){
   </div>);
 }
 
+/* ═══ CASH FLOW DETAIL (งบกระแสเงินสดละเอียด ตามแบบมาตรฐานไทย) ═══ */
+function CashFlowDetailPage({data,persist,t}){
+  const[period,setPeriod]=useState("monthly");
+  const[mKey,setMKey]=useState(mk(td()));
+  const[yKey,setYKey]=useState(td().slice(0,4));
+  const key=period==="monthly"?mKey:yKey;
+  const store=(data.cashFlow||{})[period]||{};
+  const row=store[key]||{};
+  const setVal=(k,v)=>{const n=+v||0;persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:{...store,[key]:{...row,[k]:n}}}})};
+  const delPeriod=()=>{if(!window.confirm(`ลบข้อมูล ${key}?`))return;const n={...store};delete n[key];persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:n}})};
+
+  const sum=items=>items.reduce((s,it)=>s+(+row[it.k]||0),0);
+  const totalIn=sum(CFI);const totalFixed=sum(CFF);const totalVar=sum(CFV);const totalSave=sum(CFS);const totalOut=totalFixed+totalVar+totalSave;const net=totalIn-totalOut;
+  const pct=v=>totalIn>0?(v/totalIn*100):0;
+  const fmt=v=>v?v.toLocaleString("th-TH",{maximumFractionDigits:0}):"0";
+
+  /* Period list */
+  const periods=Object.keys(store).sort().reverse();
+  const curYear=new Date().getFullYear();
+  const years=[];for(let y=curYear+1;y>=curYear-5;y--)years.push(String(y));
+  const months=[];for(let i=0;i<24;i++){const d=new Date();d.setMonth(d.getMonth()-i);months.push(mk(d.toISOString().slice(0,10)))}
+
+  const Row=({item,section,color})=>{
+    const v=+row[item.k]||0;
+    return(<tr style={{borderBottom:`1px solid ${t.cb}`}}>
+      <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>{item.l}</td>
+      <td style={{padding:"4px 6px",width:130}}><input type="number" value={row[item.k]||""} onChange={e=>setVal(item.k,e.target.value)} style={{width:"100%",padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"right"}}/></td>
+      <td style={{padding:"6px 10px",fontSize:11,color:t.tm,width:60,textAlign:"right"}}>{v?pct(v).toFixed(2):"0"}</td>
+    </tr>);
+  };
+
+  const TH=({children})=>(<tr style={{background:t.thBg}}><th colSpan={3} style={{padding:"8px 10px",textAlign:"left",fontSize:12,fontWeight:600,color:t.text,borderBottom:`2px solid ${t.cb}`}}>{children}</th></tr>);
+  const TFooter=({label,val,color})=>(<tr style={{background:`${color}10`}}><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color}}>{label}</td><td style={{padding:"8px 10px",fontSize:12,fontWeight:600,color,textAlign:"right"}}>{fmt(val)}</td><td style={{padding:"8px 10px",fontSize:11,fontWeight:600,color,textAlign:"right"}}>{totalIn>0?pct(val).toFixed(2):"0"}</td></tr>);
+
+  const exportPDF=()=>{
+    const title=period==="monthly"?`งบกระแสเงินสด เดือน ${fm(mKey)}`:`งบกระแสเงินสด ปี ${yKey}`;
+    const w=window.open("","_blank");
+    const mkRows=items=>items.map(it=>{const v=+row[it.k]||0;return`<tr><td>${it.l}</td><td class="num">${fmt(v)}</td><td class="num">${v?pct(v).toFixed(2):"0"}</td></tr>`}).join("");
+    w.document.write(`<html><head><title>${title}</title><style>
+      body{font-family:'Sarabun','Segoe UI',sans-serif;padding:30px;color:#1e293b;font-size:12px}
+      h1{color:#0ea5e9;font-size:18px;margin:0 0 4px}
+      .sub{color:#64748b;font-size:11px;margin-bottom:20px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+      table{width:100%;border-collapse:collapse;margin-bottom:16px}
+      th,td{padding:6px 10px;border:1px solid #cbd5e1;text-align:left}
+      th{background:#f1f5f9;font-weight:600}
+      .num{text-align:right}
+      .sec{background:#e0f2fe;font-weight:600}
+      .tot{background:#fef3c7;font-weight:600}
+      .net{background:#d1fae5;font-weight:700;font-size:13px}
+      @media print{body{padding:15px}}
+    </style></head><body>
+      <h1>${title}</h1>
+      <div class="sub">WealthHub — พิมพ์เมื่อ ${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</div>
+      <div class="grid">
+        <div>
+          <table>
+            <thead><tr class="sec"><th>กระแสเงินสดรับ</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
+            <tbody>${mkRows(CFI)}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody>
+          </table>
+          <table>
+            <thead><tr class="sec"><th>กระแสเงินสดจ่ายคงที่</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
+            <tbody>${mkRows(CFF)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody>
+          </table>
+        </div>
+        <div>
+          <table>
+            <thead><tr class="sec"><th>กระแสเงินสดจ่ายผันแปร</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
+            <tbody>${mkRows(CFV)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody>
+          </table>
+          <table>
+            <thead><tr class="sec"><th>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
+            <tbody>${mkRows(CFS)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายเพื่อการออม / การลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody>
+          </table>
+          <table>
+            <tbody>
+              <tr class="tot"><td>กระแสเงินสดจ่ายรวม</td><td class="num">${fmt(totalOut)}</td><td class="num">${totalIn>0?pct(totalOut).toFixed(2):"0"}</td></tr>
+              <tr class="net"><td>กระแสเงินสดสุทธิ</td><td class="num">${net>=0?"":"-"}${fmt(Math.abs(net))}</td><td class="num">${totalIn>0?pct(net).toFixed(2):"0"}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+  };
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Controls */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{display:"flex",gap:4,background:t.bg,borderRadius:8,padding:3}}>
+        {[{k:"monthly",l:"รายเดือน"},{k:"yearly",l:"รายปี"}].map(p=>(<button key={p.k} onClick={()=>setPeriod(p.k)} style={{padding:"6px 14px",fontSize:12,border:"none",borderRadius:6,cursor:"pointer",background:period===p.k?t.ac:"transparent",color:period===p.k?"#fff":t.ts,fontWeight:500}}>{p.l}</button>))}
+      </div>
+      {period==="monthly"?(<select value={mKey} onChange={e=>setMKey(e.target.value)} style={{fontSize:12,padding:"6px 10px",borderRadius:7,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}>{[...new Set([...months,...periods])].sort().reverse().map(m=><option key={m} value={m}>{fm(m)}</option>)}</select>
+      ):(<select value={yKey} onChange={e=>setYKey(e.target.value)} style={{fontSize:12,padding:"6px 10px",borderRadius:7,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}>{[...new Set([...years,...periods])].sort().reverse().map(y=><option key={y} value={y}>ปี {y}</option>)}</select>)}
+      <div style={{flex:1}}/>
+      <Btn t={t} onClick={exportPDF}>🖨 พิมพ์ / PDF</Btn>
+      {periods.includes(key)&&<Btn small danger t={t} onClick={delPeriod}>ลบข้อมูลช่วงนี้</Btn>}
+    </div>
+
+    {/* Summary */}
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="⬆" label="กระแสเงินสดรับ" value={fB(totalIn)} t={t} color={t.g}/>
+      <MC icon="⬇" label="กระแสเงินสดจ่ายรวม" value={fB(totalOut)} sub={`คงที่ ${fmt(totalFixed)} + ผันแปร ${fmt(totalVar)} + ออม ${fmt(totalSave)}`} t={t} color={t.r}/>
+      <MC icon="💰" label="กระแสเงินสดสุทธิ" value={`${net>=0?"+":"-"}${fB(net)}`} sub={totalIn>0?`${pct(net).toFixed(2)}% ของรายรับ`:""} t={t} color={net>=0?t.g:t.r}/>
+    </div>
+
+    {/* Tables - 2 columns */}
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
+      {/* LEFT: รับ + จ่ายคงที่ */}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><TH>กระแสเงินสดรับ</TH><tr style={{background:t.bg}}><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"left",borderBottom:`1px solid ${t.cb}`}}>หัวข้อ</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>บาท</th><th style={{padding:"6px 10px",fontSize:10,color:t.tm,fontWeight:500,textAlign:"right",borderBottom:`1px solid ${t.cb}`}}>ร้อยละ</th></tr></thead>
+            <tbody>{CFI.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดรับ" val={totalIn} color={t.g}/></tbody>
+          </table>
+        </div>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><TH>กระแสเงินสดจ่ายคงที่</TH></thead>
+            <tbody>{CFF.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายคงที่" val={totalFixed} color={t.am}/></tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* RIGHT: ผันแปร + ออม + สุทธิ */}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><TH>กระแสเงินสดจ่ายผันแปร</TH></thead>
+            <tbody>{CFV.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายผันแปร" val={totalVar} color={t.r}/></tbody>
+          </table>
+        </div>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><TH>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</TH></thead>
+            <tbody>{CFS.map(it=><Row key={it.k} item={it}/>)}<TFooter label="รวมกระแสเงินสดจ่ายเพื่อการออม/การลงทุน" val={totalSave} color={t.ac}/></tbody>
+          </table>
+        </div>
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <tbody>
+              <TFooter label="กระแสเงินสดจ่ายรวม" val={totalOut} color={t.r}/>
+              <tr style={{background:net>=0?`${t.g}15`:`${t.r}15`}}><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r}}>กระแสเงินสดสุทธิ</td><td style={{padding:"10px",fontSize:14,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{net>=0?"":"-"}{fmt(Math.abs(net))}</td><td style={{padding:"10px",fontSize:12,fontWeight:700,color:net>=0?t.g:t.r,textAlign:"right"}}>{totalIn>0?pct(net).toFixed(2):"0"}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ข้อมูลจะถูกบันทึกอัตโนมัติเมื่อพิมพ์ • ร้อยละคำนวณจากกระแสเงินสดรับรวม</div>
+  </div>);
+}
+
 /* ═══ TXN PAGE ═══ */
 function TxnPage({data,stats,onAdd,onDel,t}){const[filter,setFilter]=useState("all");const[mf,setMf]=useState(mk(td()));const filtered=useMemo(()=>data.transactions.filter(tx=>filter==="all"||tx.type===filter).filter(tx=>mk(tx.date)===mf).sort((a,b)=>new Date(b.date)-new Date(a.date)),[data.transactions,filter,mf]);const months=useMemo(()=>{const s=new Set(data.transactions.map(tx=>mk(tx.date)));s.add(mk(td()));return[...s].sort().reverse()},[data.transactions]);
 return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่าย" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/><MC icon="💰" label="คงเหลือ" value={fB(stats.netThisMonth)} t={t} color={stats.netThisMonth>=0?t.g:t.r}/></div>
@@ -485,7 +643,7 @@ function WealthHub(){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div><h1 style={{margin:0,fontSize:20,fontWeight:600}}>{pl}</h1><div style={{fontSize:11,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>
-          {!["reports","dca","retire","plan","balance","cashflow","budget"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -526,6 +684,7 @@ function WealthHub(){
       {page==="budget"&&<BudgetPage data={data} stats={stats} persist={persist} t={t}/>}
       {page==="balance"&&<BalancePage data={data} stats={stats} persist={persist} t={t}/>}
       {page==="cashflow"&&<CashFlowPage data={data} stats={stats} t={t}/>}
+      {page==="cfdetail"&&<CashFlowDetailPage data={data} persist={persist} t={t}/>}
 
       {page==="goals"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="🎯" label="เป้าหมายรวม" value={fB(stats.totalGoalTarget)} t={t}/><MC icon="💰" label="ออมแล้ว" value={fB(stats.totalGoalSaved)} t={t} color={t.g}/><MC icon="📊" label="เหลือ" value={fB(stats.totalGoalTarget-stats.totalGoalSaved)} t={t} color={t.am}/></div>
