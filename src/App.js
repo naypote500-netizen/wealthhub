@@ -17,14 +17,32 @@ const td=()=>new Date().toISOString().slice(0,10);
 const mk=d=>d.slice(0,7);
 const fm=d=>new Date(d+"-01").toLocaleDateString("th-TH",{month:"short",year:"2-digit"});
 
-const SK="wealthhub-v5";
-function ld(){try{const r=localStorage.getItem(SK);return r?JSON.parse(r):null}catch{return null}}
+const SK="wealthhub-v6";const OSK="wealthhub-v5";
+const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
+function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{}}}catch{return null}}
 function sv(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){console.error(e)}}
-const DF={assets:[],transactions:[],goals:[],debts:[],balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
+
+/* Process recurring: generate txn for current month if day-of-month has passed and not yet run this month */
+function processRecurring(data){
+  if(!data.recurring?.length)return data;
+  const today=new Date();const curDay=today.getDate();const curMonth=mk(td());
+  const newTxns=[];
+  const updated=data.recurring.map(r=>{
+    if(!r.active)return r;
+    if(r.lastRun===curMonth)return r;
+    if(curDay<(r.dayOfMonth||1))return r;
+    const day=Math.min(r.dayOfMonth||1,28);
+    const date=`${curMonth}-${String(day).padStart(2,"0")}`;
+    newTxns.push({id:uid(),type:r.type,category:r.category,amount:+r.amount,date,note:(r.name||"รายการประจำ")+" (auto)",recurringId:r.id});
+    return{...r,lastRun:curMonth};
+  });
+  if(!newTxns.length)return data;
+  return{...data,transactions:[...data.transactions,...newTxns],recurring:updated};
+}
 
 /* ═══ NAV ═══ */
 const NAV=[
-  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},
+  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},
   {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
 ];
@@ -312,6 +330,97 @@ function GoalForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:
 
 function DebtForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:"",icon:"🏦",total:"",paid:"0",rate:"0"});const ok=f.name&&+f.total>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:4}}>{["🏦","💳","🏠","🚗","🎓"].map(ic=>(<button key={ic} onClick={()=>set("icon",ic)} style={{width:34,height:34,borderRadius:7,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",border:f.icon===ic?`2px solid ${t.am}`:`1px solid ${t.cb}`,background:f.icon===ic?t.amL:"transparent",cursor:"pointer"}}>{ic}</button>))}</div><Inp label="ชื่อหนี้" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="ยอดหนี้ (฿)" t={t} type="number" value={f.total} onChange={e=>set("total",e.target.value)}/><Inp label="จ่ายแล้ว (฿)" t={t} type="number" value={f.paid} onChange={e=>set("paid",e.target.value)}/></div><Inp label="ดอกเบี้ย (%/ปี)" t={t} type="number" step="0.1" value={f.rate} onChange={e=>set("rate",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
+/* ═══ RECURRING FORM & PAGE ═══ */
+function RecurringForm({initial,onSave,onCancel,t}){
+  const[f,set]=useF(initial||{name:"",type:"expense",category:"food",amount:"",dayOfMonth:"1",active:true});
+  const cats=f.type==="income"?IC:EC;const ok=f.name&&+f.amount>0&&+f.dayOfMonth>=1&&+f.dayOfMonth<=31;
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับประจำ":"💸 รายจ่ายประจำ"}</button>))}</div>
+    <Inp label="ชื่อรายการ" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เงินเดือน, ค่าเช่า, Netflix"/>
+    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/>
+      <Inp label="วันที่ของเดือน (1-31)" t={t} type="number" min="1" max="31" value={f.dayOfMonth} onChange={e=>set("dayOfMonth",e.target.value)}/>
+    </div>
+    <label style={{fontSize:12,color:t.ts,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}><input type="checkbox" checked={!!f.active} onChange={e=>set("active",e.target.checked)}/>เปิดใช้งาน (สร้างรายการอัตโนมัติทุกเดือน)</label>
+    <div style={{fontSize:10,color:t.tm}}>* ระบบจะสร้างรายการอัตโนมัติเมื่อเปิดแอปในวันที่กำหนดของทุกเดือน</div>
+    <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾 บันทึก":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div>
+  </div>);
+}
+
+function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,t}){
+  const list=data.recurring||[];
+  const monthlyIn=list.filter(r=>r.active&&r.type==="income").reduce((s,r)=>s+(+r.amount||0),0);
+  const monthlyOut=list.filter(r=>r.active&&r.type==="expense").reduce((s,r)=>s+(+r.amount||0),0);
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💵" label="รายรับประจำ/เดือน" value={fB(monthlyIn)} t={t} color={t.g}/>
+      <MC icon="💸" label="รายจ่ายประจำ/เดือน" value={fB(monthlyOut)} t={t} color={t.r}/>
+      <MC icon="💰" label="สุทธิประจำเดือน" value={`${monthlyIn-monthlyOut>=0?"+":"-"}${fB(monthlyIn-monthlyOut)}`} t={t} color={monthlyIn-monthlyOut>=0?t.g:t.r}/>
+    </div>
+    {list.length===0?<Empty icon="↻" title="ยังไม่มีรายการประจำ" sub="เพิ่มเงินเดือน ค่าเช่า subscription ที่เกิดทุกเดือน" action="+ เพิ่มรายการประจำ" onAction={onAdd} t={t}/>:(
+      <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+        {list.map((r,i)=>{const cats=r.type==="income"?IC:EC;const cat=cats.find(c=>c.v===r.category)||cats[cats.length-1];const isI=r.type==="income";return(<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<list.length-1?`1px solid ${t.cb}`:"none",opacity:r.active?1:0.5}}>
+          <div style={{width:36,height:36,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:13,fontWeight:500}}>{r.name}</span>
+              <Badge color={isI?t.g:t.r}>{cat.l}</Badge>
+              {!r.active&&<Badge color={t.tm}>ปิดอยู่</Badge>}
+              {r.lastRun===mk(td())&&<Badge color={t.ac}>เดือนนี้แล้ว</Badge>}
+            </div>
+            <div style={{fontSize:10,color:t.tm,marginTop:2}}>ทุกวันที่ {r.dayOfMonth} ของเดือน{r.lastRun?` • รันล่าสุด ${fm(r.lastRun)}`:""}</div>
+          </div>
+          <span style={{fontSize:14,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(r.amount)}</span>
+          <div style={{display:"flex",gap:3}}>
+            <Btn small t={t} onClick={()=>onToggle(r)}>{r.active?"⏸":"▶"}</Btn>
+            <Btn small t={t} onClick={()=>onRunNow(r)} disabled={r.lastRun===mk(td())}>รันเดี๋ยวนี้</Btn>
+            <Btn small t={t} onClick={()=>onEdit(r)}>แก้ไข</Btn>
+            <Btn small danger t={t} onClick={()=>{if(window.confirm(`ลบ ${r.name}?`))onDel(r.id)}}>ลบ</Btn>
+          </div>
+        </div>)})}
+      </div>
+    )}
+  </div>);
+}
+
+/* ═══ BUDGET PAGE ═══ */
+function BudgetPage({data,stats,persist,t}){
+  const budgets=data.budgets||{};
+  const tm=mk(td());
+  const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
+  const setBudget=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
+  const totalBudget=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
+  const totalSpent=Object.values(spent).reduce((s,v)=>s+v,0);
+  const totalPct=totalBudget>0?(totalSpent/totalBudget*100):0;
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="🎯" label="งบประมาณรวม/เดือน" value={fB(totalBudget)} t={t} color={t.ac}/>
+      <MC icon="💸" label="ใช้ไปเดือนนี้" value={fB(totalSpent)} t={t} color={t.r}/>
+      <MC icon="💰" label="คงเหลือ" value={fB(Math.max(0,totalBudget-totalSpent))} sub={totalBudget>0?`${totalPct.toFixed(0)}% ของงบ`:""} t={t} color={totalSpent<=totalBudget?t.g:t.r}/>
+    </div>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>⊡ งบประมาณรายหมวด (เดือนนี้)</div>
+      <div style={{fontSize:11,color:t.tm,marginBottom:12}}>ตั้งเพดานรายจ่ายแต่ละหมวด ระบบจะเตือนเมื่อใกล้เกิน/เกินงบ</div>
+      {EC.map((c,i)=>{const b=+budgets[c.v]||0;const s=spent[c.v]||0;const p=b>0?(s/b*100):0;const col=p>=100?t.r:p>=80?t.am:t.g;return(<div key={c.v} style={{padding:"10px 0",borderBottom:i<EC.length-1?`1px solid ${t.cb}`:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:15,width:24}}>{c.i}</span>
+          <span style={{fontSize:12,fontWeight:500,flex:1}}>{c.l}</span>
+          <span style={{fontSize:11,color:t.tm}}>ใช้ไป {fB(s)}</span>
+          <input type="number" value={b||""} onChange={e=>setBudget(c.v,e.target.value)} placeholder="ตั้งงบ" style={{width:100,padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:12,background:t.ib,color:t.text,textAlign:"right"}}/>
+          <span style={{fontSize:11,color:t.tm,width:30}}>฿</span>
+        </div>
+        {b>0&&(<><PB pct={p} color={col} height={6} t={t}/>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10}}>
+            <span style={{color:col}}>{p>=100?`⚠️ เกินงบ ${fB(s-b)}`:p>=80?`⚠ ใกล้เต็มงบ`:`เหลือ ${fB(b-s)}`}</span>
+            <span style={{color:t.tm}}>{p.toFixed(0)}%</span>
+          </div></>)}
+      </div>)})}
+    </div>
+    <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ตัวเลขใช้จ่ายคำนวณจากธุรกรรมประเภท "รายจ่าย" ของเดือนปัจจุบัน</div>
+  </div>);
+}
+
 /* ═══ TXN PAGE ═══ */
 function TxnPage({data,stats,onAdd,onDel,t}){const[filter,setFilter]=useState("all");const[mf,setMf]=useState(mk(td()));const filtered=useMemo(()=>data.transactions.filter(tx=>filter==="all"||tx.type===filter).filter(tx=>mk(tx.date)===mf).sort((a,b)=>new Date(b.date)-new Date(a.date)),[data.transactions,filter,mf]);const months=useMemo(()=>{const s=new Set(data.transactions.map(tx=>mk(tx.date)));s.add(mk(td()));return[...s].sort().reverse()},[data.transactions]);
 return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่าย" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/><MC icon="💰" label="คงเหลือ" value={fB(stats.netThisMonth)} t={t} color={stats.netThisMonth>=0?t.g:t.r}/></div>
@@ -322,7 +431,8 @@ return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{
 function WealthHub(){
   const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);
   const t=dark?Dk:L;
-  useEffect(()=>{setData(ld()||DF);setLoading(false)},[]);
+  useEffect(()=>{const loaded=ld()||DF;const processed=processRecurring(loaded);if(processed!==loaded)sv(processed);setData(processed);try{setDark(localStorage.getItem("wealthhub-dark")==="1")}catch{}setLoading(false)},[]);
+  useEffect(()=>{try{localStorage.setItem("wealthhub-dark",dark?"1":"0")}catch{}},[dark]);
   const persist=useCallback(nd=>{setData(nd);sv(nd)},[]);
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
   const toThb=(v,cur)=>cur==="USD"?v*rate:v;
@@ -338,6 +448,14 @@ function WealthHub(){
   const addDebt=f=>{persist({...data,debts:[...data.debts,{...f,id:uid(),total:+f.total,paid:+f.paid,rate:+f.rate}]});setModal(null)};
   const updateDebt=(id,f)=>{persist({...data,debts:data.debts.map(d=>d.id===id?{...d,...f,total:+f.total,paid:+f.paid,rate:+f.rate}:d)});setModal(null)};
   const delDebt=id=>persist({...data,debts:data.debts.filter(d=>d.id!==id)});
+  const addRecurring=f=>{persist({...data,recurring:[...(data.recurring||[]),{...f,id:uid(),amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active,lastRun:null}]});setModal(null)};
+  const updateRecurring=(id,f)=>{persist({...data,recurring:(data.recurring||[]).map(r=>r.id===id?{...r,...f,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active}:r)});setModal(null)};
+  const delRecurring=id=>persist({...data,recurring:(data.recurring||[]).filter(r=>r.id!==id)});
+  const toggleRecurring=r=>persist({...data,recurring:data.recurring.map(x=>x.id===r.id?{...x,active:!x.active}:x)});
+  const runRecurringNow=r=>{const cm=mk(td());const day=Math.min(r.dayOfMonth||1,28);const date=`${cm}-${String(day).padStart(2,"0")}`;const tx={id:uid(),type:r.type,category:r.category,amount:+r.amount,date,note:(r.name||"รายการประจำ")+" (manual)",recurringId:r.id};persist({...data,transactions:[...data.transactions,tx],recurring:data.recurring.map(x=>x.id===r.id?{...x,lastRun:cm}:x)})};
+
+  const exportData=()=>{const payload={version:SK,exportedAt:new Date().toISOString(),data};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`wealthhub-backup-${td()}.json`;a.click();URL.revokeObjectURL(url)};
+  const importData=e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const parsed=JSON.parse(ev.target.result);const payload=parsed.data||parsed;if(!payload||typeof payload!=="object"||!Array.isArray(payload.assets))throw new Error("รูปแบบไฟล์ไม่ถูกต้อง");if(!window.confirm("นำเข้าข้อมูลจะเขียนทับข้อมูลปัจจุบันทั้งหมด ดำเนินการต่อ?"))return;const merged={...DF,...payload,balanceSheet:{...DF.balanceSheet,...(payload.balanceSheet||{})},settings:{...DF.settings,...(payload.settings||{})},recurring:payload.recurring||[],budgets:payload.budgets||{}};persist(merged);window.alert("นำเข้าข้อมูลสำเร็จ ✅")}catch(err){window.alert("นำเข้าไม่สำเร็จ: "+err.message)}};reader.readAsText(file);e.target.value=""};
 
   const stats=useMemo(()=>{
     if(!data)return{};
@@ -367,7 +485,7 @@ function WealthHub(){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div><h1 style={{margin:0,fontSize:20,fontWeight:600}}>{pl}</h1><div style={{fontSize:11,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>
-          {!["reports","dca","retire","plan","balance","cashflow"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","budget"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -404,6 +522,8 @@ function WealthHub(){
       </div>)}
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
+      {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
+      {page==="budget"&&<BudgetPage data={data} stats={stats} persist={persist} t={t}/>}
       {page==="balance"&&<BalancePage data={data} stats={stats} persist={persist} t={t}/>}
       {page==="cashflow"&&<CashFlowPage data={data} stats={stats} t={t}/>}
 
@@ -427,13 +547,21 @@ function WealthHub(){
         <Btn primary t={t} onClick={()=>{const w=window.open("","_blank");w.document.write(`<html><head><title>WealthHub</title><style>body{font-family:Segoe UI,sans-serif;padding:40px;color:#1e293b}h1{color:#0ea5e9}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px}th{background:#f8fafc}</style></head><body><h1>WealthHub — รายงาน</h1><p>${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</p><table><tr><td>Net Worth</td><td>${fB(stats.netWorth)}</td></tr><tr><td>พอร์ต</td><td>${fB(stats.totalPortfolio)}</td></tr><tr><td>P&L</td><td>${fB(stats.portfolioPL)}</td></tr><tr><td>รายรับ</td><td>${fB(stats.incomeThisMonth)}</td></tr><tr><td>รายจ่าย</td><td>${fB(stats.expenseThisMonth)}</td></tr><tr><td>หนี้</td><td>${fB(stats.debtRemaining)}</td></tr></table>`);if(data.assets.length){w.document.write(`<h2>พอร์ต</h2><table><tr><th>ชื่อ</th><th>สกุล</th><th>มูลค่า</th><th>P&L</th></tr>`);stats.allocation.forEach(a=>{w.document.write(`<tr><td>${a.name}</td><td>${a.currency||"THB"}</td><td>${fB(a.value)}</td><td>${fB(a.pl)}</td></tr>`)});w.document.write(`</table>`)}w.document.write(`<p style="color:#94a3b8;font-size:11px;margin-top:30px">WealthHub</p></body></html>`);w.document.close();w.print()}}>🖨️ พิมพ์ / PDF</Btn>
       </div>)}
 
-      <div style={{marginTop:28,paddingTop:10,borderTop:`1px solid ${t.cb}`,textAlign:"center"}}><button onClick={()=>{if(window.confirm("ล้างทั้งหมด?"))persist(DF)}} style={{fontSize:9,color:t.tm,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>🗑 ล้างข้อมูล</button></div>
+      <div style={{marginTop:28,paddingTop:14,borderTop:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <Btn small t={t} onClick={exportData}>💾 Export JSON</Btn>
+          <label style={{display:"inline-block"}}><span style={{padding:"5px 12px",fontSize:11,fontWeight:500,cursor:"pointer",borderRadius:8,border:`1px solid ${t.cb}`,color:t.ts,display:"inline-block"}}>📂 Import JSON</span><input type="file" accept="application/json" onChange={importData} style={{display:"none"}}/></label>
+          <span style={{fontSize:10,color:t.tm}}>สำรอง/กู้คืนข้อมูลทั้งหมด</span>
+        </div>
+        <button onClick={()=>{if(window.confirm("ล้างทั้งหมด?"))persist(DF)}} style={{fontSize:9,color:t.tm,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>🗑 ล้างข้อมูล</button>
+      </div>
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
     <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
+    <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
   </div>);
 }
 
