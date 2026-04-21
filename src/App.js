@@ -996,7 +996,7 @@ function WealthHub(){
     return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,monthlyTrend:mt,expCatData:ecd};
   },[data,rate]);
 
-  if(session===undefined||loading)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
+  if(session===undefined||loading||(session&&!data))return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
   if(!session)return<AuthPage dark={dark} setDark={setDark} t={t}/>;
 
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
