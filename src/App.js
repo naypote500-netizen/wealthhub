@@ -935,13 +935,14 @@ function WealthHub(){
     let cancelled=false;
     (async()=>{
       setLoading(true);
-      const{data:row}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();
+      const{data:row,error:rowErr}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();
       if(cancelled)return;
       const loaded=row?.data||ld()||DF;
       const processed=processRecurring(loaded);
       setData(processed);
-      if(processed!==loaded){
-        supabase.from("user_data").upsert({user_id:session.user.id,data:processed,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(()=>{});
+      // Always save to Supabase if no cloud row yet (first login / migrating from localStorage)
+      if(!row?.data||processed!==loaded){
+        supabase.from("user_data").upsert({user_id:session.user.id,data:processed,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(({error})=>{if(error)console.error("initial sync error:",error)});
         sv(processed);
       }
       setLoading(false);
