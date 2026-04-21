@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend } from "recharts";
 
 /* ═══ THEME ═══ */
@@ -55,7 +56,7 @@ const NAV=[
 ];
 
 /* ═══ COMPONENTS ═══ */
-function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose}){
+function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose,onLogout,userEmail}){
   const groups=[...new Set(NAV.map(n=>n.g))];
   const visible=!isMobile||open;
   const go=k=>{setPage(k);if(isMobile)onClose&&onClose()};
@@ -75,6 +76,8 @@ function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose}){
     </div>
     <div style={{padding:"10px 20px",borderTop:`1px solid ${dark?"#1E293B":"#1a2744"}`}}>
       <button onClick={()=>setDark(!dark)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.sidebarText,cursor:"pointer",fontSize:11,padding:0}}><span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>{dark?"Light":"Dark"} Mode</button>
+      {userEmail&&<div style={{fontSize:9,color:t.sidebarText,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>👤 {userEmail}</div>}
+      {onLogout&&<button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.r,cursor:"pointer",fontSize:11,padding:"4px 0",marginTop:2}}>🚪 ออกจากระบบ</button>}
     </div>
   </div></>);
 }
@@ -865,14 +868,93 @@ return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{
 <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}><div style={{display:"flex",gap:4}}>{[{k:"all",l:"ทั้งหมด"},{k:"income",l:"รายรับ"},{k:"expense",l:"รายจ่าย"}].map(f=>(<button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"4px 12px",fontSize:11,border:filter===f.k?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",background:filter===f.k?(f.k==="income"?t.g:f.k==="expense"?t.r:t.ac):"transparent",color:filter===f.k?"#fff":t.ts}}>{f.l}</button>))}</div><select value={mf} onChange={e=>setMf(e.target.value)} style={{fontSize:11,padding:"4px 8px",borderRadius:7,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}>{months.map(m=><option key={m} value={m}>{fm(m)}</option>)}</select></div>
 {filtered.length===0?<Empty icon="💸" title="ไม่มีรายการ" sub="เพิ่มรายรับหรือรายจ่าย" action="+ บันทึก" onAction={onAdd} t={t}/>:(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>{filtered.map((tx,i)=>{const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none"}}><div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}</div><div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short"})}</div></div><span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span><button onClick={()=>onDel(tx.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}}>✕</button></div>)})}</div>)}</div>)}
 
+/* ═══ AUTH PAGE ═══ */
+function AuthPage({dark,setDark,t}){
+  const[mode,setMode]=useState("login");
+  const[email,setEmail]=useState("");
+  const[pw,setPw]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[err,setErr]=useState("");
+  const[msg,setMsg]=useState("");
+  const submit=async()=>{
+    if(!email||!pw)return;
+    setLoading(true);setErr("");setMsg("");
+    if(mode==="login"){
+      const{error}=await supabase.auth.signInWithPassword({email,password:pw});
+      if(error)setErr(error.message);
+    }else{
+      const{error}=await supabase.auth.signUp({email,password:pw});
+      if(error)setErr(error.message);
+      else setMsg("ส่ง email ยืนยันแล้ว กรุณาตรวจสอบ inbox ครับ (ถ้าไม่เห็นให้เช็ค Spam)");
+    }
+    setLoading(false);
+  };
+  return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",padding:16}}>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:32,width:"100%",maxWidth:360}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:26,fontWeight:700,marginBottom:4}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.text}}>Hub</span></div>
+        <div style={{fontSize:11,color:t.tm}}>ระบบจัดการการเงินส่วนบุคคล</div>
+      </div>
+      <div style={{display:"flex",gap:4,background:t.bg,borderRadius:8,padding:3,marginBottom:20}}>
+        {[{k:"login",l:"เข้าสู่ระบบ"},{k:"signup",l:"สมัครสมาชิก"}].map(m=>(<button key={m.k} onClick={()=>{setMode(m.k);setErr("");setMsg("")}} style={{flex:1,padding:"7px",fontSize:12,border:"none",borderRadius:6,cursor:"pointer",background:mode===m.k?t.ac:"transparent",color:mode===m.k?"#fff":t.ts,fontWeight:500}}>{m.l}</button>))}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <Inp label="อีเมล" t={t} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        <Inp label="รหัสผ่าน (อย่างน้อย 6 ตัว)" t={t} type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        {err&&<div style={{fontSize:11,color:t.r,padding:"8px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+        {msg&&<div style={{fontSize:11,color:t.g,padding:"8px 10px",background:`${t.g}12`,borderRadius:6}}>{msg}</div>}
+        <Btn primary t={t} disabled={loading||!email||!pw} onClick={submit} style={{width:"100%",marginTop:4}}>
+          {loading?"กำลังดำเนินการ...":(mode==="login"?"เข้าสู่ระบบ":"สมัครสมาชิก")}
+        </Btn>
+      </div>
+      <div style={{marginTop:20,textAlign:"right"}}>
+        <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11}}>{dark?"☀️ Light":"🌙 Dark"}</button>
+      </div>
+    </div>
+  </div>);
+}
+
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
-  useEffect(()=>{const loaded=ld()||DF;const processed=processRecurring(loaded);if(processed!==loaded)sv(processed);setData(processed);try{setDark(localStorage.getItem("wealthhub-dark")==="1")}catch{}setLoading(false)},[]);
+
+  useEffect(()=>{try{setDark(localStorage.getItem("wealthhub-dark")==="1")}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("wealthhub-dark",dark?"1":"0")}catch{}},[dark]);
-  const persist=useCallback(nd=>{setData(nd);sv(nd)},[]);
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session:s}})=>setSession(s||null));
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>setSession(s||null));
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  useEffect(()=>{
+    if(session===undefined)return;
+    if(!session){setLoading(false);return;}
+    let cancelled=false;
+    (async()=>{
+      setLoading(true);
+      const{data:row}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();
+      if(cancelled)return;
+      const loaded=row?.data||ld()||DF;
+      const processed=processRecurring(loaded);
+      setData(processed);
+      if(processed!==loaded){
+        supabase.from("user_data").upsert({user_id:session.user.id,data:processed,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(()=>{});
+        sv(processed);
+      }
+      setLoading(false);
+    })();
+    return()=>{cancelled=true};
+  },[session]);
+
+  const persist=useCallback((nd)=>{
+    setData(nd);sv(nd);
+    if(session?.user?.id)supabase.from("user_data").upsert({user_id:session.user.id,data:nd,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(({error})=>{if(error)console.error("sync:",error)});
+  },[session]);
+
+  const logout=()=>supabase.auth.signOut().then(()=>{setData(null);setPage("dashboard")});
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
   const toThb=(v,cur)=>cur==="USD"?v*rate:v;
 
@@ -914,12 +996,13 @@ function WealthHub(){
     return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,monthlyTrend:mt,expCatData:ecd};
   },[data,rate]);
 
-  if(loading)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts}}>กำลังโหลด...</div>;
+  if(session===undefined||loading)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
+  if(!session)return<AuthPage dark={dark} setDark={setDark} t={t}/>;
 
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>
-    <Sidebar page={page} setPage={setPage} dark={dark} setDark={setDark} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)}/>
+    <Sidebar page={page} setPage={setPage} dark={dark} setDark={setDark} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
     <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px":"20px 28px",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
