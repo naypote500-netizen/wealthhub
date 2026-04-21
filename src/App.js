@@ -878,14 +878,20 @@ function AuthPage({dark,setDark,t}){
   const[msg,setMsg]=useState("");
   const submit=async()=>{
     if(!email||!pw)return;
+    const emailRe=/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+    if(!emailRe.test(email)){setErr("รูปแบบอีเมลไม่ถูกต้อง");return;}
+    if(mode==="signup"&&pw.length<6){setErr("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return;}
     setLoading(true);setErr("");setMsg("");
     if(mode==="login"){
       const{error}=await supabase.auth.signInWithPassword({email,password:pw});
-      if(error)setErr(error.message);
+      if(error){
+        if(error.message.toLowerCase().includes("email not confirmed"))setErr("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (เช็ค inbox หรือ Spam)");
+        else setErr(error.message);
+      }
     }else{
       const{error}=await supabase.auth.signUp({email,password:pw});
       if(error)setErr(error.message);
-      else setMsg("ส่ง email ยืนยันแล้ว กรุณาตรวจสอบ inbox ครับ (ถ้าไม่เห็นให้เช็ค Spam)");
+      else setMsg("✉️ ส่งลิงก์ยืนยันไปที่ "+email+" แล้ว กรุณาคลิกลิงก์ในอีเมลเพื่อยืนยันตัวตน (ถ้าไม่เห็นให้เช็คโฟลเดอร์ Spam / Junk)");
     }
     setLoading(false);
   };
