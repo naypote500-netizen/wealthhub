@@ -62,19 +62,19 @@ function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose,onLogout,use
   const go=k=>{setPage(k);if(isMobile)onClose&&onClose()};
   return(<>
     {isMobile&&open&&<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:99}}/>}
-    <div style={{width:220,height:"100vh",background:t.sidebar,display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${dark?"#1E293B":"#1a2744"}`,overflow:"hidden",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none"}}>
-    <div style={{padding:"16px 20px 16px",borderBottom:`1px solid ${dark?"#1E293B":"#1a2744"}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexShrink:0}}>
+    <div style={{width:220,height:"100vh",background:t.sidebar,display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${dark?"#1E293B":"#1a2744"}`,overflowY:"auto",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none"}}>
+    <div style={{padding:"16px 20px 16px",borderBottom:`1px solid ${dark?"#1E293B":"#1a2744"}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,position:"sticky",top:0,background:t.sidebar,zIndex:1}}>
       <div><div style={{fontSize:19,fontWeight:600}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.sidebarText}}>Hub</span></div>
         <div style={{fontSize:9,color:t.sidebarText,marginTop:2}}>ระบบจัดการการเงินส่วนบุคคล</div></div>
       {isMobile&&<button onClick={onClose} style={{background:"none",border:"none",color:t.sidebarText,fontSize:20,cursor:"pointer",lineHeight:1,padding:0}}>✕</button>}
     </div>
-    <div style={{padding:"10px 10px",flex:1,overflowY:"auto",minHeight:0}}>
+    <div style={{padding:"10px 10px",flex:1}}>
       {groups.map(g=>(<div key={g}>
         <div style={{fontSize:9,color:t.sidebarText,textTransform:"uppercase",letterSpacing:1.2,padding:"10px 8px 4px",fontWeight:600}}>{g}</div>
         {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?(dark?"#1E293B":"#162035"):"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?500:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
       </div>))}
     </div>
-    <div style={{padding:"10px 20px",borderTop:`1px solid ${dark?"#1E293B":"#1a2744"}`,flexShrink:0}}>
+    <div style={{padding:"10px 20px",borderTop:`1px solid ${dark?"#1E293B":"#1a2744"}`,position:"sticky",bottom:0,background:t.sidebar}}>
       <button onClick={()=>setDark(!dark)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.sidebarText,cursor:"pointer",fontSize:11,padding:0}}><span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>{dark?"Light":"Dark"} Mode</button>
       {userEmail&&<div style={{fontSize:9,color:t.sidebarText,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>👤 {userEmail}</div>}
       {onLogout&&<button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.r,cursor:"pointer",fontSize:11,padding:"4px 0",marginTop:2}}>🚪 ออกจากระบบ</button>}
