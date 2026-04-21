@@ -873,13 +873,15 @@ function AuthPage({dark,setDark,t}){
   const[mode,setMode]=useState("login");
   const[email,setEmail]=useState("");
   const[pw,setPw]=useState("");
+  const[showPw,setShowPw]=useState(false);
   const[loading,setLoading]=useState(false);
   const[err,setErr]=useState("");
   const[msg,setMsg]=useState("");
   const submit=async()=>{
-    if(!email||!pw)return;
     const emailRe=/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+    if(!email)return;
     if(!emailRe.test(email)){setErr("รูปแบบอีเมลไม่ถูกต้อง");return;}
+    if(mode!=="forgot"&&!pw)return;
     if(mode==="signup"&&pw.length<6){setErr("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return;}
     setLoading(true);setErr("");setMsg("");
     if(mode==="login"){
@@ -888,10 +890,14 @@ function AuthPage({dark,setDark,t}){
         if(error.message.toLowerCase().includes("email not confirmed"))setErr("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (เช็ค inbox หรือ Spam)");
         else setErr(error.message);
       }
-    }else{
+    }else if(mode==="signup"){
       const{error}=await supabase.auth.signUp({email,password:pw});
       if(error)setErr(error.message);
       else setMsg("✉️ ส่งลิงก์ยืนยันไปที่ "+email+" แล้ว กรุณาคลิกลิงก์ในอีเมลเพื่อยืนยันตัวตน (ถ้าไม่เห็นให้เช็คโฟลเดอร์ Spam / Junk)");
+    }else{
+      const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});
+      if(error)setErr(error.message);
+      else setMsg("✉️ ส่งลิงก์รีเซ็ตรหัสผ่านไปที่ "+email+" แล้ว กรุณาคลิกลิงก์ในอีเมลเพื่อตั้งรหัสผ่านใหม่ (ถ้าไม่เห็นให้เช็ค Spam / Junk)");
     }
     setLoading(false);
   };
@@ -901,17 +907,22 @@ function AuthPage({dark,setDark,t}){
         <div style={{fontSize:26,fontWeight:700,marginBottom:4}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.text}}>Hub</span></div>
         <div style={{fontSize:11,color:t.tm}}>ระบบจัดการการเงินส่วนบุคคล</div>
       </div>
-      <div style={{display:"flex",gap:4,background:t.bg,borderRadius:8,padding:3,marginBottom:20}}>
+      {mode!=="forgot"?(<div style={{display:"flex",gap:4,background:t.bg,borderRadius:8,padding:3,marginBottom:20}}>
         {[{k:"login",l:"เข้าสู่ระบบ"},{k:"signup",l:"ลงทะเบียนใช้งาน"}].map(m=>(<button key={m.k} onClick={()=>{setMode(m.k);setErr("");setMsg("")}} style={{flex:1,padding:"7px",fontSize:12,border:"none",borderRadius:6,cursor:"pointer",background:mode===m.k?t.ac:"transparent",color:mode===m.k?"#fff":t.ts,fontWeight:500}}>{m.l}</button>))}
-      </div>
+      </div>):(<div style={{marginBottom:16,fontSize:14,fontWeight:600,color:t.text,textAlign:"center"}}>🔑 ลืมรหัสผ่าน</div>)}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <Inp label="อีเมล" t={t} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&submit()}/>
-        <Inp label="รหัสผ่าน (อย่างน้อย 6 ตัว)" t={t} type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        {mode!=="forgot"&&(<div style={{position:"relative"}}>
+          <Inp label={mode==="signup"?"รหัสผ่าน (อย่างน้อย 6 ตัว)":"รหัสผ่าน"} t={t} type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={{paddingRight:36}}/>
+          <button type="button" onClick={()=>setShowPw(s=>!s)} aria-label={showPw?"ซ่อนรหัสผ่าน":"แสดงรหัสผ่าน"} style={{position:"absolute",right:6,bottom:4,background:"none",border:"none",cursor:"pointer",fontSize:14,color:t.tm,padding:"4px 6px",lineHeight:1}}>{showPw?"🙈":"👁️"}</button>
+        </div>)}
+        {mode==="login"&&(<button type="button" onClick={()=>{setMode("forgot");setErr("");setMsg("");setPw("")}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11,textAlign:"right",padding:0,marginTop:-4,alignSelf:"flex-end"}}>ลืมรหัสผ่าน?</button>)}
         {err&&<div style={{fontSize:11,color:t.r,padding:"8px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
         {msg&&<div style={{fontSize:11,color:t.g,padding:"8px 10px",background:`${t.g}12`,borderRadius:6}}>{msg}</div>}
-        <Btn primary t={t} disabled={loading||!email||!pw} onClick={submit} style={{width:"100%",marginTop:4}}>
-          {loading?"กำลังดำเนินการ...":(mode==="login"?"เข้าสู่ระบบ":"ลงทะเบียนใช้งาน")}
+        <Btn primary t={t} disabled={loading||!email||(mode!=="forgot"&&!pw)} onClick={submit} style={{width:"100%",marginTop:4}}>
+          {loading?"กำลังดำเนินการ...":(mode==="login"?"เข้าสู่ระบบ":mode==="signup"?"ลงทะเบียนใช้งาน":"ส่งลิงก์รีเซ็ตรหัสผ่าน")}
         </Btn>
+        {mode==="forgot"&&(<button type="button" onClick={()=>{setMode("login");setErr("");setMsg("")}} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11,textAlign:"center"}}>← กลับไปเข้าสู่ระบบ</button>)}
       </div>
       <div style={{marginTop:20,textAlign:"right"}}>
         <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11}}>{dark?"☀️ Light":"🌙 Dark"}</button>
@@ -922,7 +933,7 @@ function AuthPage({dark,setDark,t}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
 
@@ -931,9 +942,22 @@ function WealthHub(){
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session:s}})=>setSession(s||null));
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>setSession(s||null));
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{
+      setSession(s||null);
+      if(event==="PASSWORD_RECOVERY"){setRecovery(true);setShowAuth(false)}
+    });
     return()=>subscription.unsubscribe();
   },[]);
+
+  const updatePassword=async()=>{
+    if(newPw.length<6){setRecErr("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return;}
+    if(newPw!==newPw2){setRecErr("รหัสผ่านไม่ตรงกัน");return;}
+    setRecLoading(true);setRecErr("");
+    const{error}=await supabase.auth.updateUser({password:newPw});
+    setRecLoading(false);
+    if(error)setRecErr(error.message);
+    else{setRecovery(false);setNewPw("");setNewPw2("");setRecErr("");window.alert("เปลี่ยนรหัสผ่านสำเร็จ ✅")}
+  };
 
   useEffect(()=>{
     if(session===undefined)return;
@@ -1117,6 +1141,18 @@ function WealthHub(){
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage dark={dark} setDark={setDark} t={t}/></div></div>)}
+    <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>
+        <div style={{position:"relative"}}>
+          <Inp label="รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)" t={t} type={showNewPw?"text":"password"} value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="••••••" style={{paddingRight:36}}/>
+          <button type="button" onClick={()=>setShowNewPw(s=>!s)} style={{position:"absolute",right:6,bottom:4,background:"none",border:"none",cursor:"pointer",fontSize:14,color:t.tm,padding:"4px 6px",lineHeight:1}}>{showNewPw?"🙈":"👁️"}</button>
+        </div>
+        <Inp label="ยืนยันรหัสผ่าน" t={t} type={showNewPw?"text":"password"} value={newPw2} onChange={e=>setNewPw2(e.target.value)} placeholder="••••••"/>
+        {recErr&&<div style={{fontSize:11,color:t.r,padding:"8px 10px",background:`${t.r}12`,borderRadius:6}}>{recErr}</div>}
+        <Btn primary t={t} onClick={updatePassword} disabled={recLoading||!newPw||!newPw2} style={{width:"100%",marginTop:4}}>{recLoading?"กำลังบันทึก...":"บันทึกรหัสผ่านใหม่"}</Btn>
+      </div>
+    </Modal>
   </div>);
 }
 
