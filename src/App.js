@@ -889,8 +889,8 @@ function AuthPage({dark,setDark,t}){
     }
     setLoading(false);
   };
-  return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",padding:16}}>
-    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:32,width:"100%",maxWidth:360}}>
+  return(<div style={{color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:32,width:"min(360px,calc(100vw - 32px))"}}>
       <div style={{textAlign:"center",marginBottom:24}}>
         <div style={{fontSize:26,fontWeight:700,marginBottom:4}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.text}}>Hub</span></div>
         <div style={{fontSize:11,color:t.tm}}>ระบบจัดการการเงินส่วนบุคคล</div>
@@ -916,7 +916,7 @@ function AuthPage({dark,setDark,t}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
 
@@ -931,16 +931,23 @@ function WealthHub(){
 
   useEffect(()=>{
     if(session===undefined)return;
-    if(!session){setLoading(false);return;}
+    if(!session){
+      const loaded=ld()||DF;
+      const processed=processRecurring(loaded);
+      setData(processed);
+      if(processed!==loaded)sv(processed);
+      setLoading(false);
+      return;
+    }
+    setShowAuth(false);
     let cancelled=false;
     (async()=>{
       setLoading(true);
-      const{data:row,error:rowErr}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();
+      const{data:row}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();
       if(cancelled)return;
       const loaded=row?.data||ld()||DF;
       const processed=processRecurring(loaded);
       setData(processed);
-      // Always save to Supabase if no cloud row yet (first login / migrating from localStorage)
       if(!row?.data||processed!==loaded){
         supabase.from("user_data").upsert({user_id:session.user.id,data:processed,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(({error})=>{if(error)console.error("initial sync error:",error)});
         sv(processed);
@@ -955,7 +962,7 @@ function WealthHub(){
     if(session?.user?.id)supabase.from("user_data").upsert({user_id:session.user.id,data:nd,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(({error})=>{if(error)console.error("sync:",error)});
   },[session]);
 
-  const logout=()=>supabase.auth.signOut().then(()=>{setData(null);setPage("dashboard")});
+  const logout=()=>supabase.auth.signOut().then(()=>{setPage("dashboard")});
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
   const toThb=(v,cur)=>cur==="USD"?v*rate:v;
 
@@ -997,8 +1004,7 @@ function WealthHub(){
     return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,monthlyTrend:mt,expCatData:ecd};
   },[data,rate]);
 
-  if(session===undefined||loading||(session&&!data))return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
-  if(!session)return<AuthPage dark={dark} setDark={setDark} t={t}/>;
+  if(session===undefined||loading||!data)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
 
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
@@ -1012,6 +1018,7 @@ function WealthHub(){
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
+          {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
           {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
@@ -1103,6 +1110,7 @@ function WealthHub(){
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
+    {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage dark={dark} setDark={setDark} t={t}/></div></div>)}
   </div>);
 }
 
