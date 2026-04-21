@@ -896,7 +896,7 @@ function AuthPage({dark,setDark,t}){
         <div style={{fontSize:11,color:t.tm}}>ระบบจัดการการเงินส่วนบุคคล</div>
       </div>
       <div style={{display:"flex",gap:4,background:t.bg,borderRadius:8,padding:3,marginBottom:20}}>
-        {[{k:"login",l:"เข้าสู่ระบบ"},{k:"signup",l:"สมัครสมาชิก"}].map(m=>(<button key={m.k} onClick={()=>{setMode(m.k);setErr("");setMsg("")}} style={{flex:1,padding:"7px",fontSize:12,border:"none",borderRadius:6,cursor:"pointer",background:mode===m.k?t.ac:"transparent",color:mode===m.k?"#fff":t.ts,fontWeight:500}}>{m.l}</button>))}
+        {[{k:"login",l:"เข้าสู่ระบบ"},{k:"signup",l:"ลงทะเบียนใช้งาน"}].map(m=>(<button key={m.k} onClick={()=>{setMode(m.k);setErr("");setMsg("")}} style={{flex:1,padding:"7px",fontSize:12,border:"none",borderRadius:6,cursor:"pointer",background:mode===m.k?t.ac:"transparent",color:mode===m.k?"#fff":t.ts,fontWeight:500}}>{m.l}</button>))}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <Inp label="อีเมล" t={t} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&submit()}/>
@@ -904,7 +904,7 @@ function AuthPage({dark,setDark,t}){
         {err&&<div style={{fontSize:11,color:t.r,padding:"8px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
         {msg&&<div style={{fontSize:11,color:t.g,padding:"8px 10px",background:`${t.g}12`,borderRadius:6}}>{msg}</div>}
         <Btn primary t={t} disabled={loading||!email||!pw} onClick={submit} style={{width:"100%",marginTop:4}}>
-          {loading?"กำลังดำเนินการ...":(mode==="login"?"เข้าสู่ระบบ":"สมัครสมาชิก")}
+          {loading?"กำลังดำเนินการ...":(mode==="login"?"เข้าสู่ระบบ":"ลงทะเบียนใช้งาน")}
         </Btn>
       </div>
       <div style={{marginTop:20,textAlign:"right"}}>
