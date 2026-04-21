@@ -68,7 +68,7 @@ function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose,onLogout,use
         <div style={{fontSize:9,color:t.sidebarText,marginTop:2}}>ระบบจัดการการเงินส่วนบุคคล</div></div>
       {isMobile&&<button onClick={onClose} style={{background:"none",border:"none",color:t.sidebarText,fontSize:20,cursor:"pointer",lineHeight:1,padding:0}}>✕</button>}
     </div>
-    <div style={{padding:"10px 10px",flex:1,overflowY:"auto"}}>
+    <div style={{padding:"10px 10px",flex:1,overflowY:"auto",minHeight:0}}>
       {groups.map(g=>(<div key={g}>
         <div style={{fontSize:9,color:t.sidebarText,textTransform:"uppercase",letterSpacing:1.2,padding:"10px 8px 4px",fontWeight:600}}>{g}</div>
         {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?(dark?"#1E293B":"#162035"):"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?500:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
