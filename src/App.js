@@ -971,13 +971,13 @@ function ChallengesPage({t,session,rate,toThb,detailId,setDetailId}){
 }
 
 function CreateChallengeForm({onClose,t,session}){
-  const[f,set]=useF({name:"",description:"",end_date:"",starting_cash:"",target_pct:""});
+  const[f,set]=useF({name:"",description:"",end_date:"",starting_cash:"",target_amount:""});
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
   const submit=async()=>{
     if(!f.name)return;
     setLoading(true);setErr("");
     const code=genCode();
-    const{data:ch,error}=await supabase.from("challenges").insert({name:f.name,description:f.description||null,creator_id:session.user.id,end_date:f.end_date||null,join_code:code,target_pct:f.target_pct===""?null:+f.target_pct}).select().single();
+    const{data:ch,error}=await supabase.from("challenges").insert({name:f.name,description:f.description||null,creator_id:session.user.id,end_date:f.end_date||null,join_code:code,target_amount:f.target_amount===""?null:+f.target_amount}).select().single();
     if(error){setErr(error.message);setLoading(false);return;}
     const{error:mErr}=await supabase.from("challenge_members").insert({challenge_id:ch.id,user_id:session.user.id,display_name:session.user.email,starting_cash:+f.starting_cash||0,cash:+f.starting_cash||0,assets:[]});
     if(mErr){setErr(mErr.message);setLoading(false);return;}
@@ -988,8 +988,8 @@ function CreateChallengeForm({onClose,t,session}){
     <Inp label="คำอธิบาย (ไม่บังคับ)" t={t} value={f.description} onChange={e=>set("description",e.target.value)} placeholder="กติกา / รายละเอียด"/>
     <Inp label="วันสิ้นสุด (ไม่บังคับ)" t={t} type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)}/>
     <Inp label="เงินสดเริ่มต้น (บาท)" t={t} type="number" value={f.starting_cash} onChange={e=>set("starting_cash",e.target.value)} placeholder="100000"/>
-    <Inp label="🎯 เป้าหมาย % กำไร (ไม่บังคับ)" t={t} type="number" step="0.1" value={f.target_pct} onChange={e=>set("target_pct",e.target.value)} placeholder="เช่น 10 = เป้า +10%"/>
-    <div style={{fontSize:10,color:t.tm}}>* เงินสดเริ่มต้น = เงินที่ทุกคนเริ่มต้นชาเลนจ์นี้ ใช้คำนวณ % กำไร/ขาดทุน<br/>* เป้าหมาย = เป้า % กำไรที่ต้องการ (เช่น 10 หมายถึงทำกำไร +10% ภายในเวลาที่กำหนด)</div>
+    <Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 150000 = เป้า ฿150,000"/>
+    <div style={{fontSize:10,color:t.tm}}>* เงินสดเริ่มต้น = เงินที่ทุกคนเริ่มต้นชาเลนจ์นี้ ใช้คำนวณ % กำไร/ขาดทุน<br/>* เป้าหมาย = มูลค่ารวมที่ต้องการไปถึงภายในเวลา (เช่น เริ่ม ฿100,000 ตั้งเป้า ฿150,000 = +50%)</div>
     {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
     <div style={{display:"flex",gap:6}}>
       <Btn primary t={t} onClick={submit} disabled={loading||!f.name} style={{flex:1}}>{loading?"กำลังสร้าง...":"✓ สร้าง"}</Btn>
@@ -1097,10 +1097,11 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       setTimeout(()=>setRefresh(p=>({...p,msg:""})),4000);
     }catch(e){setRefresh({loading:false,msg:"",err:e.message});}
   };
-  const targetPct=challenge.target_pct!=null?+challenge.target_pct:null;
+  const targetAmount=challenge.target_amount!=null?+challenge.target_amount:(challenge.target_pct!=null?null:null);
+  const legacyTargetPct=challenge.target_amount==null&&challenge.target_pct!=null?+challenge.target_pct:null;
   const chartData=sorted.map(m=>{
     const nv=calcNetWorth(m),sv=calcStartingValue(m);
-    const target=targetPct!=null?sv*(1+targetPct/100):null;
+    const target=targetAmount!=null?targetAmount:(legacyTargetPct!=null?sv*(1+legacyTargetPct/100):null);
     const pctOfTarget=target&&target>0?(nv/target)*100:null;
     const pctGain=sv>0?((nv-sv)/sv)*100:0;
     const name=(m.display_name||"?").slice(0,12);
@@ -1108,6 +1109,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     const fill=target!=null?(reached?t.g:pctOfTarget>=75?t.ac:pctOfTarget>=50?t.am:t.r):(pctGain>=0?t.g:t.r);
     return{name:m.user_id===session.user.id?name+" (คุณ)":name,amount:+nv.toFixed(0),starting:+sv.toFixed(0),target:target!=null?+target.toFixed(0):null,pctOfTarget:pctOfTarget!=null?+pctOfTarget.toFixed(1):null,pctGain:+pctGain.toFixed(2),reached,fill};
   });
+  const hasTarget=targetAmount!=null||legacyTargetPct!=null;
   const maxTarget=chartData.reduce((mx,d)=>Math.max(mx,d.target||0),0);
   const maxNet=chartData.reduce((mx,d)=>Math.max(mx,d.amount||0),0);
   const yDomainMax=Math.max(maxTarget,maxNet)*1.08||100;
@@ -1118,7 +1120,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:18,fontWeight:700}}>🏆 {challenge.name}</div>
           {challenge.description&&<div style={{fontSize:12,color:t.ts,marginTop:4}}>{challenge.description}</div>}
-          <div style={{fontSize:11,color:t.tm,marginTop:6}}>เริ่ม {challenge.start_date}{challenge.end_date?` · สิ้นสุด ${challenge.end_date}`:""} · {members.length} คน{targetPct!=null?` · 🎯 เป้า ${targetPct>=0?"+":""}${targetPct}%`:""}</div>
+          <div style={{fontSize:11,color:t.tm,marginTop:6}}>เริ่ม {challenge.start_date}{challenge.end_date?` · สิ้นสุด ${challenge.end_date}`:""} · {members.length} คน{targetAmount!=null?` · 🎯 เป้า ${fB(targetAmount)}`:legacyTargetPct!=null?` · 🎯 เป้า ${legacyTargetPct>=0?"+":""}${legacyTargetPct}%`:""}</div>
           <div style={{fontSize:11,color:t.ac,marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>รหัสเชิญ: <code style={{fontWeight:600,padding:"2px 6px",background:`${t.ac}15`,borderRadius:4}}>{challenge.join_code}</code><button onClick={()=>{navigator.clipboard.writeText(challenge.join_code);window.alert("คัดลอกรหัสแล้ว ✅")}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11}}>📋 คัดลอก</button></div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1137,7 +1139,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     </div>
     {members.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
       <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 เปรียบเทียบผู้เล่น (มูลค่ารวม)</div>
-      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>{targetPct!=null?`แกนตั้ง = มูลค่ารวม (฿) · ขีดสูงสุด = เป้าหมาย (เริ่มต้น + ${targetPct>=0?"+":""}${targetPct}%) · ตัวเลขบนแท่ง = % ที่ได้ของเป้า`:"แกนตั้ง = มูลค่ารวม (฿) ของแต่ละผู้เล่น (ตั้งเป้าได้ตอนสร้างชาเลนจ์)"}</div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>{targetAmount!=null?`แกนตั้ง = มูลค่ารวม (฿) · ขีดสูงสุด = เป้าหมาย ${fB(targetAmount)} · ตัวเลขบนแท่ง = % ที่ได้ของเป้า`:legacyTargetPct!=null?`แกนตั้ง = มูลค่ารวม (฿) · ขีดสูงสุด = เป้าหมาย (เริ่มต้น + ${legacyTargetPct>=0?"+":""}${legacyTargetPct}%) · ตัวเลขบนแท่ง = % ที่ได้ของเป้า`:"แกนตั้ง = มูลค่ารวม (฿) ของแต่ละผู้เล่น (ตั้งเป้าได้ตอนสร้างชาเลนจ์)"}</div>
       <ResponsiveContainer width="100%" height={Math.max(260,members.length*30+200)}>
         <BarChart data={chartData} margin={{top:30,right:16,left:10,bottom:40}}>
           <CartesianGrid strokeDasharray="3 3" stroke={t.cb} vertical={false}/>
@@ -1146,21 +1148,21 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
           <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={(v,n)=>n==="amount"?[fB(v),"มูลค่ารวม"]:[v,n]} labelFormatter={(l,p)=>{const d=p?.[0]?.payload;if(!d)return l;return`${l} · เริ่มต้น ${fB(d.starting)}${d.target!=null?` · เป้า ${fB(d.target)}`:""}${d.pctOfTarget!=null?` · ${d.pctOfTarget}% ของเป้า`:""}`}}/>
           <Bar dataKey="amount" radius={[6,6,0,0]}>
             {chartData.map((d,i)=><Cell key={i} fill={d.fill}/>)}
-            <LabelList dataKey={targetPct!=null?"pctOfTarget":"amount"} position="top" formatter={v=>targetPct!=null?(v!=null?`${v}%${v>=100?" 🏁":""}`:""):fB(v)} style={{fontSize:10,fill:t.text,fontWeight:600}}/>
+            <LabelList dataKey={hasTarget?"pctOfTarget":"amount"} position="top" formatter={v=>hasTarget?(v!=null?`${v}%${v>=100?" 🏁":""}`:""):fB(v)} style={{fontSize:10,fill:t.text,fontWeight:600}}/>
           </Bar>
           {maxTarget>0&&<ReferenceLine y={maxTarget} stroke={t.am} strokeDasharray="5 3" strokeWidth={2} label={{value:`🎯 เป้า ${fB(maxTarget)}`,fill:t.am,fontSize:10,position:"insideTopRight"}}/>}
         </BarChart>
       </ResponsiveContainer>
-      {targetPct!=null&&targetPct!==0&&(<div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
-        <div style={{fontSize:12,fontWeight:600,color:t.ts}}>🎯 ความคืบหน้าสู่เป้าหมาย ({targetPct>=0?"+":""}{targetPct}%)</div>
+      {hasTarget&&(<div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:12,fontWeight:600,color:t.ts}}>🎯 ความคืบหน้าสู่เป้าหมาย {targetAmount!=null?fB(targetAmount):`(${legacyTargetPct>=0?"+":""}${legacyTargetPct}%)`}</div>
         {sorted.map(m=>{
           const nv=calcNetWorth(m),sv=calcStartingValue(m);
-          const pct=sv>0?((nv-sv)/sv)*100:0;
-          const progress=(pct/targetPct)*100;
+          const target=targetAmount!=null?targetAmount:sv*(1+legacyTargetPct/100);
+          const progress=target>0?(nv/target)*100:0;
           const clamped=Math.max(0,Math.min(100,progress));
           const done=progress>=100;
           const isMe=m.user_id===session.user.id;
-          const color=done?t.g:progress>=50?t.ac:progress>=0?t.am:t.r;
+          const color=done?t.g:progress>=75?t.ac:progress>=50?t.am:t.r;
           return(<div key={m.id}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,fontSize:11,gap:8}}>
               <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
@@ -1170,7 +1172,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
               <span style={{color,fontWeight:600,flexShrink:0}}>{progress.toFixed(1)}% ของเป้า{done&&" 🏁"}</span>
             </div>
             <PB pct={clamped} color={color} height={8} t={t}/>
-            <div style={{fontSize:9,color:t.tm,marginTop:2}}>{pct>=0?"+":""}{pct.toFixed(2)}% / เป้า {targetPct>=0?"+":""}{targetPct}%</div>
+            <div style={{fontSize:9,color:t.tm,marginTop:2}}>{fB(nv)} / เป้า {fB(target)}</div>
           </div>);
         })}
       </div>)}
