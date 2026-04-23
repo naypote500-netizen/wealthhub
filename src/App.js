@@ -1126,7 +1126,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>📊 Leaderboard</div>
       <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
         <thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["#","ผู้เล่น","เงินเริ่มต้น","มูลค่ารวม","P&L","%"].map((h,i)=><th key={i} style={{padding:"8px 10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500}}>{h}</th>)}</tr></thead>
-        <tbody>{sorted.map((m,i)=>{const nv=calcNetWorth(m),sv=calcStartingValue(m),pl=nv-sv,pct=sv>0?(pl/sv)*100:0;const isMe=m.user_id===session.user.id;return(<tr key={m.id} style={{borderBottom:`1px solid ${t.cb}`,background:isMe?`${t.ac}10`:"transparent"}}><td style={{padding:"8px 10px",fontWeight:600}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</td><td style={{padding:"8px 10px",fontWeight:500}}>{m.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:10}}>(คุณ)</span>}</td><td style={{padding:"8px 10px",color:t.tm}}>{fB(sv)}</td><td style={{padding:"8px 10px",fontWeight:600}}>{fB(nv)}</td><td style={{padding:"8px 10px"}}><Badge color={pl>=0?t.g:t.r}>{pl>=0?"▲":"▼"}{fB(pl)}</Badge></td><td style={{padding:"8px 10px",color:pct>=0?t.g:t.r,fontWeight:600}}>{fP(pct)}</td></tr>);})}</tbody>
+        <tbody>{sorted.map((m,i)=>{const nv=calcNetWorth(m),sv=calcStartingValue(m),pl=nv-sv,pct=sv>0?(pl/sv)*100:0;const isMe=m.user_id===session.user.id;return(<tr key={m.id} style={{borderBottom:`1px solid ${t.cb}`,background:isMe?`${t.ac}10`:"transparent"}}><td style={{padding:"8px 10px",fontWeight:600}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</td><td style={{padding:"8px 10px",fontWeight:500}}><div style={{display:"flex",alignItems:"center",gap:8}}><Avatar url={m.avatar_url} name={m.display_name} size={28} t={t}/><span>{m.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:10}}>(คุณ)</span>}</span></div></td><td style={{padding:"8px 10px",color:t.tm}}>{fB(sv)}</td><td style={{padding:"8px 10px",fontWeight:600}}>{fB(nv)}</td><td style={{padding:"8px 10px"}}><Badge color={pl>=0?t.g:t.r}>{pl>=0?"▲":"▼"}{fB(pl)}</Badge></td><td style={{padding:"8px 10px",color:pct>=0?t.g:t.r,fontWeight:600}}>{fP(pct)}</td></tr>);})}</tbody>
       </table></div>
     </div>
     {members.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
@@ -1153,9 +1153,12 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
           const isMe=m.user_id===session.user.id;
           const color=done?t.g:progress>=50?t.ac:progress>=0?t.am:t.r;
           return(<div key={m.id}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:11}}>
-              <span style={{fontWeight:500}}>{done&&"✅ "}{m.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:4,fontSize:10}}>(คุณ)</span>}</span>
-              <span style={{color,fontWeight:600}}>{progress.toFixed(1)}% ของเป้า{done&&" 🏁"}</span>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,fontSize:11,gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                <Avatar url={m.avatar_url} name={m.display_name} size={22} t={t}/>
+                <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{done&&"✅ "}{m.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:4,fontSize:10}}>(คุณ)</span>}</span>
+              </div>
+              <span style={{color,fontWeight:600,flexShrink:0}}>{progress.toFixed(1)}% ของเป้า{done&&" 🏁"}</span>
             </div>
             <PB pct={clamped} color={color} height={8} t={t}/>
             <div style={{fontSize:9,color:t.tm,marginTop:2}}>{pct>=0?"+":""}{pct.toFixed(2)}% / เป้า {targetPct>=0?"+":""}{targetPct}%</div>
@@ -1168,14 +1171,77 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       {refresh.msg&&<span style={{fontSize:11,color:t.g,padding:"4px 10px",background:`${t.g}15`,borderRadius:6}}>✅ {refresh.msg}</span>}
       {refresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {refresh.err}</span>}
     </div>}
-    {sorted.map(m=>(<MemberPortfolio key={m.id} member={m} isMe={m.user_id===session.user.id} onUpdate={updateMe} t={t} toThb={toThb} rate={rate}/>))}
+    {sorted.map(m=>(<MemberPortfolio key={m.id} member={m} isMe={m.user_id===session.user.id} onUpdate={updateMe} onEditProfile={mem=>setModal({type:"profile",member:mem})} t={t} toThb={toThb} rate={rate}/>))}
     <Modal open={modal?.type==="join"} onClose={()=>setModal(null)} title="เข้าร่วมชาเลนจ์" t={t}>
       <JoinChallengeForm onClose={()=>{setModal(null);load()}} t={t} session={session} challengeId={id}/>
+    </Modal>
+    <Modal open={modal?.type==="profile"} onClose={()=>setModal(null)} title="✏️ แก้ไขโปรไฟล์ในชาเลนจ์" t={t}>
+      {modal?.member&&<EditProfileForm member={modal.member} session={session} t={t} onClose={()=>setModal(null)} onSaved={load}/>}
     </Modal>
   </div>);
 }
 
-function MemberPortfolio({member,isMe,onUpdate,t,toThb,rate}){
+function Avatar({url,name,size,t}){
+  const s=size||36;
+  const initial=(name||"?").trim().charAt(0).toUpperCase()||"?";
+  if(url)return<img src={url} alt={name||""} style={{width:s,height:s,borderRadius:"50%",objectFit:"cover",border:`2px solid ${t.cb}`,background:t.cb,flexShrink:0}} onError={e=>{e.currentTarget.style.display="none"}}/>;
+  const hue=(initial.charCodeAt(0)*37)%360;
+  return<div style={{width:s,height:s,borderRadius:"50%",background:`hsl(${hue},65%,55%)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:600,fontSize:s*0.42,flexShrink:0,border:`2px solid ${t.cb}`}}>{initial}</div>;
+}
+
+function EditProfileForm({member,onClose,onSaved,t,session}){
+  const[name,setName]=useState(member.display_name||"");
+  const[url,setUrl]=useState(member.avatar_url||"");
+  const[uploading,setUploading]=useState(false);
+  const[err,setErr]=useState("");
+  const upload=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    if(file.size>2*1024*1024){setErr("ไฟล์ใหญ่เกิน 2MB");return;}
+    if(!/^image\//.test(file.type)){setErr("ต้องเป็นไฟล์รูปภาพ");return;}
+    setUploading(true);setErr("");
+    try{
+      const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+      const path=`${session.user.id}/${member.challenge_id}-${Date.now()}.${ext}`;
+      const{error:upErr}=await supabase.storage.from("avatars").upload(path,file,{cacheControl:"3600",upsert:true,contentType:file.type});
+      if(upErr)throw upErr;
+      const{data:{publicUrl}}=supabase.storage.from("avatars").getPublicUrl(path);
+      setUrl(publicUrl);
+    }catch(ex){setErr("อัปโหลดไม่สำเร็จ: "+(ex.message||ex));}
+    setUploading(false);
+  };
+  const save=async()=>{
+    setUploading(true);setErr("");
+    const{error}=await supabase.from("challenge_members").update({display_name:name.trim()||null,avatar_url:url||null,updated_at:new Date().toISOString()}).eq("id",member.id);
+    setUploading(false);
+    if(error){setErr(error.message);return;}
+    onSaved&&onSaved();onClose();
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",gap:14,padding:10,background:`${t.ac}08`,borderRadius:8}}>
+      <Avatar url={url} name={name} size={64} t={t}/>
+      <div style={{fontSize:11,color:t.tm,flex:1}}>รูปโปรไฟล์จะแสดงในกระดานคะแนนและการ์ดพอร์ตของชาเลนจ์นี้</div>
+    </div>
+    <Inp label="ชื่อที่แสดง" t={t} value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อเล่น / ชื่อในชาเลนจ์" maxLength={30}/>
+    <label style={{fontSize:11,color:t.ts}}>📸 รูปโปรไฟล์ (ไม่เกิน 2MB)
+      <div style={{marginTop:4,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <label style={{padding:"6px 12px",fontSize:11,background:t.ac,color:"#fff",borderRadius:6,cursor:uploading?"wait":"pointer",display:"inline-block"}}>
+          {uploading?"⏳ กำลังอัปโหลด...":"📤 เลือกไฟล์"}
+          <input type="file" accept="image/*" onChange={upload} disabled={uploading} style={{display:"none"}}/>
+        </label>
+        {url&&<button onClick={()=>setUrl("")} style={{padding:"5px 10px",fontSize:11,background:"transparent",color:t.r,border:`1px solid ${t.r}40`,borderRadius:6,cursor:"pointer"}}>🗑 ลบรูป</button>}
+      </div>
+    </label>
+    <Inp label="หรือวาง URL รูปภาพ (ไม่บังคับ)" t={t} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://..."/>
+    {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+    <div style={{display:"flex",gap:6,marginTop:4}}>
+      <Btn primary t={t} onClick={save} disabled={uploading} style={{flex:1}}>{uploading?"กำลังบันทึก...":"✓ บันทึก"}</Btn>
+      <Btn t={t} onClick={onClose}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
+function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
   const[modal,setModal]=useState(null);
   const[editCash,setEditCash]=useState(false);
   const[cashInput,setCashInput]=useState(member.cash||0);
@@ -1190,7 +1256,13 @@ function MemberPortfolio({member,isMe,onUpdate,t,toThb,rate}){
   const saveCash=()=>{onUpdate({cash:+cashInput||0});setEditCash(false);};
   return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
-      <div style={{fontSize:13,fontWeight:600}}>👤 {member.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:11}}>(คุณ)</span>}</div>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 auto"}}>
+        <Avatar url={member.avatar_url} name={member.display_name} size={40} t={t}/>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis"}}>{member.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:11}}>(คุณ)</span>}</div>
+          {isMe&&onEditProfile&&<button onClick={()=>onEditProfile(member)} style={{fontSize:10,background:"none",border:"none",color:t.ac,cursor:"pointer",padding:0,marginTop:2}}>✏️ แก้ชื่อ / รูปโปรไฟล์</button>}
+        </div>
+      </div>
       <div style={{fontSize:12,color:t.tm}}>มูลค่ารวม: <span style={{color:t.text,fontWeight:600,fontSize:13}}>{fB(total)}</span></div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
