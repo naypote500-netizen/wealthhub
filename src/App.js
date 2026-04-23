@@ -52,7 +52,7 @@ function processRecurring(data){
 const NAV=[
   {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
-  {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
+  {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
 ];
 
 /* ═══ COMPONENTS ═══ */
@@ -931,9 +931,262 @@ function AuthPage({dark,setDark,t}){
   </div>);
 }
 
+/* ═══ CHALLENGES ═══ */
+function genCode(){return Math.random().toString(36).substring(2,8).toUpperCase()}
+
+function ChallengesPage({t,session,rate,toThb,detailId,setDetailId}){
+  const[challenges,setChallenges]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[modal,setModal]=useState(null);
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows,error}=await supabase.from("challenge_members").select("challenge:challenges(*)").eq("user_id",session.user.id);
+    if(!error&&rows)setChallenges(rows.map(r=>r.challenge).filter(Boolean).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)));
+    setLoading(false);
+  },[session.user.id]);
+  useEffect(()=>{if(!detailId)load();},[detailId,load]);
+  if(detailId)return<ChallengeDetail id={detailId} onBack={()=>setDetailId(null)} t={t} session={session} rate={rate} toThb={toThb}/>;
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <Btn primary t={t} onClick={()=>setModal({type:"create"})}>+ สร้างชาเลนจ์</Btn>
+      <Btn t={t} onClick={()=>setModal({type:"join"})}>🔑 เข้าร่วมด้วยรหัส</Btn>
+    </div>
+    {loading?<div style={{color:t.tm,fontSize:12,padding:20,textAlign:"center"}}>กำลังโหลด...</div>:
+     challenges.length===0?<Empty icon="🏆" title="ยังไม่มีชาเลนจ์" sub="สร้างชาเลนจ์ใหม่ หรือเข้าร่วมด้วยรหัสเชิญจากเพื่อน" t={t}/>:
+     <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+       {challenges.map(c=>(<div key={c.id} onClick={()=>setDetailId(c.id)} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16,cursor:"pointer",transition:"transform .1s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"} onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+         <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>🏆 {c.name}</div>
+         {c.description&&<div style={{fontSize:11,color:t.tm,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.description}</div>}
+         <div style={{fontSize:10,color:t.tm}}>เริ่ม {c.start_date}{c.end_date?` · สิ้นสุด ${c.end_date}`:" · ไม่มีวันสิ้นสุด"}</div>
+         <div style={{fontSize:10,color:t.ac,marginTop:6}}>รหัสเชิญ: <code style={{fontWeight:600}}>{c.join_code}</code></div>
+       </div>))}
+     </div>}
+    <Modal open={modal?.type==="create"} onClose={()=>setModal(null)} title="🏆 สร้างชาเลนจ์" t={t}>
+      <CreateChallengeForm onClose={created=>{setModal(null);if(created)setDetailId(created);else load()}} t={t} session={session}/>
+    </Modal>
+    <Modal open={modal?.type==="join"} onClose={()=>setModal(null)} title="🔑 เข้าร่วมชาเลนจ์" t={t}>
+      <JoinChallengeForm onClose={joined=>{setModal(null);if(joined)setDetailId(joined);else load()}} t={t} session={session}/>
+    </Modal>
+  </div>);
+}
+
+function CreateChallengeForm({onClose,t,session}){
+  const[f,set]=useF({name:"",description:"",end_date:"",starting_cash:""});
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const submit=async()=>{
+    if(!f.name)return;
+    setLoading(true);setErr("");
+    const code=genCode();
+    const{data:ch,error}=await supabase.from("challenges").insert({name:f.name,description:f.description||null,creator_id:session.user.id,end_date:f.end_date||null,join_code:code}).select().single();
+    if(error){setErr(error.message);setLoading(false);return;}
+    const{error:mErr}=await supabase.from("challenge_members").insert({challenge_id:ch.id,user_id:session.user.id,display_name:session.user.email,starting_cash:+f.starting_cash||0,cash:+f.starting_cash||0,assets:[]});
+    if(mErr){setErr(mErr.message);setLoading(false);return;}
+    setLoading(false);onClose(ch.id);
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <Inp label="ชื่อชาเลนจ์" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เช่น ลงทุน 30 วัน"/>
+    <Inp label="คำอธิบาย (ไม่บังคับ)" t={t} value={f.description} onChange={e=>set("description",e.target.value)} placeholder="กติกา / รายละเอียด"/>
+    <Inp label="วันสิ้นสุด (ไม่บังคับ)" t={t} type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)}/>
+    <Inp label="เงินสดเริ่มต้น (บาท)" t={t} type="number" value={f.starting_cash} onChange={e=>set("starting_cash",e.target.value)} placeholder="100000"/>
+    <div style={{fontSize:10,color:t.tm}}>* เงินสดเริ่มต้น = เงินที่คุณเริ่มต้นชาเลนจ์นี้ ใช้คำนวณ % กำไร/ขาดทุน</div>
+    {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+    <div style={{display:"flex",gap:6}}>
+      <Btn primary t={t} onClick={submit} disabled={loading||!f.name} style={{flex:1}}>{loading?"กำลังสร้าง...":"✓ สร้าง"}</Btn>
+      <Btn t={t} onClick={()=>onClose()}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
+function JoinChallengeForm({onClose,t,session,challengeId}){
+  const[code,setCode]=useState("");const[name,setName]=useState(session?.user?.email||"");
+  const[cash,setCash]=useState("");const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const submit=async()=>{
+    setLoading(true);setErr("");
+    let cid=challengeId;
+    if(!cid){
+      if(!code)return setLoading(false);
+      const{data:ch,error}=await supabase.from("challenges").select("id").eq("join_code",code.trim().toUpperCase()).maybeSingle();
+      if(error||!ch){setErr("ไม่พบชาเลนจ์รหัสนี้");setLoading(false);return;}
+      cid=ch.id;
+    }
+    const{error:mErr}=await supabase.from("challenge_members").insert({challenge_id:cid,user_id:session.user.id,display_name:name||session.user.email,starting_cash:+cash||0,cash:+cash||0,assets:[]});
+    if(mErr){
+      if(mErr.code==="23505")setErr("คุณเข้าร่วมชาเลนจ์นี้อยู่แล้ว");
+      else setErr(mErr.message);
+      setLoading(false);return;
+    }
+    setLoading(false);onClose(cid);
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {!challengeId&&<Inp label="รหัสเชิญ" t={t} value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="ABC123" style={{textTransform:"uppercase",letterSpacing:2,fontWeight:600}}/>}
+    <Inp label="ชื่อที่แสดงในชาเลนจ์" t={t} value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อเล่น / email"/>
+    <Inp label="เงินสดเริ่มต้น (บาท)" t={t} type="number" value={cash} onChange={e=>setCash(e.target.value)} placeholder="100000"/>
+    {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+    <div style={{display:"flex",gap:6}}>
+      <Btn primary t={t} onClick={submit} disabled={loading||(!challengeId&&!code)} style={{flex:1}}>{loading?"กำลังเข้าร่วม...":"✓ เข้าร่วม"}</Btn>
+      <Btn t={t} onClick={()=>onClose()}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
+function ChallengeDetail({id,onBack,t,session,rate,toThb}){
+  const[challenge,setChallenge]=useState(null);
+  const[members,setMembers]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[refresh,setRefresh]=useState({loading:false,msg:"",err:""});
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const[{data:ch},{data:ms}]=await Promise.all([
+      supabase.from("challenges").select("*").eq("id",id).maybeSingle(),
+      supabase.from("challenge_members").select("*").eq("challenge_id",id).order("joined_at",{ascending:true}),
+    ]);
+    setChallenge(ch||null);setMembers(ms||[]);setLoading(false);
+  },[id]);
+  useEffect(()=>{load();},[load]);
+  if(loading)return<div style={{color:t.tm,fontSize:12,padding:20,textAlign:"center"}}>กำลังโหลด...</div>;
+  if(!challenge)return(<div><Btn small t={t} onClick={onBack}>← กลับ</Btn><div style={{marginTop:10,color:t.tm}}>ไม่พบชาเลนจ์</div></div>);
+  const calcNetWorth=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0))+(+m.cash||0);
+  const calcStartingValue=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0))+(+m.starting_cash||0);
+  const sorted=[...members].sort((a,b)=>{
+    const aS=calcStartingValue(a),bS=calcStartingValue(b);
+    const aG=aS>0?(calcNetWorth(a)-aS)/aS:0;
+    const bG=bS>0?(calcNetWorth(b)-bS)/bS:0;
+    return bG-aG;
+  });
+  const me=members.find(m=>m.user_id===session.user.id);
+  const isCreator=challenge.creator_id===session.user.id;
+  const updateMe=async changes=>{
+    const{error}=await supabase.from("challenge_members").update({...changes,updated_at:new Date().toISOString()}).eq("challenge_id",id).eq("user_id",session.user.id);
+    if(error){window.alert(error.message);return;}
+    load();
+  };
+  const leave=async()=>{
+    if(!window.confirm("ออกจากชาเลนจ์นี้? ข้อมูลพอร์ตในชาเลนจ์จะถูกลบ"))return;
+    await supabase.from("challenge_members").delete().eq("challenge_id",id).eq("user_id",session.user.id);
+    onBack();
+  };
+  const deleteChallenge=async()=>{
+    if(!window.confirm("ลบชาเลนจ์นี้? สมาชิกทั้งหมดจะถูกลบไปด้วย"))return;
+    await supabase.from("challenges").delete().eq("id",id);
+    onBack();
+  };
+  const mapSym=a=>{
+    const s=(a.name||"").trim().toUpperCase();if(!s)return null;
+    if(a.type==="stock_th")return s.includes(".")?s:s+".BK";
+    if(a.type==="stock_us")return s;
+    if(a.type==="crypto")return s.includes("-")?s:s+"-USD";
+    if(a.type==="gold")return "GC=F";
+    return null;
+  };
+  const refreshMyPrices=async()=>{
+    if(!me)return;
+    const assets=me.assets||[];
+    const pairs=assets.map(a=>[a,mapSym(a)]).filter(([,s])=>s);
+    if(!pairs.length){setRefresh({loading:false,msg:"",err:"ไม่มีหุ้นที่ดึงราคาได้"});return;}
+    setRefresh({loading:true,msg:"",err:""});
+    try{
+      const syms=[...new Set(pairs.map(([,s])=>s))].join(",");
+      const r=await fetch(`/api/quote?symbols=${encodeURIComponent(syms)}`);
+      const{quotes}=await r.json();
+      let ok=0;
+      const newAssets=assets.map(a=>{const s=mapSym(a);const q=s?quotes[s]:null;if(q?.price!=null){ok++;return{...a,currentPrice:+q.price.toFixed(4)}}return a;});
+      await updateMe({assets:newAssets});
+      setRefresh({loading:false,msg:`อัปเดต ${ok} รายการ`,err:""});
+      setTimeout(()=>setRefresh(p=>({...p,msg:""})),4000);
+    }catch(e){setRefresh({loading:false,msg:"",err:e.message});}
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <Btn small t={t} onClick={onBack}>← กลับ</Btn>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginTop:8}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:18,fontWeight:700}}>🏆 {challenge.name}</div>
+          {challenge.description&&<div style={{fontSize:12,color:t.ts,marginTop:4}}>{challenge.description}</div>}
+          <div style={{fontSize:11,color:t.tm,marginTop:6}}>เริ่ม {challenge.start_date}{challenge.end_date?` · สิ้นสุด ${challenge.end_date}`:""} · {members.length} คน</div>
+          <div style={{fontSize:11,color:t.ac,marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>รหัสเชิญ: <code style={{fontWeight:600,padding:"2px 6px",background:`${t.ac}15`,borderRadius:4}}>{challenge.join_code}</code><button onClick={()=>{navigator.clipboard.writeText(challenge.join_code);window.alert("คัดลอกรหัสแล้ว ✅")}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11}}>📋 คัดลอก</button></div>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {!me&&<Btn primary t={t} onClick={()=>setModal({type:"join"})}>+ เข้าร่วม</Btn>}
+          {me&&<Btn small t={t} onClick={leave}>🚪 ออก</Btn>}
+          {isCreator&&<Btn small t={t} onClick={deleteChallenge} style={{color:t.r,border:`1px solid ${t.r}40`}}>🗑 ลบ</Btn>}
+        </div>
+      </div>
+    </div>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>📊 Leaderboard</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
+        <thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["#","ผู้เล่น","เงินเริ่มต้น","มูลค่ารวม","P&L","%"].map((h,i)=><th key={i} style={{padding:"8px 10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500}}>{h}</th>)}</tr></thead>
+        <tbody>{sorted.map((m,i)=>{const nv=calcNetWorth(m),sv=calcStartingValue(m),pl=nv-sv,pct=sv>0?(pl/sv)*100:0;const isMe=m.user_id===session.user.id;return(<tr key={m.id} style={{borderBottom:`1px solid ${t.cb}`,background:isMe?`${t.ac}10`:"transparent"}}><td style={{padding:"8px 10px",fontWeight:600}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</td><td style={{padding:"8px 10px",fontWeight:500}}>{m.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:10}}>(คุณ)</span>}</td><td style={{padding:"8px 10px",color:t.tm}}>{fB(sv)}</td><td style={{padding:"8px 10px",fontWeight:600}}>{fB(nv)}</td><td style={{padding:"8px 10px"}}><Badge color={pl>=0?t.g:t.r}>{pl>=0?"▲":"▼"}{fB(pl)}</Badge></td><td style={{padding:"8px 10px",color:pct>=0?t.g:t.r,fontWeight:600}}>{fP(pct)}</td></tr>);})}</tbody>
+      </table></div>
+    </div>
+    {me&&<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <Btn t={t} onClick={refreshMyPrices} disabled={refresh.loading}>{refresh.loading?"⏳ กำลังดึงราคา...":"🔄 อัปเดตราคาหุ้นของฉัน"}</Btn>
+      {refresh.msg&&<span style={{fontSize:11,color:t.g,padding:"4px 10px",background:`${t.g}15`,borderRadius:6}}>✅ {refresh.msg}</span>}
+      {refresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {refresh.err}</span>}
+    </div>}
+    {sorted.map(m=>(<MemberPortfolio key={m.id} member={m} isMe={m.user_id===session.user.id} onUpdate={updateMe} t={t} toThb={toThb} rate={rate}/>))}
+    <Modal open={modal?.type==="join"} onClose={()=>setModal(null)} title="เข้าร่วมชาเลนจ์" t={t}>
+      <JoinChallengeForm onClose={()=>{setModal(null);load()}} t={t} session={session} challengeId={id}/>
+    </Modal>
+  </div>);
+}
+
+function MemberPortfolio({member,isMe,onUpdate,t,toThb,rate}){
+  const[modal,setModal]=useState(null);
+  const[editCash,setEditCash]=useState(false);
+  const[cashInput,setCashInput]=useState(member.cash||0);
+  const assets=member.assets||[];
+  const stockValue=assets.reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0);
+  const stockCost=assets.reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0);
+  const pl=stockValue-stockCost;
+  const total=stockValue+(+member.cash||0);
+  const addAsset=f=>{onUpdate({assets:[...assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null);};
+  const updateAsset=(aid,f)=>{onUpdate({assets:assets.map(a=>a.id===aid?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null);};
+  const delAsset=aid=>{if(!window.confirm("ลบสินทรัพย์นี้?"))return;onUpdate({assets:assets.filter(a=>a.id!==aid)});};
+  const saveCash=()=>{onUpdate({cash:+cashInput||0});setEditCash(false);};
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+      <div style={{fontSize:13,fontWeight:600}}>👤 {member.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:11}}>(คุณ)</span>}</div>
+      <div style={{fontSize:12,color:t.tm}}>มูลค่ารวม: <span style={{color:t.text,fontWeight:600,fontSize:13}}>{fB(total)}</span></div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+      <div style={{background:`${t.ac}10`,padding:10,borderRadius:8}}>
+        <div style={{fontSize:10,color:t.tm}}>📊 หุ้น ({assets.length} ตัว)</div>
+        <div style={{fontSize:15,fontWeight:600,color:t.ac}}>{fB(stockValue)}</div>
+        <div style={{fontSize:10,color:pl>=0?t.g:t.r}}>P&L: {pl>=0?"+":""}{fB(pl)}</div>
+      </div>
+      <div style={{background:`${t.g}10`,padding:10,borderRadius:8,position:"relative"}}>
+        <div style={{fontSize:10,color:t.tm}}>💵 เงินสด/บัญชี</div>
+        {editCash&&isMe?<div style={{display:"flex",gap:4,alignItems:"center",marginTop:2}}>
+          <input value={cashInput} onChange={e=>setCashInput(e.target.value)} type="number" autoFocus style={{flex:1,padding:"4px 6px",borderRadius:4,border:`1px solid ${t.ibr}`,fontSize:13,background:t.ib,color:t.text,minWidth:0}}/>
+          <button onClick={saveCash} style={{fontSize:11,padding:"3px 8px",background:t.g,color:"#fff",border:"none",borderRadius:4,cursor:"pointer"}}>✓</button>
+          <button onClick={()=>setEditCash(false)} style={{fontSize:11,padding:"3px 8px",background:"transparent",color:t.tm,border:`1px solid ${t.cb}`,borderRadius:4,cursor:"pointer"}}>✕</button>
+        </div>:<><div style={{fontSize:15,fontWeight:600,color:t.g}}>{fB(member.cash||0)}</div>{isMe&&<button onClick={()=>{setCashInput(member.cash||0);setEditCash(true)}} style={{position:"absolute",top:8,right:8,fontSize:10,background:"none",border:"none",color:t.tm,cursor:"pointer",textDecoration:"underline"}}>แก้ไข</button>}</>}
+      </div>
+    </div>
+    {assets.length>0?<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:isMe?560:480}}>
+      <thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L",...(isMe?[""]:[])].map((h,i)=><th key={i} style={{padding:"6px 8px",textAlign:"left",fontSize:9,color:t.tm,background:t.thBg}}>{h}</th>)}</tr></thead>
+      <tbody>{assets.map(a=>{const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";const v=toThb((+a.units)*(+a.currentPrice),cur);const c=toThb((+a.units)*(+a.avgCost),cur);const ap=v-c;const tp=AT.find(at=>at.v===a.type)||AT[7];return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}>
+        <td style={{padding:"6px 8px",fontWeight:500}}>{tp.i} {a.name}<Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td>
+        <td style={{padding:"6px 8px"}}>{a.units}</td>
+        <td style={{padding:"6px 8px"}}>{sym}{a.avgCost}</td>
+        <td style={{padding:"6px 8px"}}>{sym}{a.currentPrice}</td>
+        <td style={{padding:"6px 8px",fontWeight:500}}>{fB(v)}</td>
+        <td style={{padding:"6px 8px",color:ap>=0?t.g:t.r}}>{ap>=0?"+":""}{fB(ap)}</td>
+        {isMe&&<td style={{padding:"6px 8px"}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"edit",asset:a})} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้</button><button onClick={()=>delAsset(a.id)} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td>}
+      </tr>);})}</tbody>
+    </table></div>:<div style={{fontSize:11,color:t.tm,textAlign:"center",padding:14,background:`${t.cb}20`,borderRadius:8}}>ยังไม่มีสินทรัพย์</div>}
+    {isMe&&<div style={{marginTop:10}}><Btn small primary t={t} onClick={()=>setModal({type:"add"})}>+ เพิ่มสินทรัพย์</Btn></div>}
+    <Modal open={modal?.type==="add"||modal?.type==="edit"} onClose={()=>setModal(null)} title={modal?.type==="edit"?"แก้ไขสินทรัพย์":"เพิ่มสินทรัพย์"} t={t}>
+      <AssetForm initial={modal?.asset} onSave={f=>modal?.type==="edit"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/>
+    </Modal>
+  </div>);
+}
+
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
 
@@ -1092,7 +1345,7 @@ function WealthHub(){
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about","challenges"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -1167,6 +1420,7 @@ function WealthHub(){
         <Btn primary t={t} onClick={()=>{const w=window.open("","_blank");w.document.write(`<html><head><title>WealthHub</title><style>body{font-family:Segoe UI,sans-serif;padding:40px;color:#1e293b}h1{color:#0ea5e9}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px}th{background:#f8fafc}</style></head><body><h1>WealthHub — รายงาน</h1><p>${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</p><table><tr><td>Net Worth</td><td>${fB(stats.netWorth)}</td></tr><tr><td>พอร์ต</td><td>${fB(stats.totalPortfolio)}</td></tr><tr><td>P&L</td><td>${fB(stats.portfolioPL)}</td></tr><tr><td>รายรับ</td><td>${fB(stats.incomeThisMonth)}</td></tr><tr><td>รายจ่าย</td><td>${fB(stats.expenseThisMonth)}</td></tr><tr><td>หนี้</td><td>${fB(stats.debtRemaining)}</td></tr></table>`);if(data.assets.length){w.document.write(`<h2>พอร์ต</h2><table><tr><th>ชื่อ</th><th>สกุล</th><th>มูลค่า</th><th>P&L</th></tr>`);stats.allocation.forEach(a=>{w.document.write(`<tr><td>${a.name}</td><td>${a.currency||"THB"}</td><td>${fB(a.value)}</td><td>${fB(a.pl)}</td></tr>`)});w.document.write(`</table>`)}w.document.write(`<p style="color:#94a3b8;font-size:11px;margin-top:30px">WealthHub</p></body></html>`);w.document.close();w.print()}}>🖨️ พิมพ์ / PDF</Btn>
       </div>)}
 
+      {page==="challenges"&&(session?<ChallengesPage t={t} session={session} rate={rate} toThb={toThb} detailId={challengeDetailId} setDetailId={setChallengeDetailId}/>:<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}><div style={{fontSize:42,marginBottom:10}}>🏆</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>ชาเลนจ์การลงทุน</div><div style={{fontSize:12,color:t.ts,marginBottom:14,lineHeight:1.7}}>เข้าร่วมชาเลนจ์ลงทุนกับเพื่อน เปรียบเทียบพอร์ตหุ้น + เงินสด<br/>ดูกระดานคะแนนแบบเรียลไทม์</div><div style={{fontSize:11,color:t.tm,marginBottom:14}}>กรุณาเข้าสู่ระบบเพื่อใช้งานฟีเจอร์นี้</div><Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 เข้าสู่ระบบ</Btn></div>)}
       {page==="about"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>♥</div>
         <div style={{fontSize:18,fontWeight:600,marginBottom:8,color:t.tp}}>เกี่ยวกับเรา</div>
