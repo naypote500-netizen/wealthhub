@@ -993,6 +993,42 @@ function WealthHub(){
   },[session]);
 
   const logout=()=>supabase.auth.signOut().then(()=>{setPage("dashboard")});
+
+  const[priceRefresh,setPriceRefresh]=useState({loading:false,msg:"",err:""});
+  const mapYahooSymbol=(a)=>{
+    const s=(a.name||"").trim().toUpperCase();
+    if(!s)return null;
+    if(a.type==="stock_th")return s.includes(".")?s:s+".BK";
+    if(a.type==="stock_us")return s;
+    if(a.type==="crypto")return s.includes("-")?s:s+"-USD";
+    if(a.type==="gold")return "GC=F";
+    return null;
+  };
+  const refreshPrices=async()=>{
+    if(!data?.assets?.length)return;
+    const pairs=data.assets.map(a=>[a,mapYahooSymbol(a)]).filter(([,s])=>s);
+    if(!pairs.length){setPriceRefresh({loading:false,msg:"",err:"ไม่มีสินทรัพย์ที่รองรับการดึงราคา (รองรับ: หุ้นไทย/US, Crypto, ทอง)"});return;}
+    setPriceRefresh({loading:true,msg:"",err:""});
+    try{
+      const syms=[...new Set(pairs.map(([,s])=>s))].join(",");
+      const r=await fetch(`/api/quote?symbols=${encodeURIComponent(syms)}`);
+      if(!r.ok)throw new Error(`server ${r.status}`);
+      const{quotes}=await r.json();
+      let ok=0,fail=0;
+      const newAssets=data.assets.map(a=>{
+        const sym=mapYahooSymbol(a);
+        const q=sym?quotes[sym]:null;
+        if(q&&q.price!=null&&!q.error){ok++;return{...a,currentPrice:+q.price.toFixed(4)}}
+        if(sym)fail++;
+        return a;
+      });
+      persist({...data,assets:newAssets});
+      setPriceRefresh({loading:false,msg:`อัปเดต ${ok} รายการสำเร็จ${fail?` (ไม่พบ ${fail} รายการ)`:""}`,err:""});
+      setTimeout(()=>setPriceRefresh(p=>({...p,msg:""})),4000);
+    }catch(e){
+      setPriceRefresh({loading:false,msg:"",err:"ดึงราคาไม่สำเร็จ: "+e.message});
+    }
+  };
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
   const toThb=(v,cur)=>cur==="USD"?v*rate:v;
 
@@ -1081,6 +1117,12 @@ function WealthHub(){
 
       {page==="portfolio"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="💰" label="มูลค่ารวม" value={fB(stats.totalPortfolio)} t={t}/><MC icon="📈" label="P&L" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="🏷️" label="ต้นทุน" value={fB(stats.totalCost)} t={t}/></div>
+        {data.assets.length>0&&(<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <Btn t={t} onClick={refreshPrices} disabled={priceRefresh.loading}>{priceRefresh.loading?"⏳ กำลังดึงราคา...":"🔄 อัปเดตราคาจากตลาด"}</Btn>
+          <span style={{fontSize:10,color:t.tm}}>ข้อมูลจาก Yahoo Finance (ดีเลย์ ~15 นาที) · รองรับ: หุ้นไทย (.BK), หุ้น US, Crypto, ทอง</span>
+          {priceRefresh.msg&&<span style={{fontSize:11,color:t.g,padding:"4px 10px",background:`${t.g}15`,borderRadius:6}}>✅ {priceRefresh.msg}</span>}
+          {priceRefresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {priceRefresh.err}</span>}
+        </div>)}
         {data.assets.length===0?<Empty icon="📊" title="ยังไม่มีสินทรัพย์" sub="เพิ่มหุ้น กองทุน คริปโต" action="+ เพิ่ม" onAction={()=>setModal({type:"addAsset"})} t={t}/>:(
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
       </div>)}
