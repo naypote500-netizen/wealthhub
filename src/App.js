@@ -1047,8 +1047,8 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
   useEffect(()=>{load();},[load]);
   if(loading)return<div style={{color:t.tm,fontSize:12,padding:20,textAlign:"center"}}>กำลังโหลด...</div>;
   if(!challenge)return(<div><Btn small t={t} onClick={onBack}>← กลับ</Btn><div style={{marginTop:10,color:t.tm}}>ไม่พบชาเลนจ์</div></div>);
-  const calcNetWorth=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0))+(+m.cash||0);
-  const calcStartingValue=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0))+(+m.starting_cash||0);
+  const calcNetWorth=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0))+(+m.cash||0)+((m.other_items||[]).reduce((s,o)=>s+(+o.amount||0),0));
+  const calcStartingValue=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0))+(+m.starting_cash||0)+((m.other_items||[]).reduce((s,o)=>s+(+(o.cost??o.amount)||0),0));
   const sorted=[...members].sort((a,b)=>{
     const aS=calcStartingValue(a),bS=calcStartingValue(b);
     const aG=aS>0?(calcNetWorth(a)-aS)/aS:0;
@@ -1241,19 +1241,53 @@ function EditProfileForm({member,onClose,onSaved,t,session}){
   </div>);
 }
 
+const OTHER_PRESETS=[
+  {v:"loan",l:"เงินปล่อยกู้/ให้ยืม",i:"🤝"},
+  {v:"deposit",l:"เงินฝาก/ออมทรัพย์",i:"🏦"},
+  {v:"property",l:"อสังหาริมทรัพย์",i:"🏠"},
+  {v:"vehicle",l:"ยานพาหนะ",i:"🚗"},
+  {v:"business",l:"เงินลงทุนธุรกิจ",i:"💼"},
+  {v:"collectible",l:"ของสะสม/พระ/ศิลปะ",i:"🎨"},
+  {v:"receivable",l:"ลูกหนี้การค้า",i:"📋"},
+  {v:"other",l:"อื่นๆ",i:"✨"},
+];
+
+function OtherItemForm({initial,onSave,onCancel,t}){
+  const[f,set]=useF({category:initial?.category||"loan",name:initial?.name||"",amount:initial?.amount??"",cost:initial?.cost??"",note:initial?.note||""});
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{OTHER_PRESETS.map(p=><option key={p.v} value={p.v}>{p.i} {p.l}</option>)}</Sel>
+    <Inp label="ชื่อรายการ" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เช่น ปล่อยกู้คุณ A, คอนโดฯ รังสิต"/>
+    <Inp label="มูลค่าปัจจุบัน (บาท)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="เช่น 105000"/>
+    <Inp label="ต้นทุน/เงินต้น (บาท) — ไม่บังคับ" t={t} type="number" value={f.cost} onChange={e=>set("cost",e.target.value)} placeholder="เว้นว่าง = ไม่มีกำไร/ขาดทุน"/>
+    <div style={{fontSize:10,color:t.tm}}>* ต้นทุน = เงินที่ลงไปครั้งแรก เช่น ปล่อยกู้ 100,000 ได้คืน 105,000 → ต้นทุน 100,000 / มูลค่าปัจจุบัน 105,000 = กำไร 5,000</div>
+    <Inp label="หมายเหตุ (ไม่บังคับ)" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="ดอกเบี้ย 5% ครบ 31 ธ.ค."/>
+    <div style={{display:"flex",gap:6}}>
+      <Btn primary t={t} onClick={()=>onSave(f)} disabled={!f.name||f.amount===""} style={{flex:1}}>✓ บันทึก</Btn>
+      <Btn t={t} onClick={onCancel}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
 function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
   const[modal,setModal]=useState(null);
   const[editCash,setEditCash]=useState(false);
   const[cashInput,setCashInput]=useState(member.cash||0);
   const assets=member.assets||[];
+  const others=member.other_items||[];
   const stockValue=assets.reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0);
   const stockCost=assets.reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0);
   const pl=stockValue-stockCost;
-  const total=stockValue+(+member.cash||0);
+  const otherValue=others.reduce((s,o)=>s+(+o.amount||0),0);
+  const otherCost=others.reduce((s,o)=>s+(+(o.cost??o.amount)||0),0);
+  const otherPL=otherValue-otherCost;
+  const total=stockValue+(+member.cash||0)+otherValue;
   const addAsset=f=>{onUpdate({assets:[...assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null);};
   const updateAsset=(aid,f)=>{onUpdate({assets:assets.map(a=>a.id===aid?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null);};
   const delAsset=aid=>{if(!window.confirm("ลบสินทรัพย์นี้?"))return;onUpdate({assets:assets.filter(a=>a.id!==aid)});};
   const saveCash=()=>{onUpdate({cash:+cashInput||0});setEditCash(false);};
+  const addOther=f=>{onUpdate({other_items:[...others,{...f,id:uid(),amount:+f.amount,cost:f.cost===""?null:+f.cost}]});setModal(null);};
+  const updateOther=(oid,f)=>{onUpdate({other_items:others.map(o=>o.id===oid?{...o,...f,amount:+f.amount,cost:f.cost===""?null:+f.cost}:o)});setModal(null);};
+  const delOther=oid=>{if(!window.confirm("ลบรายการนี้?"))return;onUpdate({other_items:others.filter(o=>o.id!==oid)});};
   return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 auto"}}>
@@ -1265,7 +1299,7 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
       </div>
       <div style={{fontSize:12,color:t.tm}}>มูลค่ารวม: <span style={{color:t.text,fontWeight:600,fontSize:13}}>{fB(total)}</span></div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(3,1fr)",gap:10,marginBottom:12}}>
       <div style={{background:`${t.ac}10`,padding:10,borderRadius:8}}>
         <div style={{fontSize:10,color:t.tm}}>📊 หุ้น ({assets.length} ตัว)</div>
         <div style={{fontSize:15,fontWeight:600,color:t.ac}}>{fB(stockValue)}</div>
@@ -1278,6 +1312,11 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
           <button onClick={saveCash} style={{fontSize:11,padding:"3px 8px",background:t.g,color:"#fff",border:"none",borderRadius:4,cursor:"pointer"}}>✓</button>
           <button onClick={()=>setEditCash(false)} style={{fontSize:11,padding:"3px 8px",background:"transparent",color:t.tm,border:`1px solid ${t.cb}`,borderRadius:4,cursor:"pointer"}}>✕</button>
         </div>:<><div style={{fontSize:15,fontWeight:600,color:t.g}}>{fB(member.cash||0)}</div>{isMe&&<button onClick={()=>{setCashInput(member.cash||0);setEditCash(true)}} style={{position:"absolute",top:8,right:8,fontSize:10,background:"none",border:"none",color:t.tm,cursor:"pointer",textDecoration:"underline"}}>แก้ไข</button>}</>}
+      </div>
+      <div style={{background:`${t.pp}10`,padding:10,borderRadius:8}}>
+        <div style={{fontSize:10,color:t.tm}}>✨ อื่นๆ ({others.length} รายการ)</div>
+        <div style={{fontSize:15,fontWeight:600,color:t.pp}}>{fB(otherValue)}</div>
+        <div style={{fontSize:10,color:otherPL>=0?t.g:t.r}}>P&L: {otherPL>=0?"+":""}{fB(otherPL)}</div>
       </div>
     </div>
     {assets.length>0?<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:isMe?560:480}}>
@@ -1292,9 +1331,29 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
         {isMe&&<td style={{padding:"6px 8px"}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"edit",asset:a})} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้</button><button onClick={()=>delAsset(a.id)} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td>}
       </tr>);})}</tbody>
     </table></div>:<div style={{fontSize:11,color:t.tm,textAlign:"center",padding:14,background:`${t.cb}20`,borderRadius:8}}>ยังไม่มีสินทรัพย์</div>}
-    {isMe&&<div style={{marginTop:10}}><Btn small primary t={t} onClick={()=>setModal({type:"add"})}>+ เพิ่มสินทรัพย์</Btn></div>}
+    {others.length>0&&(<div style={{marginTop:12}}>
+      <div style={{fontSize:11,fontWeight:600,color:t.ts,marginBottom:6}}>✨ สินทรัพย์อื่นๆ</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:isMe?520:440}}>
+        <thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["หมวด","ชื่อรายการ","ต้นทุน","มูลค่าปัจจุบัน","P&L",...(isMe?[""]:[])].map((h,i)=><th key={i} style={{padding:"6px 8px",textAlign:"left",fontSize:9,color:t.tm,background:t.thBg}}>{h}</th>)}</tr></thead>
+        <tbody>{others.map(o=>{const cat=OTHER_PRESETS.find(p=>p.v===o.category)||OTHER_PRESETS[7];const hasCost=o.cost!=null&&o.cost!=="";const cost=+o.cost||0;const amt=+o.amount||0;const gain=amt-cost;return(<tr key={o.id} style={{borderBottom:`1px solid ${t.cb}`}}>
+          <td style={{padding:"6px 8px"}}><span style={{fontSize:13,marginRight:4}}>{cat.i}</span><span style={{fontSize:10,color:t.tm}}>{cat.l}</span></td>
+          <td style={{padding:"6px 8px",fontWeight:500}}>{o.name}{o.note&&<div style={{fontSize:9,color:t.tm,fontWeight:400}}>{o.note}</div>}</td>
+          <td style={{padding:"6px 8px",color:t.tm}}>{hasCost?fB(cost):"-"}</td>
+          <td style={{padding:"6px 8px",fontWeight:500,color:t.pp}}>{fB(amt)}</td>
+          <td style={{padding:"6px 8px",color:hasCost?(gain>=0?t.g:t.r):t.tm}}>{hasCost?`${gain>=0?"+":""}${fB(gain)}`:"-"}</td>
+          {isMe&&<td style={{padding:"6px 8px"}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editOther",other:o})} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้</button><button onClick={()=>delOther(o.id)} style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td>}
+        </tr>);})}</tbody>
+      </table></div>
+    </div>)}
+    {isMe&&<div style={{marginTop:10,display:"flex",gap:6,flexWrap:"wrap"}}>
+      <Btn small primary t={t} onClick={()=>setModal({type:"add"})}>+ เพิ่มสินทรัพย์</Btn>
+      <Btn small t={t} onClick={()=>setModal({type:"addOther"})} style={{background:`${t.pp}15`,border:`1px solid ${t.pp}60`,color:t.pp}}>+ เพิ่มอื่นๆ (ปล่อยกู้/อสังหา/ฯลฯ)</Btn>
+    </div>}
     <Modal open={modal?.type==="add"||modal?.type==="edit"} onClose={()=>setModal(null)} title={modal?.type==="edit"?"แก้ไขสินทรัพย์":"เพิ่มสินทรัพย์"} t={t}>
       <AssetForm initial={modal?.asset} onSave={f=>modal?.type==="edit"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/>
+    </Modal>
+    <Modal open={modal?.type==="addOther"||modal?.type==="editOther"} onClose={()=>setModal(null)} title={modal?.type==="editOther"?"แก้ไขรายการอื่นๆ":"เพิ่มสินทรัพย์อื่นๆ"} t={t}>
+      <OtherItemForm initial={modal?.other} onSave={f=>modal?.type==="editOther"?updateOther(modal.other.id,f):addOther(f)} onCancel={()=>setModal(null)} t={t}/>
     </Modal>
   </div>);
 }
