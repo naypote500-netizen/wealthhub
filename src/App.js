@@ -1004,29 +1004,36 @@ function WealthHub(){
     if(a.type==="gold")return "GC=F";
     return null;
   };
-  const refreshPrices=async()=>{
-    if(!data?.assets?.length)return;
-    const pairs=data.assets.map(a=>[a,mapYahooSymbol(a)]).filter(([,s])=>s);
-    if(!pairs.length){setPriceRefresh({loading:false,msg:"",err:"ไม่มีสินทรัพย์ที่รองรับการดึงราคา (รองรับ: หุ้นไทย/US, Crypto, ทอง)"});return;}
+  const refreshPrices=async(opts={})=>{
+    const fxOnly=!!opts.fxOnly;
+    const pairs=fxOnly?[]:(data?.assets||[]).map(a=>[a,mapYahooSymbol(a)]).filter(([,s])=>s);
+    if(!fxOnly&&!pairs.length){setPriceRefresh({loading:false,msg:"",err:"ไม่มีสินทรัพย์ที่รองรับการดึงราคา (รองรับ: หุ้นไทย/US, Crypto, ทอง)"});return;}
     setPriceRefresh({loading:true,msg:"",err:""});
     try{
-      const syms=[...new Set(pairs.map(([,s])=>s))].join(",");
+      const symSet=new Set(pairs.map(([,s])=>s));
+      symSet.add("THB=X");
+      const syms=[...symSet].join(",");
       const r=await fetch(`/api/quote?symbols=${encodeURIComponent(syms)}`);
       if(!r.ok)throw new Error(`server ${r.status}`);
       const{quotes}=await r.json();
       let ok=0,fail=0;
-      const newAssets=data.assets.map(a=>{
+      const newAssets=fxOnly?data.assets:data.assets.map(a=>{
         const sym=mapYahooSymbol(a);
         const q=sym?quotes[sym]:null;
         if(q&&q.price!=null&&!q.error){ok++;return{...a,currentPrice:+q.price.toFixed(4)}}
         if(sym)fail++;
         return a;
       });
-      persist({...data,assets:newAssets});
-      setPriceRefresh({loading:false,msg:`อัปเดต ${ok} รายการสำเร็จ${fail?` (ไม่พบ ${fail} รายการ)`:""}`,err:""});
-      setTimeout(()=>setPriceRefresh(p=>({...p,msg:""})),4000);
+      const fx=quotes["THB=X"];
+      const newRate=fx?.price?+fx.price.toFixed(4):null;
+      const newSettings=newRate?{...data.settings,rate:newRate}:data.settings;
+      persist({...data,assets:newAssets,settings:newSettings});
+      const fxMsg=newRate?` · 💱 1 USD = ฿${newRate.toFixed(2)}`:"";
+      const assetMsg=fxOnly?"อัปเดตอัตราแลกเปลี่ยนสำเร็จ":`อัปเดต ${ok} รายการสำเร็จ`;
+      setPriceRefresh({loading:false,msg:`${assetMsg}${fxMsg}${fail?` (ไม่พบ ${fail} รายการ)`:""}`,err:""});
+      setTimeout(()=>setPriceRefresh(p=>({...p,msg:""})),5000);
     }catch(e){
-      setPriceRefresh({loading:false,msg:"",err:"ดึงราคาไม่สำเร็จ: "+e.message});
+      setPriceRefresh({loading:false,msg:"",err:"ดึงข้อมูลไม่สำเร็จ: "+e.message});
     }
   };
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
@@ -1103,8 +1110,13 @@ function WealthHub(){
         {/* Currency + alerts */}
         <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
-            <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>💱 แปลงสกุลเงิน</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:12,fontWeight:600}}>💱 แปลงสกุลเงิน</span>
+              <button onClick={()=>refreshPrices({fxOnly:true})} disabled={priceRefresh.loading} style={{fontSize:10,color:t.ac,background:"none",border:"none",cursor:"pointer",padding:0}}>{priceRefresh.loading?"⏳":"🔄 อัปเดต"}</button>
+            </div>
             <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>1 USD =</span><input value={rate} onChange={e=>setRate(+e.target.value)} type="number" step="0.1" style={{width:60,padding:"4px 6px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"center"}}/><span style={{fontSize:11,color:t.tm}}>บาท</span></div>
+            {priceRefresh.msg&&<div style={{fontSize:10,color:t.g,marginTop:6}}>{priceRefresh.msg}</div>}
+            {priceRefresh.err&&<div style={{fontSize:10,color:t.r,marginTop:6}}>{priceRefresh.err}</div>}
           </div>
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
             <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>🔔 แจ้งเตือน</div>
