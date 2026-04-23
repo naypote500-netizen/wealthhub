@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from './supabaseClient';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 
 /* ═══ THEME ═══ */
 const L={bg:"#F4F6F9",sidebar:"#0F1B2D",sidebarText:"#8899AA",sidebarActive:"#38BDF8",card:"#FFFFFF",cb:"#E2E8F0",text:"#1E293B",ts:"#64748B",tm:"#94A3B8",ac:"#0EA5E9",acL:"#E0F2FE",g:"#10B981",gL:"#D1FAE5",r:"#EF4444",rL:"#FEE2E2",am:"#F59E0B",amL:"#FEF3C7",tl:"#14B8A6",pp:"#8B5CF6",ib:"#FFFFFF",ibr:"#CBD5E1",thBg:"#F8FAFC"};
@@ -1100,11 +1100,17 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
   const targetPct=challenge.target_pct!=null?+challenge.target_pct:null;
   const chartData=sorted.map(m=>{
     const nv=calcNetWorth(m),sv=calcStartingValue(m);
-    const pct=sv>0?((nv-sv)/sv)*100:0;
-    const progress=targetPct&&targetPct!==0?Math.max(-100,Math.min(200,(pct/targetPct)*100)):null;
+    const target=targetPct!=null?sv*(1+targetPct/100):null;
+    const pctOfTarget=target&&target>0?(nv/target)*100:null;
+    const pctGain=sv>0?((nv-sv)/sv)*100:0;
     const name=(m.display_name||"?").slice(0,12);
-    return{name:m.user_id===session.user.id?name+" (คุณ)":name,pct:+pct.toFixed(2),progress:progress!=null?+progress.toFixed(1):null,fill:pct>=0?t.g:t.r};
+    const reached=target!=null&&nv>=target;
+    const fill=target!=null?(reached?t.g:pctOfTarget>=75?t.ac:pctOfTarget>=50?t.am:t.r):(pctGain>=0?t.g:t.r);
+    return{name:m.user_id===session.user.id?name+" (คุณ)":name,amount:+nv.toFixed(0),starting:+sv.toFixed(0),target:target!=null?+target.toFixed(0):null,pctOfTarget:pctOfTarget!=null?+pctOfTarget.toFixed(1):null,pctGain:+pctGain.toFixed(2),reached,fill};
   });
+  const maxTarget=chartData.reduce((mx,d)=>Math.max(mx,d.target||0),0);
+  const maxNet=chartData.reduce((mx,d)=>Math.max(mx,d.amount||0),0);
+  const yDomainMax=Math.max(maxTarget,maxNet)*1.08||100;
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
       <Btn small t={t} onClick={onBack}>← กลับ</Btn>
@@ -1130,16 +1136,19 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       </table></div>
     </div>
     {members.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
-      <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 เปรียบเทียบผู้เล่น</div>
-      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>{targetPct!=null?`% กำไร/ขาดทุนปัจจุบัน · เส้นประ = เป้าหมาย ${targetPct>=0?"+":""}${targetPct}%`:"% กำไร/ขาดทุนของแต่ละผู้เล่น (ตั้งเป้าได้ตอนสร้างชาเลนจ์)"}</div>
-      <ResponsiveContainer width="100%" height={Math.max(180,members.length*42+60)}>
-        <BarChart data={chartData} layout="vertical" margin={{top:6,right:40,left:10,bottom:6}}>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.cb} horizontal={false}/>
-          <XAxis type="number" tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>`${v}%`}/>
-          <YAxis type="category" dataKey="name" tick={{fontSize:11,fill:t.ts}} width={110}/>
-          <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={(v,n)=>[`${v}%`,n==="pct"?"กำไร":"ของเป้า"]}/>
-          <Bar dataKey="pct" radius={[0,6,6,0]}>{chartData.map((d,i)=><Cell key={i} fill={d.fill}/>)}</Bar>
-          {targetPct!=null&&<ReferenceLine x={targetPct} stroke={t.am} strokeDasharray="4 3" strokeWidth={2} label={{value:`🎯 ${targetPct}%`,fill:t.am,fontSize:10,position:"top"}}/>}
+      <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 เปรียบเทียบผู้เล่น (มูลค่ารวม)</div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>{targetPct!=null?`แกนตั้ง = มูลค่ารวม (฿) · ขีดสูงสุด = เป้าหมาย (เริ่มต้น + ${targetPct>=0?"+":""}${targetPct}%) · ตัวเลขบนแท่ง = % ที่ได้ของเป้า`:"แกนตั้ง = มูลค่ารวม (฿) ของแต่ละผู้เล่น (ตั้งเป้าได้ตอนสร้างชาเลนจ์)"}</div>
+      <ResponsiveContainer width="100%" height={Math.max(260,members.length*30+200)}>
+        <BarChart data={chartData} margin={{top:30,right:16,left:10,bottom:40}}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.cb} vertical={false}/>
+          <XAxis dataKey="name" tick={{fontSize:10,fill:t.ts}} angle={-20} textAnchor="end" interval={0} height={50}/>
+          <YAxis type="number" domain={[0,yDomainMax]} tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1000000?`฿${(v/1000000).toFixed(1)}M`:v>=1000?`฿${(v/1000).toFixed(0)}k`:`฿${v}`} width={60}/>
+          <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={(v,n)=>n==="amount"?[fB(v),"มูลค่ารวม"]:[v,n]} labelFormatter={(l,p)=>{const d=p?.[0]?.payload;if(!d)return l;return`${l} · เริ่มต้น ${fB(d.starting)}${d.target!=null?` · เป้า ${fB(d.target)}`:""}${d.pctOfTarget!=null?` · ${d.pctOfTarget}% ของเป้า`:""}`}}/>
+          <Bar dataKey="amount" radius={[6,6,0,0]}>
+            {chartData.map((d,i)=><Cell key={i} fill={d.fill}/>)}
+            <LabelList dataKey={targetPct!=null?"pctOfTarget":"amount"} position="top" formatter={v=>targetPct!=null?(v!=null?`${v}%${v>=100?" 🏁":""}`:""):fB(v)} style={{fontSize:10,fill:t.text,fontWeight:600}}/>
+          </Bar>
+          {maxTarget>0&&<ReferenceLine y={maxTarget} stroke={t.am} strokeDasharray="5 3" strokeWidth={2} label={{value:`🎯 เป้า ${fB(maxTarget)}`,fill:t.am,fontSize:10,position:"insideTopRight"}}/>}
         </BarChart>
       </ResponsiveContainer>
       {targetPct!=null&&targetPct!==0&&(<div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
