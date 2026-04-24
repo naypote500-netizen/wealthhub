@@ -998,6 +998,32 @@ function CreateChallengeForm({onClose,t,session}){
   </div>);
 }
 
+function EditChallengeForm({challenge,onClose,onSaved,t}){
+  const[f,set]=useF({name:challenge.name||"",description:challenge.description||"",start_date:challenge.start_date||"",end_date:challenge.end_date||"",target_amount:challenge.target_amount!=null?String(challenge.target_amount):""});
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const submit=async()=>{
+    if(!f.name){setErr("กรุณาใส่ชื่อชาเลนจ์");return;}
+    setLoading(true);setErr("");
+    const payload={name:f.name,description:f.description||null,start_date:f.start_date||null,end_date:f.end_date||null,target_amount:f.target_amount===""?null:+f.target_amount};
+    const{error}=await supabase.from("challenges").update(payload).eq("id",challenge.id);
+    if(error){setErr(error.message);setLoading(false);return;}
+    setLoading(false);onSaved&&onSaved();onClose();
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <Inp label="ชื่อชาเลนจ์" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/>
+    <Inp label="คำอธิบาย (ไม่บังคับ)" t={t} value={f.description} onChange={e=>set("description",e.target.value)}/>
+    <Inp label="วันเริ่มต้น" t={t} type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)}/>
+    <Inp label="วันสิ้นสุด (ไม่บังคับ)" t={t} type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)}/>
+    <Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 1000000 = เป้า ฿1,000,000"/>
+    <div style={{fontSize:10,color:t.tm}}>* การแก้ไขเป้าหมาย/วันที่ จะมีผลกับทุกคนในชาเลนจ์ทันที</div>
+    {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+    <div style={{display:"flex",gap:6}}>
+      <Btn primary t={t} onClick={submit} disabled={loading||!f.name} style={{flex:1}}>{loading?"กำลังบันทึก...":"💾 บันทึก"}</Btn>
+      <Btn t={t} onClick={()=>onClose()}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
 function JoinChallengeForm({onClose,t,session,challengeId}){
   const[code,setCode]=useState("");const[name,setName]=useState(session?.user?.email||"");
   const[cash,setCash]=useState("");const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
@@ -1126,6 +1152,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {!me&&<Btn primary t={t} onClick={()=>setModal({type:"join"})}>+ เข้าร่วม</Btn>}
           {me&&<Btn small t={t} onClick={leave}>🚪 ออก</Btn>}
+          {isCreator&&<Btn small t={t} onClick={()=>setModal({type:"editChallenge"})}>✏️ แก้ไข</Btn>}
           {isCreator&&<Btn small t={t} onClick={deleteChallenge} style={{color:t.r,border:`1px solid ${t.r}40`}}>🗑 ลบ</Btn>}
         </div>
       </div>
@@ -1188,6 +1215,9 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     </Modal>
     <Modal open={modal?.type==="profile"} onClose={()=>setModal(null)} title="✏️ แก้ไขโปรไฟล์ในชาเลนจ์" t={t}>
       {modal?.member&&<EditProfileForm member={modal.member} session={session} t={t} onClose={()=>setModal(null)} onSaved={load}/>}
+    </Modal>
+    <Modal open={modal?.type==="editChallenge"} onClose={()=>setModal(null)} title="✏️ แก้ไขชาเลนจ์" t={t}>
+      <EditChallengeForm challenge={challenge} t={t} onClose={()=>setModal(null)} onSaved={load}/>
     </Modal>
   </div>);
 }
