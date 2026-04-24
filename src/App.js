@@ -931,6 +931,91 @@ function AuthPage({dark,setDark,t}){
   </div>);
 }
 
+/* ═══ NOTIFICATIONS ═══ */
+async function createNotif(userId,type,title,body,link,dedupKey){
+  if(!userId)return;
+  try{await supabase.from("notifications").upsert({user_id:userId,type,title,body:body||null,link:link||null,dedup_key:dedupKey||null},{onConflict:"user_id,dedup_key",ignoreDuplicates:true});}catch(e){}
+}
+
+function NotifBell({session,t,onNavigate}){
+  const[list,setList]=useState([]);const[open,setOpen]=useState(false);
+  const unread=list.filter(n=>!n.read_at).length;
+  const load=useCallback(async()=>{
+    if(!session?.user)return;
+    const{data}=await supabase.from("notifications").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false}).limit(30);
+    setList(data||[]);
+  },[session]);
+  useEffect(()=>{load();const i=setInterval(load,60000);return()=>clearInterval(i)},[load]);
+  const markRead=async id=>{await supabase.from("notifications").update({read_at:new Date().toISOString()}).eq("id",id);load()};
+  const markAll=async()=>{await supabase.from("notifications").update({read_at:new Date().toISOString()}).eq("user_id",session.user.id).is("read_at",null);load()};
+  const remove=async id=>{await supabase.from("notifications").delete().eq("id",id);load()};
+  if(!session?.user)return null;
+  return(<div style={{position:"relative"}}>
+    <button onClick={()=>setOpen(!open)} aria-label="notifications" style={{background:t.card,border:`1px solid ${t.cb}`,color:t.text,fontSize:16,padding:"6px 10px",borderRadius:8,cursor:"pointer",position:"relative",lineHeight:1}}>🔔
+      {unread>0&&<span style={{position:"absolute",top:-5,right:-5,background:t.r,color:"#fff",fontSize:9,fontWeight:700,borderRadius:10,minWidth:16,height:16,padding:"0 4px",display:"flex",alignItems:"center",justifyContent:"center"}}>{unread>9?"9+":unread}</span>}
+    </button>
+    {open&&<>
+      <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:200}}/>
+      <div style={{position:"absolute",right:0,top:42,width:340,maxHeight:460,overflowY:"auto",background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,boxShadow:"0 10px 30px rgba(0,0,0,0.15)",zIndex:201}}>
+        <div style={{padding:"10px 12px",borderBottom:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:t.card}}>
+          <div style={{fontSize:12,fontWeight:600}}>🔔 การแจ้งเตือน{unread>0&&` (${unread})`}</div>
+          {unread>0&&<button onClick={markAll} style={{background:"none",border:"none",color:t.ac,fontSize:10,cursor:"pointer"}}>อ่านทั้งหมด</button>}
+        </div>
+        {list.length===0?<div style={{padding:24,textAlign:"center",color:t.tm,fontSize:11}}>ยังไม่มีการแจ้งเตือน</div>:
+          list.map(n=>(<div key={n.id} onClick={()=>{markRead(n.id);if(n.link&&onNavigate){onNavigate(n.link);setOpen(false)}}} style={{padding:"10px 12px",borderBottom:`1px solid ${t.cb}`,cursor:n.link?"pointer":"default",background:n.read_at?"transparent":`${t.ac}10`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:t.text}}>{!n.read_at&&<span style={{color:t.ac,marginRight:4}}>•</span>}{n.title}</div>
+                {n.body&&<div style={{fontSize:10,color:t.ts,marginTop:3,whiteSpace:"pre-wrap"}}>{n.body}</div>}
+                <div style={{fontSize:9,color:t.tm,marginTop:4}}>{new Date(n.created_at).toLocaleString("th-TH",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+              <button onClick={e=>{e.stopPropagation();remove(n.id)}} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕</button>
+            </div>
+          </div>))}
+      </div>
+    </>}
+  </div>);
+}
+
+/* ═══ NET WORTH HISTORY ═══ */
+function NetWorthHistoryChart({session,t}){
+  const[rows,setRows]=useState([]);const[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(!session?.user){setLoading(false);return}
+    supabase.from("net_worth_history").select("*").eq("user_id",session.user.id).order("date").limit(365).then(({data})=>{setRows(data||[]);setLoading(false)});
+  },[session]);
+  if(!session?.user||loading)return null;
+  if(rows.length<2)return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 มูลค่าสุทธิย้อนหลัง</div>
+    <div style={{fontSize:11,color:t.tm,padding:"20px 0",textAlign:"center"}}>ระบบจะเก็บข้อมูลให้อัตโนมัติวันละ 1 ครั้งเมื่อคุณเข้าใช้งาน ({rows.length}/2 วัน)</div>
+  </div>);
+  const chartData=rows.map(r=>({date:r.date.slice(5),netWorth:+r.net_worth,assets:+(r.assets||0),liabilities:+(r.liabilities||0)}));
+  const first=+rows[0].net_worth,last=+rows[rows.length-1].net_worth;
+  const change=last-first,pct=first!==0?(change/Math.abs(first))*100:0;
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:6,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:600}}>📈 มูลค่าสุทธิย้อนหลัง ({rows.length} วัน)</div>
+        <div style={{fontSize:10,color:t.tm,marginTop:2}}>บันทึกอัตโนมัติเมื่อเข้าใช้งานแต่ละวัน</div>
+      </div>
+      <div style={{textAlign:"right"}}>
+        <div style={{fontSize:14,fontWeight:700,color:change>=0?t.g:t.r}}>{change>=0?"▲":"▼"} {fB(Math.abs(change))}</div>
+        <div style={{fontSize:10,color:change>=0?t.g:t.r}}>{pct>=0?"+":""}{pct.toFixed(2)}% ตั้งแต่เริ่มเก็บ</div>
+      </div>
+    </div>
+    <ResponsiveContainer width="100%" height={240}>
+      <AreaChart data={chartData} margin={{top:8,right:10,left:0,bottom:4}}>
+        <defs><linearGradient id="nwgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={t.ac} stopOpacity={0.35}/><stop offset="95%" stopColor={t.ac} stopOpacity={0}/></linearGradient></defs>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.cb} vertical={false}/>
+        <XAxis dataKey="date" tick={{fontSize:9,fill:t.ts}}/>
+        <YAxis tick={{fontSize:9,fill:t.tm}} tickFormatter={v=>v>=1000000?`฿${(v/1000000).toFixed(1)}M`:v>=1000?`฿${(v/1000).toFixed(0)}k`:`฿${v}`} width={55}/>
+        <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={v=>fB(v)}/>
+        <Area type="monotone" dataKey="netWorth" name="มูลค่าสุทธิ" stroke={t.ac} strokeWidth={2} fill="url(#nwgrad)"/>
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>);
+}
+
 /* ═══ CHALLENGES ═══ */
 function genCode(){return Math.random().toString(36).substring(2,8).toUpperCase()}
 
@@ -1071,9 +1156,32 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     setChallenge(ch||null);setMembers(ms||[]);setLoading(false);
   },[id]);
   useEffect(()=>{load();},[load]);
+  const calcNetWorth=useCallback(m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0))+(+m.cash||0)+((m.other_items||[]).reduce((s,o)=>s+(+o.amount||0),0)),[toThb]);
+  useEffect(()=>{
+    if(!challenge||!session?.user||!members.length)return;
+    const me2=members.find(m=>m.user_id===session.user.id);if(!me2)return;
+    const nv=calcNetWorth(me2);
+    const today=new Date().toISOString().slice(0,10);
+    supabase.from("challenge_snapshots").upsert({challenge_id:id,user_id:session.user.id,date:today,net_worth:+nv.toFixed(2)},{onConflict:"challenge_id,user_id,date"}).then(()=>{});
+    // Check challenge end-date notification
+    if(challenge.end_date){
+      const diff=(new Date(challenge.end_date)-new Date())/86400000;
+      if(diff>=0&&diff<=3)createNotif(session.user.id,"challenge_end",`⏰ ${challenge.name} ใกล้สิ้นสุด`,`เหลืออีก ${Math.ceil(diff)} วัน!`,`challenge:${id}`,`challenge_end_${id}`);
+    }
+    // Check if anyone reached target
+    const target=challenge.target_amount!=null?+challenge.target_amount:(challenge.target_pct!=null?null:null);
+    if(target!=null){
+      members.forEach(m=>{
+        const nv2=calcNetWorth(m);
+        if(nv2>=target){
+          const who=m.user_id===session.user.id?"คุณ":(m.display_name||"ผู้เล่น");
+          createNotif(session.user.id,"challenge_reached",`🏁 ${who} ถึงเป้าหมายแล้ว!`,`${challenge.name}: ${fB(nv2)} / ${fB(target)}`,`challenge:${id}`,`reached_${id}_${m.user_id}`);
+        }
+      });
+    }
+  },[challenge,members,session,id,calcNetWorth]);
   if(loading)return<div style={{color:t.tm,fontSize:12,padding:20,textAlign:"center"}}>กำลังโหลด...</div>;
   if(!challenge)return(<div><Btn small t={t} onClick={onBack}>← กลับ</Btn><div style={{marginTop:10,color:t.tm}}>ไม่พบชาเลนจ์</div></div>);
-  const calcNetWorth=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.currentPrice||0),a.currency||"THB"),0))+(+m.cash||0)+((m.other_items||[]).reduce((s,o)=>s+(+o.amount||0),0));
   const calcStartingValue=m=>((m.assets||[]).reduce((s,a)=>s+toThb((+a.units||0)*(+a.avgCost||0),a.currency||"THB"),0))+(+m.starting_cash||0)+((m.other_items||[]).reduce((s,o)=>s+(+(o.cost??o.amount)||0),0));
   const sorted=[...members].sort((a,b)=>{
     const aS=calcStartingValue(a),bS=calcStartingValue(b);
@@ -1209,6 +1317,8 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       {refresh.msg&&<span style={{fontSize:11,color:t.g,padding:"4px 10px",background:`${t.g}15`,borderRadius:6}}>✅ {refresh.msg}</span>}
       {refresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {refresh.err}</span>}
     </div>}
+    <ChallengeHistoryChart challengeId={id} members={sorted} session={session} t={t}/>
+    <ChallengePosts challengeId={id} members={members} session={session} t={t}/>
     {sorted.map(m=>(<MemberPortfolio key={m.id} member={m} isMe={m.user_id===session.user.id} onUpdate={updateMe} onEditProfile={mem=>setModal({type:"profile",member:mem})} t={t} toThb={toThb} rate={rate}/>))}
     <Modal open={modal?.type==="join"} onClose={()=>setModal(null)} title="เข้าร่วมชาเลนจ์" t={t}>
       <JoinChallengeForm onClose={()=>{setModal(null);load()}} t={t} session={session} challengeId={id}/>
@@ -1219,6 +1329,83 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     <Modal open={modal?.type==="editChallenge"} onClose={()=>setModal(null)} title="✏️ แก้ไขชาเลนจ์" t={t}>
       <EditChallengeForm challenge={challenge} t={t} onClose={()=>setModal(null)} onSaved={load}/>
     </Modal>
+  </div>);
+}
+
+function ChallengePosts({challengeId,members,session,t}){
+  const[posts,setPosts]=useState([]);
+  const[msg,setMsg]=useState("");
+  const[sending,setSending]=useState(false);
+  const load=useCallback(async()=>{
+    const{data}=await supabase.from("challenge_posts").select("*").eq("challenge_id",challengeId).order("created_at",{ascending:false}).limit(100);
+    setPosts(data||[]);
+  },[challengeId]);
+  useEffect(()=>{load();const i=setInterval(load,30000);return()=>clearInterval(i)},[load]);
+  const send=async()=>{
+    if(!msg.trim())return;
+    setSending(true);
+    await supabase.from("challenge_posts").insert({challenge_id:challengeId,user_id:session.user.id,message:msg.trim()});
+    setMsg("");setSending(false);load();
+  };
+  const del=async id=>{
+    if(!window.confirm("ลบข้อความนี้?"))return;
+    await supabase.from("challenge_posts").delete().eq("id",id);load();
+  };
+  const getMem=uid=>members.find(m=>m.user_id===uid);
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>💬 พูดคุยในชาเลนจ์ ({posts.length})</div>
+    <div style={{display:"flex",gap:6,marginBottom:12}}>
+      <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="พิมพ์ข้อความ... (Enter เพื่อส่ง)" maxLength={500} style={{flex:1,padding:"8px 10px",borderRadius:6,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text,fontSize:12,outline:"none"}}/>
+      <Btn primary t={t} onClick={send} disabled={sending||!msg.trim()}>{sending?"...":"ส่ง"}</Btn>
+    </div>
+    {posts.length===0?<div style={{textAlign:"center",color:t.tm,fontSize:11,padding:20}}>ยังไม่มีข้อความ — มาเริ่มคุยกันเลย! 🎉</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:400,overflowY:"auto",paddingRight:4}}>
+        {posts.map(p=>{const m=getMem(p.user_id);const isMe=p.user_id===session.user.id;return(<div key={p.id} style={{display:"flex",gap:8}}>
+          <Avatar url={m?.avatar_url} name={m?.display_name} size={32} t={t}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",fontSize:11,flexWrap:"wrap"}}>
+              <span style={{fontWeight:600}}>{m?.display_name||"ผู้ใช้"}</span>
+              {isMe&&<span style={{color:t.ac,fontSize:10}}>(คุณ)</span>}
+              <span style={{color:t.tm,fontSize:10}}>{new Date(p.created_at).toLocaleString("th-TH",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span>
+              {isMe&&<button onClick={()=>del(p.id)} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11,marginLeft:"auto"}}>🗑</button>}
+            </div>
+            <div style={{fontSize:12,color:t.text,marginTop:3,padding:"7px 11px",background:isMe?`${t.ac}15`:t.bg,borderRadius:8,border:`1px solid ${t.cb}`,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{p.message}</div>
+          </div>
+        </div>);})}
+      </div>}
+  </div>);
+}
+
+function ChallengeHistoryChart({challengeId,members,session,t}){
+  const[rows,setRows]=useState([]);const[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(!challengeId){setLoading(false);return}
+    supabase.from("challenge_snapshots").select("*").eq("challenge_id",challengeId).order("date").then(({data})=>{setRows(data||[]);setLoading(false)});
+  },[challengeId,members.length]);
+  if(loading)return null;
+  if(rows.length<2)return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 มูลค่าพอร์ตในชาเลนจ์ย้อนหลัง</div>
+    <div style={{fontSize:11,color:t.tm,textAlign:"center",padding:"16px 0"}}>ระบบจะเก็บข้อมูลวันละ 1 ครั้งเมื่อมีผู้เล่นเข้ามาดู ({new Set(rows.map(r=>r.date)).size}/2 วัน)</div>
+  </div>);
+  const memMap=Object.fromEntries(members.map(m=>[m.user_id,(m.display_name||"?").slice(0,12)]));
+  const byDate={};
+  rows.forEach(r=>{if(!byDate[r.date])byDate[r.date]={date:r.date};byDate[r.date][memMap[r.user_id]||r.user_id.slice(0,6)]=+r.net_worth});
+  const data=Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date)).map(d=>({...d,date:d.date.slice(5)}));
+  const COLORS=["#0EA5E9","#10B981","#F59E0B","#EF4444","#8B5CF6","#14B8A6","#EC4899","#F97316","#6366F1","#84CC16"];
+  const keys=members.map(m=>memMap[m.user_id]).filter(Boolean);
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+    <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>📈 มูลค่าพอร์ตในชาเลนจ์ย้อนหลัง ({Object.keys(byDate).length} วัน)</div>
+    <div style={{fontSize:10,color:t.tm,marginBottom:10}}>เส้นหนา = ของคุณ · บันทึกอัตโนมัติเมื่อเข้าดูชาเลนจ์</div>
+    <ResponsiveContainer width="100%" height={280}>
+      <LineChart data={data} margin={{top:10,right:16,left:0,bottom:4}}>
+        <CartesianGrid strokeDasharray="3 3" stroke={t.cb} vertical={false}/>
+        <XAxis dataKey="date" tick={{fontSize:9,fill:t.ts}}/>
+        <YAxis tick={{fontSize:9,fill:t.tm}} tickFormatter={v=>v>=1000000?`฿${(v/1000000).toFixed(1)}M`:v>=1000?`฿${(v/1000).toFixed(0)}k`:`฿${v}`} width={55}/>
+        <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={v=>fB(v)}/>
+        <Legend wrapperStyle={{fontSize:10}}/>
+        {members.map((m,i)=>{const name=memMap[m.user_id];if(!keys.includes(name))return null;const isMe=m.user_id===session.user.id;return<Line key={m.user_id} type="monotone" dataKey={name} stroke={COLORS[i%COLORS.length]} strokeWidth={isMe?3:1.5} dot={{r:isMe?4:2.5}} activeDot={{r:5}} connectNulls/>})}
+      </LineChart>
+    </ResponsiveContainer>
   </div>);
 }
 
@@ -1542,8 +1729,25 @@ function WealthHub(){
     const mt=ms.map(m=>({month:fm(m),income:data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0),expense:data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0)}));
     const ec={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{ec[tx.category]=(ec[tx.category]||0)+tx.amount});
     const ecd=Object.entries(ec).map(([k,v],i)=>{const cat=EC.find(c=>c.v===k)||EC[7];return{name:cat.l,value:v,color:PC[i%PC.length],icon:cat.i}}).sort((a,b)=>b.value-a.value);
-    return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,monthlyTrend:mt,expCatData:ecd};
+    return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,totalAssets:tp+gs+(data.balanceSheet?((data.balanceSheet.cash||0)+(data.balanceSheet.savings||0)+(data.balanceSheet.car||0)+(data.balanceSheet.house||0)+(data.balanceSheet.otherAssets||0)):0),totalLiab:dr+(data.balanceSheet?((data.balanceSheet.creditCard||0)+(data.balanceSheet.carLoan||0)+(data.balanceSheet.homeLoan||0)+(data.balanceSheet.otherLiab||0)):0),monthlyTrend:mt,expCatData:ecd};
   },[data,rate]);
+
+  // Daily net worth snapshot
+  useEffect(()=>{
+    if(!session?.user||!data||stats.netWorth===undefined)return;
+    const today=new Date().toISOString().slice(0,10);
+    const key=`nwSnap_${session.user.id}_${today}`;
+    if(localStorage.getItem(key))return;
+    const realNW=(stats.totalAssets||0)-(stats.totalLiab||0);
+    supabase.from("net_worth_history").upsert({user_id:session.user.id,date:today,net_worth:+realNW.toFixed(2),assets:+(stats.totalAssets||0).toFixed(2),liabilities:+(stats.totalLiab||0).toFixed(2)},{onConflict:"user_id,date"}).then(({error})=>{if(!error)localStorage.setItem(key,"1")});
+    // Debt due-soon notification
+    (data.debts||[]).forEach(d=>{
+      if(d.dueDate&&d.total-d.paid>0){
+        const diff=(new Date(d.dueDate)-new Date())/86400000;
+        if(diff>=0&&diff<=7)createNotif(session.user.id,"debt_due",`💳 ${d.name} ใกล้ครบกำหนด`,`เหลืออีก ${Math.ceil(diff)} วัน · คงเหลือ ${fB(d.total-d.paid)}`,"debts",`debt_${d.id}_${d.dueDate}`);
+      }
+    });
+  },[session,data,stats]);
 
   if(session===undefined||loading||!data)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:t.bg,color:t.ts,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>กำลังโหลด...</div>;
 
@@ -1559,6 +1763,7 @@ function WealthHub(){
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
+          <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
           {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about","challenges"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
@@ -1591,6 +1796,7 @@ function WealthHub(){
             {(()=>{const al=[];data.debts.forEach(d=>{if(d.total-d.paid>0&&d.rate>=10)al.push({c:t.r,t:`⚠️ ${d.name} ดอกเบี้ยสูง`})});if(!al.length)al.push({c:t.g,t:"✅ ปกติ"});return al.map((a,i)=>(<div key={i} style={{padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:2,background:`${a.c}12`,color:a.c}}>{a.t}</div>))})()}
           </div>
         </div>
+        <NetWorthHistoryChart session={session} t={t}/>
         {stats.monthlyTrend.some(m=>m.income||m.expense)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>รายรับ vs รายจ่าย (6 เดือน)</div><ResponsiveContainer width="100%" height={180}><BarChart data={stats.monthlyTrend} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={t.cb}/><XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/><YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1e3?`${(v/1e3).toFixed(0)}K`:v}/><Tooltip formatter={v=>fB(v)} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:8}}/><Bar dataKey="income" name="รายรับ" fill={t.g} radius={[4,4,0,0]}/><Bar dataKey="expense" name="รายจ่าย" fill={t.r} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>)}
         {data.goals.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🎯 เป้าหมาย</div>{data.goals.map(g=>{const p=g.target>0?(g.saved/g.target)*100:0;return(<div key={g.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}><span style={{fontWeight:500}}>{g.icon} {g.name}</span><span style={{color:t.ts}}>{fB(g.saved)}/{fB(g.target)} ({Math.round(p)}%)</span></div><PB pct={p} color={p>=100?t.g:t.ac} height={5} t={t}/></div>)})}</div>)}
       </div>)}
@@ -1610,7 +1816,7 @@ function WealthHub(){
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
       {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
       {page==="budget"&&<BudgetPage data={data} stats={stats} persist={persist} t={t}/>}
-      {page==="balance"&&<BalancePage data={data} stats={stats} persist={persist} t={t}/>}
+      {page==="balance"&&<><BalancePage data={data} stats={stats} persist={persist} t={t}/><div style={{marginTop:14}}><NetWorthHistoryChart session={session} t={t}/></div></>}
       {page==="cashflow"&&<CashFlowPage data={data} stats={stats} t={t}/>}
       {page==="cfdetail"&&<CashFlowDetailPage data={data} persist={persist} t={t}/>}
 
