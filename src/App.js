@@ -600,8 +600,11 @@ function EnvelopesPage({data,persist,t}){
               </div>
               {b>0&&<div style={{fontSize:10,fontWeight:700,color:col,padding:"3px 7px",borderRadius:6,background:`${col}20`}}>{status==="over"?"⚠️ เกิน":status==="low"?"⚠ ใกล้หมด":"✓ ปกติ"}</div>}
             </div>
-            <div style={{fontSize:10,color:t.tm,marginBottom:3}}>เงินในซอง</div>
-            <input type="number" value={b||""} onChange={e=>setEnv(c.v,e.target.value)} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${t.ibr}`,fontSize:14,background:t.ib,color:t.text,fontWeight:600,marginBottom:8}}/>
+            <div style={{fontSize:10,color:t.tm,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>💵 <span>เงินในซอง</span></div>
+            <div style={{position:"relative",marginBottom:10}}>
+              <div style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:26,height:26,borderRadius:8,background:b>0?col:t.cb,color:b>0?"#fff":t.tm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,transition:"all .2s",pointerEvents:"none"}}>฿</div>
+              <input type="number" inputMode="decimal" value={b||""} onChange={e=>setEnv(c.v,e.target.value)} onFocus={e=>{e.target.parentElement.style.boxShadow=`0 0 0 3px ${col}30`;e.target.style.borderColor=col}} onBlur={e=>{e.target.parentElement.style.boxShadow="none";e.target.style.borderColor=t.ibr}} placeholder="0" style={{width:"100%",padding:"12px 14px 12px 44px",borderRadius:10,border:`1.5px solid ${t.ibr}`,fontSize:18,background:t.ib,color:t.text,fontWeight:700,letterSpacing:0.3,outline:"none",transition:"border-color .2s,box-shadow .2s",fontFamily:"inherit"}}/>
+            </div>
             {b>0&&<><PB pct={Math.min(pct,100)} color={col} height={10} t={t}/>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginTop:6}}>
                 <span style={{color:t.tm}}>ใช้ไป {fB(s)}</span>
