@@ -422,7 +422,22 @@ function PlanPage({data,stats,t}){
 /* ═══ FORMS ═══ */
 function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||{name:"",type:"stock_th",units:"",avgCost:"",currentPrice:"",currency:"THB",note:""});const ok=f.name&&+f.units>0&&+f.avgCost>0&&+f.currentPrice>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><Inp label="ชื่อ/Symbol" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="KBANK, AAPL"/><div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}><Sel label="ประเภท" t={t} value={f.type} onChange={e=>set("type",e.target.value)}>{AT.map(a=><option key={a.v} value={a.v}>{a.i} {a.l}</option>)}</Sel><Sel label="สกุลเงิน" t={t} value={f.currency} onChange={e=>set("currency",e.target.value)}><option value="THB">🇹🇭 THB</option><option value="USD">🇺🇸 USD</option></Sel></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวน" t={t} type="number" step="any" value={f.units} onChange={e=>set("units",e.target.value)}/><Inp label={`ต้นทุน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.avgCost} onChange={e=>set("avgCost",e.target.value)}/></div><Inp label={`ราคาปัจจุบัน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.currentPrice} onChange={e=>set("currentPrice",e.target.value)}/>{f.currency==="USD"&&+f.currentPrice>0&&<div style={{fontSize:10,color:t.ac}}>≈ {fB(+f.currentPrice*rate)}/unit</div>}<Inp label="โน้ต" t={t} value={f.note||""} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
-function TxnForm({onSave,onCancel,t,initialDate,initial}){const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||""}:{type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div><Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div><Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div></div>)}
+function TxnForm({onSave,onCancel,t,initialDate,initial,data}){
+  const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||""}:{type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});
+  const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;
+  // Smart Category: build keyword→category map from history (expenses only)
+  const noteMap=useMemo(()=>{const m={};(data?.transactions||[]).filter(tx=>tx.type==="expense"&&tx.note).forEach(tx=>{tx.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2).forEach(w=>{if(!m[w])m[w]={};m[w][tx.category]=(m[w][tx.category]||0)+1})});return m},[data?.transactions]);
+  const suggestion=useMemo(()=>{if(f.type!=="expense"||!f.note||f.note.length<2)return null;const words=f.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2);const scores={};words.forEach(w=>{if(noteMap[w])Object.entries(noteMap[w]).forEach(([c,n])=>{scores[c]=(scores[c]||0)+n})});const top=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];return(top&&top[0]!==f.category)?top[0]:null},[f.note,f.category,f.type,noteMap]);
+  const sugCat=suggestion?EC.find(c=>c.v===suggestion):null;
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div>
+    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
+    {sugCat&&<button type="button" onClick={()=>set("category",suggestion)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",border:`1px dashed ${t.ac}`,borderRadius:8,background:`${t.ac}10`,cursor:"pointer",color:t.ac,fontSize:11,textAlign:"left"}}>💡 น่าจะเป็นหมวด <b>{sugCat.i} {sugCat.l}</b> ใช่ไหม? <span style={{marginLeft:"auto",fontSize:10,color:t.tm}}>คลิกเพื่อเปลี่ยน →</span></button>}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div>
+    <Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="เช่น เซเว่น, กาแฟสตาร์บัค, ค่าน้ำมัน"/>
+    <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div>
+  </div>);
+}
 
 function GoalForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:"",icon:"🎯",target:"",saved:"0",deadline:""});const ok=f.name&&+f.target>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:4}}>{"🎯🏠🚗✈️💍🎓💰🛡️".split("").filter((_,i)=>i%2===0||(i===1)).length&&["🎯","🏠","🚗","✈️","💍","🎓","💰","🛡️"].map(ic=>(<button key={ic} onClick={()=>set("icon",ic)} style={{width:34,height:34,borderRadius:7,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",border:f.icon===ic?`2px solid ${t.ac}`:`1px solid ${t.cb}`,background:f.icon===ic?t.acL:"transparent",cursor:"pointer"}}>{ic}</button>))}</div><Inp label="ชื่อเป้าหมาย" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="เป้าหมาย (฿)" t={t} type="number" value={f.target} onChange={e=>set("target",e.target.value)}/><Inp label="ออมแล้ว (฿)" t={t} type="number" value={f.saved} onChange={e=>set("saved",e.target.value)}/></div><Inp label="กำหนด" t={t} type="date" value={f.deadline||""} onChange={e=>set("deadline",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ สร้าง"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
@@ -649,6 +664,25 @@ function AnalyticsPage({data,stats,t}){
   // Avg expense per day
   const dayInMonth=tdy.getDate();
   const avgPerDay=dayInMonth>0?totalExpThis/dayInMonth:0;
+  // Forecast: project end-of-month total based on avg/day
+  const daysInMonth=new Date(tdy.getFullYear(),tdy.getMonth()+1,0).getDate();
+  const remainingDays=daysInMonth-dayInMonth;
+  const projected=Math.round(avgPerDay*daysInMonth);
+  const totalBudget=Object.values(data?.budgets||{}).reduce((s,v)=>s+(+v||0),0);
+  const overBudget=totalBudget>0?projected-totalBudget:0;
+  // Heatmap: last ~13 weeks aligned to Sunday-start
+  const heatmap=useMemo(()=>{
+    const dailyExp={};
+    data.transactions.filter(tx=>tx.type==="expense").forEach(tx=>{dailyExp[tx.date]=(dailyExp[tx.date]||0)+tx.amount});
+    const today=new Date();today.setHours(12,0,0,0);
+    const start=new Date(today);start.setDate(today.getDate()-89);
+    while(start.getDay()!==0)start.setDate(start.getDate()-1);
+    const cells=[];const cur=new Date(start);
+    while(cur<=today){const k=cur.toISOString().slice(0,10);cells.push({date:k,day:cur.getDay(),amount:dailyExp[k]||0});cur.setDate(cur.getDate()+1)}
+    const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
+    const max=Math.max(1,...cells.map(c=>c.amount));
+    return{weeks,max};
+  },[data.transactions]);
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",gap:5}}>
@@ -662,6 +696,68 @@ function AnalyticsPage({data,stats,t}){
       <MC icon="📊" label="หมวดที่ใช้สุด" value={topCats[0]?(topCats[0].icon+" "+topCats[0].name):"-"} sub={topCats[0]?fB(topCats[0].value):""} t={t} color={t.am}/>
       <MC icon="💰" label="Savings Rate ล่าสุด" value={`${srTrend[srTrend.length-1]?.rate||0}%`} t={t} color={(srTrend[srTrend.length-1]?.rate||0)>=20?t.g:t.am}/>
     </div>
+
+    {/* Forecast end-of-month */}
+    {totalExpThis>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={{fontSize:18}}>🔮</span>
+        <div style={{fontSize:14,fontWeight:600}}>คาดการณ์สิ้นเดือน</div>
+      </div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:14}}>ประมาณการจากค่าเฉลี่ยรายจ่ายต่อวัน × {daysInMonth} วัน</div>
+      <div style={{display:"grid",gridTemplateColumns:t.m?"1fr 1fr":"repeat(3, minmax(0,1fr))",gap:12}}>
+        <div style={{background:t.bg,border:`1px solid ${t.cb}`,borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:t.tm,marginBottom:4}}>ใช้ไปแล้ว</div>
+          <div style={{fontSize:16,fontWeight:700,color:t.text}}>{fB(totalExpThis)}</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>{dayInMonth}/{daysInMonth} วัน</div>
+        </div>
+        <div style={{background:`${t.ac}10`,border:`1px solid ${t.ac}40`,borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:t.tm,marginBottom:4}}>คาดการณ์ทั้งเดือน</div>
+          <div style={{fontSize:16,fontWeight:700,color:t.ac}}>{fB(projected)}</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>เหลืออีก {remainingDays} วัน</div>
+        </div>
+        {totalBudget>0&&(<div style={{background:overBudget>0?`${t.r}10`:`${t.g}10`,border:`1px solid ${overBudget>0?t.r:t.g}40`,borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:t.tm,marginBottom:4}}>เทียบงบ ({fB(totalBudget)})</div>
+          <div style={{fontSize:16,fontWeight:700,color:overBudget>0?t.r:t.g}}>{overBudget>0?"+":""}{fB(overBudget)}</div>
+          <div style={{fontSize:10,color:overBudget>0?t.r:t.g,marginTop:2,fontWeight:600}}>{overBudget>0?"⚠️ จะเกินงบ":"✅ อยู่ในงบ"}</div>
+        </div>)}
+      </div>
+      {totalBudget>0&&overBudget>0&&remainingDays>0&&(<div style={{marginTop:12,padding:"10px 12px",background:`${t.am}15`,border:`1px solid ${t.am}40`,borderRadius:8,fontSize:11,color:t.text}}>
+        💡 ลดรายจ่ายเหลือ <b>{fB(Math.max(0,(totalBudget-totalExpThis)/Math.max(1,remainingDays)))}/วัน</b> เพื่อไม่ให้เกินงบ
+      </div>)}
+    </div>)}
+
+    {/* Spending Heatmap */}
+    {data.transactions.some(tx=>tx.type==="expense")&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={{fontSize:18}}>🗓️</span>
+        <div style={{fontSize:14,fontWeight:600}}>Spending Heatmap (90 วันล่าสุด)</div>
+      </div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:14}}>วันที่สีเข้ม = ใช้เงินเยอะ · สีอ่อน = ใช้น้อย</div>
+      <div style={{display:"flex",gap:10,alignItems:"flex-start",overflowX:"auto",paddingBottom:6}}>
+        {/* Day-of-week labels */}
+        <div style={{display:"flex",flexDirection:"column",gap:3,paddingTop:0,flexShrink:0}}>
+          {["อา","จ","อ","พ","พฤ","ศ","ส"].map((d,i)=>(<div key={i} style={{fontSize:9,color:t.tm,height:14,lineHeight:"14px",textAlign:"right",width:18}}>{i%2===1?d:""}</div>))}
+        </div>
+        {/* Week columns */}
+        <div style={{display:"flex",gap:3,flexShrink:0}}>
+          {heatmap.weeks.map((week,wi)=>(<div key={wi} style={{display:"flex",flexDirection:"column",gap:3}}>
+            {Array.from({length:7}).map((_,di)=>{
+              const cell=week[di];
+              if(!cell)return<div key={di} style={{width:14,height:14}}/>;
+              const intensity=cell.amount/heatmap.max;
+              const lvl=cell.amount===0?0:intensity<0.25?1:intensity<0.5?2:intensity<0.75?3:4;
+              const colors=[t.cb,`${t.ac}30`,`${t.ac}60`,`${t.ac}90`,t.ac];
+              return(<div key={di} title={`${cell.date}: ${cell.amount>0?fB(cell.amount):"ไม่มีรายจ่าย"}`} style={{width:14,height:14,borderRadius:3,background:colors[lvl],cursor:"pointer"}}/>);
+            })}
+          </div>))}
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:6,marginTop:12,fontSize:10,color:t.tm}}>
+        <span>น้อย</span>
+        {[t.cb,`${t.ac}30`,`${t.ac}60`,`${t.ac}90`,t.ac].map((c,i)=>(<div key={i} style={{width:12,height:12,borderRadius:3,background:c}}/>))}
+        <span>เยอะ</span>
+      </div>
+    </div>)}
 
     {/* Pie chart this month */}
     {pieData.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
@@ -2204,7 +2300,7 @@ function QuickAddFAB({data,t,onQuickAdd,onOpenFull,disabled}){
   const cats=EC.reduce((a,c)=>{a[c.v]=c;return a},{});
   return(<>
     {open&&<div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:998,backdropFilter:"blur(2px)"}}/>}
-    <div style={{position:"fixed",right:"calc(16px + env(safe-area-inset-right))",bottom:"calc(16px + env(safe-area-inset-bottom))",zIndex:999,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
+    <div style={{position:"fixed",right:"calc(16px + env(safe-area-inset-right))",bottom:"calc(74px + env(safe-area-inset-bottom))",zIndex:999,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
       {open&&(<>
         {templates.map((tpl,i)=>{const c=cats[tpl.category]||cats.other;return(
           <button key={i} onClick={()=>{onQuickAdd(tpl);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:24,boxShadow:"0 4px 12px rgba(0,0,0,0.18)",cursor:"pointer",color:t.text,fontSize:13,fontWeight:500,animation:`fabIn .22s ease ${i*0.04}s both`,whiteSpace:"nowrap"}}>
@@ -2226,10 +2322,31 @@ function QuickAddFAB({data,t,onQuickAdd,onOpenFull,disabled}){
 function Toast({toast,onUndo,onClose,t}){
   useEffect(()=>{if(!toast)return;const id=setTimeout(onClose,5000);return()=>clearTimeout(id)},[toast,onClose]);
   if(!toast)return null;
-  return(<div style={{position:"fixed",left:"50%",bottom:"calc(88px + env(safe-area-inset-bottom))",transform:"translateX(-50%)",zIndex:1001,background:t.text,color:t.bg,padding:"11px 18px",borderRadius:24,boxShadow:"0 6px 20px rgba(0,0,0,0.32)",display:"flex",alignItems:"center",gap:14,fontSize:13,maxWidth:"calc(100vw - 32px)",animation:"toastIn .25s ease"}}>
+  return(<div style={{position:"fixed",left:"50%",bottom:"calc(146px + env(safe-area-inset-bottom))",transform:"translateX(-50%)",zIndex:1001,background:t.text,color:t.bg,padding:"11px 18px",borderRadius:24,boxShadow:"0 6px 20px rgba(0,0,0,0.32)",display:"flex",alignItems:"center",gap:14,fontSize:13,maxWidth:"calc(100vw - 32px)",animation:"toastIn .25s ease"}}>
     <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast.msg}</span>
     {toast.undoId&&<button onClick={onUndo} style={{background:"transparent",border:"none",color:t.ac,fontWeight:600,cursor:"pointer",fontSize:13,padding:0,whiteSpace:"nowrap"}}>↶ ยกเลิก</button>}
     <style>{`@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+  </div>);
+}
+
+/* ═══ BOTTOM TAB BAR (mobile) ═══ */
+function BottomTabBar({page,setPage,t,onMore,disabled}){
+  if(disabled)return null;
+  const tabs=[
+    {k:"dashboard",i:"⬡",l:"หน้าแรก"},
+    {k:"txn",i:"⇄",l:"รายการ"},
+    {k:"analytics",i:"📊",l:"วิเคราะห์"},
+    {k:"envelopes",i:"💌",l:"ซองเงิน"},
+    {k:"_more",i:"☰",l:"เพิ่มเติม"},
+  ];
+  return(<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:97,background:t.card,borderTop:`1px solid ${t.cb}`,boxShadow:"0 -2px 10px rgba(0,0,0,0.06)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)"}}>
+    <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:58}}>
+      {tabs.map(tab=>{const active=tab.k!=="_more"&&page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>tab.k==="_more"?onMore():setPage(tab.k)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s"}}>
+        {active&&<div style={{position:"absolute",top:0,left:"30%",right:"30%",height:3,background:t.ac,borderRadius:"0 0 3px 3px"}}/>}
+        <span style={{fontSize:20,lineHeight:1}}>{tab.i}</span>
+        <span style={{fontSize:10,fontWeight:active?600:400,letterSpacing:0.2}}>{tab.l}</span>
+      </button>)})}
+    </div>
   </div>);
 }
 
@@ -2406,7 +2523,7 @@ function WealthHub(){
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)",boxSizing:"border-box"}}>
     <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
-    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 90px":"20px 28px",minWidth:0}}>
+    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 150px":"20px 28px",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
           {isMobile&&<button onClick={()=>setSbOpen(true)} aria-label="menu" style={{background:t.card,border:`1px solid ${t.cb}`,color:t.text,fontSize:18,padding:"6px 10px",borderRadius:8,cursor:"pointer",lineHeight:1}}>☰</button>}
@@ -2518,12 +2635,13 @@ function WealthHub(){
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
-    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date}/></Modal>
-    <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn}/>}</Modal>
+    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date} data={data}/></Modal>
+    <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn} data={data}/>}</Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
+    <BottomTabBar page={page} setPage={setPage} t={t} onMore={()=>setSbOpen(true)} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
     <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
     <Toast toast={toast} onUndo={()=>toast?.undoId&&undoLastTxn(toast.undoId)} onClose={()=>setToast(null)} t={t}/>
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
