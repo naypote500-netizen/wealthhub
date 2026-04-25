@@ -2174,9 +2174,64 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
   </div>);
 }
 
+/* ═══ QUICK ADD FAB ═══ */
+function QuickAddFAB({data,t,onQuickAdd,onOpenFull,disabled}){
+  const[open,setOpen]=useState(false);
+  const templates=useMemo(()=>{
+    const now=Date.now();const days60=60*86400000;
+    const recent=(data?.transactions||[]).filter(tx=>tx.type==="expense"&&(now-new Date(tx.date).getTime())<=days60);
+    const groups={};
+    recent.forEach(tx=>{
+      const bucket=Math.round(tx.amount/10)*10||10;
+      const key=`${tx.category}-${bucket}`;
+      if(!groups[key])groups[key]={count:0,category:tx.category,amount:bucket,note:tx.note||""};
+      groups[key].count++;
+      if(tx.note&&!groups[key].note)groups[key].note=tx.note;
+    });
+    const sorted=Object.values(groups).sort((a,b)=>b.count-a.count).slice(0,5);
+    if(sorted.length<4){
+      const defaults=[{category:"food",amount:60,note:"กาแฟ"},{category:"food",amount:80,note:"ข้าวเที่ยง"},{category:"transport",amount:50,note:"เดินทาง"},{category:"shopping",amount:100,note:"เซเว่น"}];
+      defaults.forEach(d=>{if(sorted.length<4&&!sorted.some(s=>s.category===d.category&&s.amount===d.amount))sorted.push(d)});
+    }
+    return sorted.slice(0,5);
+  },[data?.transactions]);
+  useEffect(()=>{if(disabled&&open)setOpen(false)},[disabled,open]);
+  if(disabled)return null;
+  const cats=EC.reduce((a,c)=>{a[c.v]=c;return a},{});
+  return(<>
+    {open&&<div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:998,backdropFilter:"blur(2px)"}}/>}
+    <div style={{position:"fixed",right:16,bottom:16,zIndex:999,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
+      {open&&(<>
+        {templates.map((tpl,i)=>{const c=cats[tpl.category]||cats.other;return(
+          <button key={i} onClick={()=>{onQuickAdd(tpl);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:24,boxShadow:"0 4px 12px rgba(0,0,0,0.18)",cursor:"pointer",color:t.text,fontSize:13,fontWeight:500,animation:`fabIn .22s ease ${i*0.04}s both`,whiteSpace:"nowrap"}}>
+            <span style={{fontSize:16}}>{c.i}</span>
+            <span style={{maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{tpl.note||c.l}</span>
+            <span style={{color:t.r,fontWeight:600}}>{fB(tpl.amount)}</span>
+          </button>
+        )})}
+        <button onClick={()=>{onOpenFull();setOpen(false)}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:24,boxShadow:"0 4px 12px rgba(0,0,0,0.18)",cursor:"pointer",color:t.text,fontSize:13,fontWeight:500,animation:`fabIn .22s ease ${templates.length*0.04}s both`}}>
+          <span style={{fontSize:16}}>📝</span><span>กรอกเอง</span>
+        </button>
+      </>)}
+      <button onClick={()=>setOpen(o=>!o)} aria-label="quick add" style={{width:56,height:56,borderRadius:"50%",background:t.ac,color:"#fff",border:"none",fontSize:28,fontWeight:300,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .22s ease",transform:open?"rotate(45deg)":"rotate(0)",lineHeight:1}}>+</button>
+    </div>
+    <style>{`@keyframes fabIn{from{opacity:0;transform:translateY(8px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+  </>);
+}
+
+function Toast({toast,onUndo,onClose,t}){
+  useEffect(()=>{if(!toast)return;const id=setTimeout(onClose,5000);return()=>clearTimeout(id)},[toast,onClose]);
+  if(!toast)return null;
+  return(<div style={{position:"fixed",left:"50%",bottom:88,transform:"translateX(-50%)",zIndex:1001,background:t.text,color:t.bg,padding:"11px 18px",borderRadius:24,boxShadow:"0 6px 20px rgba(0,0,0,0.32)",display:"flex",alignItems:"center",gap:14,fontSize:13,maxWidth:"calc(100vw - 32px)",animation:"toastIn .25s ease"}}>
+    <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast.msg}</span>
+    {toast.undoId&&<button onClick={onUndo} style={{background:"transparent",border:"none",color:t.ac,fontWeight:600,cursor:"pointer",fontSize:13,padding:0,whiteSpace:"nowrap"}}>↶ ยกเลิก</button>}
+    <style>{`@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+  </div>);
+}
+
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:L),m:isMobile}),[theme,isMobile]);
   const dark=theme==="dark";
@@ -2289,6 +2344,8 @@ function WealthHub(){
   const addTxn=f=>{persist({...data,transactions:[...data.transactions,{...f,id:uid(),amount:+f.amount}]});setModal(null)};
   const updateTxn=(id,f)=>{persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount}:tx)});setModal(null)};
   const delTxn=id=>persist({...data,transactions:data.transactions.filter(tx=>tx.id!==id)});
+  const quickAddTxn=tpl=>{const id=uid();const newTxn={type:"expense",category:tpl.category,amount:+tpl.amount,date:td(),note:tpl.note||"",id};persist({...data,transactions:[...data.transactions,newTxn]});setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}`,undoId:id})};
+  const undoLastTxn=id=>{persist({...data,transactions:data.transactions.filter(tx=>tx.id!==id)});setToast(null)};
   const addGoal=f=>{persist({...data,goals:[...data.goals,{...f,id:uid(),target:+f.target,saved:+f.saved}]});setModal(null)};
   const updateGoal=(id,f)=>{persist({...data,goals:data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g)});setModal(null)};
   const delGoal=id=>persist({...data,goals:data.goals.filter(g=>g.id!==id)});
@@ -2345,7 +2402,7 @@ function WealthHub(){
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>
     <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
-    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px":"20px 28px",minWidth:0}}>
+    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 90px":"20px 28px",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
           {isMobile&&<button onClick={()=>setSbOpen(true)} aria-label="menu" style={{background:t.card,border:`1px solid ${t.cb}`,color:t.text,fontSize:18,padding:"6px 10px",borderRadius:8,cursor:"pointer",lineHeight:1}}>☰</button>}
@@ -2463,6 +2520,8 @@ function WealthHub(){
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
+    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
+    <Toast toast={toast} onUndo={()=>toast?.undoId&&undoLastTxn(toast.undoId)} onClose={()=>setToast(null)} t={t}/>
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>
