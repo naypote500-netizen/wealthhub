@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "WealthHub",
+  "name": "WealthHub - บริหารเงินส่วนตัว",
+  "description": "แอปบริหารเงิน ติดตามรายรับ-รายจ่าย พอร์ตลงทุน และเป้าหมายการเงิน",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +11,42 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait-primary",
+  "theme_color": "#0ea5e9",
+  "background_color": "#f8fafc",
+  "lang": "th",
+  "categories": ["finance", "productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "เพิ่มรายจ่าย",
+      "short_name": "เพิ่มรายจ่าย",
+      "description": "บันทึกรายจ่ายใหม่",
+      "url": "/?page=txn"
+    },
+    {
+      "name": "พอร์ตลงทุน",
+      "short_name": "พอร์ต",
+      "description": "ดูพอร์ตลงทุน",
+      "url": "/?page=portfolio"
+    },
+    {
+      "name": "วิเคราะห์รายจ่าย",
+      "short_name": "วิเคราะห์",
+      "description": "ดูสรุปรายจ่าย",
+      "url": "/?page=analytics"
+    }
+  ]
 }
