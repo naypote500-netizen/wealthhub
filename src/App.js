@@ -51,7 +51,7 @@ function processRecurring(data){
 
 /* ═══ NAV ═══ */
 const NAV=[
-  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},
+  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
   {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
 ];
@@ -346,7 +346,7 @@ function PlanPage({data,stats,t}){
 /* ═══ FORMS ═══ */
 function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||{name:"",type:"stock_th",units:"",avgCost:"",currentPrice:"",currency:"THB",note:""});const ok=f.name&&+f.units>0&&+f.avgCost>0&&+f.currentPrice>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><Inp label="ชื่อ/Symbol" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="KBANK, AAPL"/><div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}><Sel label="ประเภท" t={t} value={f.type} onChange={e=>set("type",e.target.value)}>{AT.map(a=><option key={a.v} value={a.v}>{a.i} {a.l}</option>)}</Sel><Sel label="สกุลเงิน" t={t} value={f.currency} onChange={e=>set("currency",e.target.value)}><option value="THB">🇹🇭 THB</option><option value="USD">🇺🇸 USD</option></Sel></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวน" t={t} type="number" step="any" value={f.units} onChange={e=>set("units",e.target.value)}/><Inp label={`ต้นทุน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.avgCost} onChange={e=>set("avgCost",e.target.value)}/></div><Inp label={`ราคาปัจจุบัน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.currentPrice} onChange={e=>set("currentPrice",e.target.value)}/>{f.currency==="USD"&&+f.currentPrice>0&&<div style={{fontSize:10,color:t.ac}}>≈ {fB(+f.currentPrice*rate)}/unit</div>}<Inp label="โน้ต" t={t} value={f.note||""} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
-function TxnForm({onSave,onCancel,t}){const[f,set]=useF({type:"expense",category:"food",amount:"",date:td(),note:""});const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div><Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div><Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)}/><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)}>✓ บันทึก</Btn></div>)}
+function TxnForm({onSave,onCancel,t,initialDate}){const[f,set]=useF({type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div><Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div><Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)}/><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)}>✓ บันทึก</Btn></div>)}
 
 function GoalForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:"",icon:"🎯",target:"",saved:"0",deadline:""});const ok=f.name&&+f.target>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:4}}>{"🎯🏠🚗✈️💍🎓💰🛡️".split("").filter((_,i)=>i%2===0||(i===1)).length&&["🎯","🏠","🚗","✈️","💍","🎓","💰","🛡️"].map(ic=>(<button key={ic} onClick={()=>set("icon",ic)} style={{width:34,height:34,borderRadius:7,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",border:f.icon===ic?`2px solid ${t.ac}`:`1px solid ${t.cb}`,background:f.icon===ic?t.acL:"transparent",cursor:"pointer"}}>{ic}</button>))}</div><Inp label="ชื่อเป้าหมาย" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="เป้าหมาย (฿)" t={t} type="number" value={f.target} onChange={e=>set("target",e.target.value)}/><Inp label="ออมแล้ว (฿)" t={t} type="number" value={f.saved} onChange={e=>set("saved",e.target.value)}/></div><Inp label="กำหนด" t={t} type="date" value={f.deadline||""} onChange={e=>set("deadline",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ สร้าง"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
@@ -440,6 +440,141 @@ function BudgetPage({data,stats,persist,t}){
       </div>)})}
     </div>
     <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ตัวเลขใช้จ่ายคำนวณจากธุรกรรมประเภท "รายจ่าย" ของเดือนปัจจุบัน</div>
+  </div>);
+}
+
+const fBshort=v=>{const a=Math.abs(v);if(a>=1000000)return`${(v/1000000).toFixed(1)}M`;if(a>=1000)return`${(v/1000).toFixed(0)}k`;return`${Math.round(v)}`};
+
+function CalendarPage({data,t,onAddTxn,setPage}){
+  const[ym,setYm]=useState(()=>mk(td()));
+  const[selDay,setSelDay]=useState(td());
+  const[y,m]=ym.split("-").map(Number);
+  const firstDay=new Date(y,m-1,1).getDay();
+  const daysInMonth=new Date(y,m,0).getDate();
+  const fmt=d=>`${ym}-${String(d).padStart(2,"0")}`;
+  const dayData=useCallback(d=>{const date=fmt(d);const txns=data.transactions.filter(tx=>tx.date===date);const inc=txns.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);const exp=txns.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);return{txns,inc,exp}},[data.transactions,ym]);
+  const monthInc=Array.from({length:daysInMonth},(_,i)=>dayData(i+1).inc).reduce((s,v)=>s+v,0);
+  const monthExp=Array.from({length:daysInMonth},(_,i)=>dayData(i+1).exp).reduce((s,v)=>s+v,0);
+  const selData=(()=>{const[yy,mm,dd]=selDay.split("-").map(Number);if(`${yy}-${String(mm).padStart(2,"0")}`!==ym)return{txns:[],inc:0,exp:0};return dayData(dd)})();
+  const prev=()=>{const nd=new Date(y,m-2,1);setYm(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}`)};
+  const next=()=>{const nd=new Date(y,m,1);setYm(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}`)};
+  const upcoming=(data.recurring||[]).filter(r=>!r.disabled).map(r=>({...r,day:Math.min(r.dayOfMonth||1,daysInMonth)})).sort((a,b)=>a.day-b.day);
+  const monthName=new Date(y,m-1).toLocaleDateString("th-TH",{month:"long",year:"numeric"});
+  const weeks=[];let cur=[];for(let i=0;i<firstDay;i++)cur.push(null);for(let d=1;d<=daysInMonth;d++){cur.push(d);if(cur.length===7){weeks.push(cur);cur=[]}}if(cur.length){while(cur.length<7)cur.push(null);weeks.push(cur)}
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💵" label="รายรับเดือนนี้" value={fB(monthInc)} t={t} color={t.g}/>
+      <MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(monthExp)} t={t} color={t.r}/>
+      <MC icon="💰" label="คงเหลือ" value={fB(monthInc-monthExp)} t={t} color={monthInc>=monthExp?t.g:t.r}/>
+    </div>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8}}>
+        <button onClick={prev} style={{background:"none",border:`1px solid ${t.cb}`,padding:"4px 14px",borderRadius:6,cursor:"pointer",color:t.text,fontSize:14}}>‹</button>
+        <div style={{fontSize:15,fontWeight:600}}>📅 {monthName}</div>
+        <button onClick={next} style={{background:"none",border:`1px solid ${t.cb}`,padding:"4px 14px",borderRadius:6,cursor:"pointer",color:t.text,fontSize:14}}>›</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
+        {["อา","จ","อ","พ","พฤ","ศ","ส"].map((d,i)=><div key={d} style={{textAlign:"center",fontSize:10,fontWeight:600,color:i===0?t.r:t.tm,padding:"4px 0"}}>{d}</div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+        {weeks.flat().map((d,i)=>{
+          if(!d)return<div key={i} style={{minHeight:64}}/>;
+          const dt=fmt(d);const{inc,exp,txns}=dayData(d);const isToday=dt===td();const isSel=dt===selDay;const dow=i%7;
+          return(<button key={i} onClick={()=>setSelDay(dt)} style={{minHeight:64,padding:"4px 4px",border:`1px solid ${isSel?t.ac:t.cb}`,borderRadius:6,background:isSel?`${t.ac}15`:isToday?`${t.am}10`:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"flex-start",fontSize:11,gap:1,color:t.text,position:"relative",textAlign:"left"}}>
+            <span style={{fontSize:11,fontWeight:isToday?700:500,color:isToday?t.am:dow===0?t.r:t.text}}>{d}{isToday&&<span style={{fontSize:8,marginLeft:3}}>•</span>}</span>
+            {(inc>0||exp>0)&&<div style={{display:"flex",flexDirection:"column",gap:1,fontSize:9,width:"100%",alignItems:"flex-start",lineHeight:1.2}}>
+              {inc>0&&<span style={{color:t.g,fontWeight:600}}>+{fBshort(inc)}</span>}
+              {exp>0&&<span style={{color:t.r,fontWeight:600}}>-{fBshort(exp)}</span>}
+            </div>}
+            {txns.length>0&&<div style={{position:"absolute",bottom:3,right:4,fontSize:8,color:t.tm,background:`${t.tm}20`,borderRadius:8,padding:"0 4px"}}>{txns.length}</div>}
+          </button>);
+        })}
+      </div>
+    </div>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:6}}>
+        <div style={{fontSize:13,fontWeight:600}}>{new Date(selDay).toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric",weekday:"long"})}</div>
+        <div style={{fontSize:11,color:t.tm}}>{selData.txns.length} รายการ {selData.inc>0&&<span style={{color:t.g,marginLeft:6}}>+{fB(selData.inc)}</span>} {selData.exp>0&&<span style={{color:t.r,marginLeft:6}}>-{fB(selData.exp)}</span>}</div>
+      </div>
+      {selData.txns.length===0?<div style={{textAlign:"center",color:t.tm,fontSize:11,padding:20}}>ไม่มีรายการในวันนี้ <button onClick={()=>{onAddTxn&&onAddTxn(selDay)}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11,marginLeft:4,textDecoration:"underline"}}>+ เพิ่ม</button></div>:
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {selData.txns.map(tx=>{const cats=tx.type==="income"?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
+            <span style={{fontSize:18}}>{cat.i}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:500}}>{tx.note||cat.l}</div>
+              <div style={{fontSize:10,color:t.tm}}>{cat.l}</div>
+            </div>
+            <span style={{fontSize:13,fontWeight:600,color:tx.type==="income"?t.g:t.r}}>{tx.type==="income"?"+":"-"}{fB(tx.amount)}</span>
+          </div>);})}
+        </div>}
+    </div>
+    {upcoming.length>0&&<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🔁 รายการประจำของเดือนนี้</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {upcoming.map(r=>{const cats=r.type==="income"?IC:EC;const cat=cats.find(c=>c.v===r.category)||cats[cats.length-1];return(<div key={r.id} onClick={()=>setSelDay(fmt(r.day))} style={{display:"flex",alignItems:"center",gap:10,fontSize:11,padding:"8px 6px",borderBottom:`1px solid ${t.cb}`,cursor:"pointer"}}>
+          <span style={{color:t.tm,width:60,fontSize:10}}>วันที่ {r.day}</span>
+          <span style={{fontSize:14}}>{cat.i}</span>
+          <span style={{flex:1,fontWeight:500}}>{r.name||cat.l}</span>
+          <span style={{color:r.type==="income"?t.g:t.r,fontWeight:600}}>{r.type==="income"?"+":"-"}{fB(r.amount)}</span>
+        </div>);})}
+      </div>
+    </div>}
+  </div>);
+}
+
+function EnvelopesPage({data,persist,t}){
+  const budgets=data.budgets||{};
+  const tm=mk(td());
+  const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
+  const monthInc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===tm).reduce((s,tx)=>s+tx.amount,0);
+  const totalAlloc=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
+  const totalSpent=Object.values(spent).reduce((s,v)=>s+v,0);
+  const unalloc=monthInc-totalAlloc;
+  const setEnv=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
+  const autoAlloc=()=>{if(!window.confirm("จัดสรรอัตโนมัติตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด?\n(จะเขียนทับซองเดิมที่ตั้งไว้)"))return;const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}const totals={};let grand=0;EC.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});if(grand===0){window.alert("ยังไม่มีข้อมูลรายจ่าย 3 เดือนย้อนหลังพอที่จะจัดสรรอัตโนมัติ");return}const newB={...budgets};EC.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});persist({...data,budgets:newB})};
+  const reset=()=>{if(window.confirm("ล้างซองทั้งหมด?")){const newB={};EC.forEach(c=>newB[c.v]=0);persist({...data,budgets:newB})}};
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💵" label="รายรับเดือนนี้" value={fB(monthInc)} t={t} color={t.g}/>
+      <MC icon="💌" label="จัดสรรเข้าซองรวม" value={fB(totalAlloc)} sub={monthInc>0?`${(totalAlloc/monthInc*100).toFixed(0)}% ของรายรับ`:""} t={t} color={t.ac}/>
+      <MC icon="🪙" label={unalloc>=0?"ยังไม่จัดสรร":"จัดสรรเกินรายรับ"} value={fB(Math.abs(unalloc))} t={t} color={unalloc>=0?t.am:t.r}/>
+    </div>
+    <div style={{background:`${t.ac}10`,border:`1px solid ${t.ac}40`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:11,color:t.ts,flex:1,minWidth:200}}>💡 <b>แนวคิดซองเงิน</b>: ใส่เงินเข้าซองตามหมวดค่าใช้จ่าย เมื่อซองหมด = หยุดใช้หมวดนั้น เพื่อสร้างวินัยการใช้เงิน</span>
+      <Btn small t={t} onClick={autoAlloc}>🤖 จัดสรรอัตโนมัติ</Btn>
+      <Btn small t={t} onClick={reset} style={{color:t.r,borderColor:`${t.r}40`}}>🗑 ล้าง</Btn>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+      {EC.map(c=>{
+        const b=+budgets[c.v]||0;const s=spent[c.v]||0;const remain=b-s;const pct=b>0?(s/b*100):0;
+        const status=b===0?"empty":pct>=100?"over":pct>=80?"low":"ok";
+        const col=status==="over"?t.r:status==="low"?t.am:status==="ok"?t.g:t.tm;
+        const fillH=Math.max(0,100-Math.min(pct,100));
+        return(<div key={c.v} style={{background:t.card,border:`2px solid ${b>0?col:t.cb}`,borderRadius:12,padding:14,position:"relative",overflow:"hidden",minHeight:200}}>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,height:`${100-fillH}%`,background:`${col}10`,transition:"height .3s",pointerEvents:"none"}}/>
+          <div style={{position:"relative"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:40,height:40,borderRadius:10,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{c.i}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600}}>{c.l}</div>
+                <div style={{fontSize:10,color:t.tm}}>💌 ซองเงิน</div>
+              </div>
+              {b>0&&<div style={{fontSize:10,fontWeight:700,color:col,padding:"3px 7px",borderRadius:6,background:`${col}20`}}>{status==="over"?"⚠️ เกิน":status==="low"?"⚠ ใกล้หมด":"✓ ปกติ"}</div>}
+            </div>
+            <div style={{fontSize:10,color:t.tm,marginBottom:3}}>เงินในซอง</div>
+            <input type="number" value={b||""} onChange={e=>setEnv(c.v,e.target.value)} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${t.ibr}`,fontSize:14,background:t.ib,color:t.text,fontWeight:600,marginBottom:8}}/>
+            {b>0&&<><PB pct={Math.min(pct,100)} color={col} height={10} t={t}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginTop:6}}>
+                <span style={{color:t.tm}}>ใช้ไป {fB(s)}</span>
+                <span style={{color:col,fontWeight:600}}>{pct.toFixed(0)}%</span>
+              </div>
+              <div style={{textAlign:"center",fontSize:13,fontWeight:700,marginTop:8,color:col}}>
+                {pct>=100?`⚠️ เกินซอง ${fB(s-b)}`:`💰 เหลือ ${fB(remain)}`}
+              </div></>}
+          </div>
+        </div>);
+      })}
+    </div>
   </div>);
 }
 
@@ -1061,25 +1196,51 @@ function ChallengesPage({t,session,rate,toThb,detailId,setDetailId}){
 }
 
 function CreateChallengeForm({onClose,t,session}){
-  const[f,set]=useF({name:"",description:"",end_date:"",starting_cash:"",target_amount:""});
+  const[f,set]=useF({mode:"investment",name:"",description:"",end_date:"",starting_cash:"",target_amount:"",forbidden:["food","shopping","entertainment"]});
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const toggleCat=v=>set("forbidden",f.forbidden.includes(v)?f.forbidden.filter(x=>x!==v):[...f.forbidden,v]);
   const submit=async()=>{
     if(!f.name)return;
+    if(f.mode==="no_spend"&&f.forbidden.length===0){setErr("กรุณาเลือกหมวดหมู่ที่จะหลีกเลี่ยงอย่างน้อย 1 หมวด");return;}
     setLoading(true);setErr("");
     const code=genCode();
-    const{data:ch,error}=await supabase.from("challenges").insert({name:f.name,description:f.description||null,creator_id:session.user.id,end_date:f.end_date||null,join_code:code,target_amount:f.target_amount===""?null:+f.target_amount}).select().single();
+    const payload={name:f.name,description:f.description||null,creator_id:session.user.id,end_date:f.end_date||null,join_code:code,mode:f.mode,forbidden_categories:f.mode==="no_spend"?f.forbidden:[],target_amount:f.mode==="investment"&&f.target_amount!==""?+f.target_amount:null};
+    const{data:ch,error}=await supabase.from("challenges").insert(payload).select().single();
     if(error){setErr(error.message);setLoading(false);return;}
-    const{error:mErr}=await supabase.from("challenge_members").insert({challenge_id:ch.id,user_id:session.user.id,display_name:session.user.email,starting_cash:+f.starting_cash||0,cash:+f.starting_cash||0,assets:[]});
+    const{error:mErr}=await supabase.from("challenge_members").insert({challenge_id:ch.id,user_id:session.user.id,display_name:session.user.email,starting_cash:f.mode==="investment"?+f.starting_cash||0:0,cash:f.mode==="investment"?+f.starting_cash||0:0,assets:[]});
     if(mErr){setErr(mErr.message);setLoading(false);return;}
     setLoading(false);onClose(ch.id);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    <Inp label="ชื่อชาเลนจ์" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เช่น ลงทุน 30 วัน"/>
+    <div>
+      <div style={{fontSize:11,color:t.tm,marginBottom:5}}>ประเภทชาเลนจ์</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        <button onClick={()=>set("mode","investment")} style={{padding:"10px 8px",border:f.mode==="investment"?`2px solid ${t.ac}`:`1px solid ${t.cb}`,borderRadius:8,background:f.mode==="investment"?`${t.ac}10`:"transparent",cursor:"pointer",textAlign:"left",color:t.text}}>
+          <div style={{fontSize:13,fontWeight:600}}>📈 ลงทุน</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>แข่งกันสร้างผลตอบแทนพอร์ต</div>
+        </button>
+        <button onClick={()=>set("mode","no_spend")} style={{padding:"10px 8px",border:f.mode==="no_spend"?`2px solid ${t.ac}`:`1px solid ${t.cb}`,borderRadius:8,background:f.mode==="no_spend"?`${t.ac}10`:"transparent",cursor:"pointer",textAlign:"left",color:t.text}}>
+          <div style={{fontSize:13,fontWeight:600}}>🚫 ไม่ใช้เงิน</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>No-Spend Challenge — งดใช้บางหมวด</div>
+        </button>
+      </div>
+    </div>
+    <Inp label="ชื่อชาเลนจ์" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder={f.mode==="no_spend"?"เช่น งดช้อป 30 วัน":"เช่น ลงทุน 30 วัน"}/>
     <Inp label="คำอธิบาย (ไม่บังคับ)" t={t} value={f.description} onChange={e=>set("description",e.target.value)} placeholder="กติกา / รายละเอียด"/>
     <Inp label="วันสิ้นสุด (ไม่บังคับ)" t={t} type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)}/>
-    <Inp label="เงินสดเริ่มต้น (บาท)" t={t} type="number" value={f.starting_cash} onChange={e=>set("starting_cash",e.target.value)} placeholder="100000"/>
-    <Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 150000 = เป้า ฿150,000"/>
-    <div style={{fontSize:10,color:t.tm}}>* เงินสดเริ่มต้น = เงินที่ทุกคนเริ่มต้นชาเลนจ์นี้ ใช้คำนวณ % กำไร/ขาดทุน<br/>* เป้าหมาย = มูลค่ารวมที่ต้องการไปถึงภายในเวลา (เช่น เริ่ม ฿100,000 ตั้งเป้า ฿150,000 = +50%)</div>
+    {f.mode==="investment"?<>
+      <Inp label="เงินสดเริ่มต้น (บาท)" t={t} type="number" value={f.starting_cash} onChange={e=>set("starting_cash",e.target.value)} placeholder="100000"/>
+      <Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 150000 = เป้า ฿150,000"/>
+      <div style={{fontSize:10,color:t.tm}}>* เงินสดเริ่มต้น = เงินที่ทุกคนเริ่มต้นชาเลนจ์นี้ ใช้คำนวณ % กำไร/ขาดทุน<br/>* เป้าหมาย = มูลค่ารวมที่ต้องการไปถึงภายในเวลา (เช่น เริ่ม ฿100,000 ตั้งเป้า ฿150,000 = +50%)</div>
+    </>:<>
+      <div>
+        <div style={{fontSize:11,color:t.tm,marginBottom:6}}>หมวดหมู่ที่ห้ามใช้เงิน <span style={{color:t.r}}>*</span></div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+          {EC.map(c=>{const on=f.forbidden.includes(c.v);return(<button key={c.v} onClick={()=>toggleCat(c.v)} style={{padding:"6px 10px",border:`1px solid ${on?t.r:t.cb}`,borderRadius:6,background:on?`${t.r}15`:"transparent",cursor:"pointer",fontSize:11,color:on?t.r:t.text,fontWeight:on?600:400}}>{on?"🚫":""} {c.i} {c.l}</button>);})}
+        </div>
+      </div>
+      <div style={{fontSize:10,color:t.tm,padding:"6px 10px",background:`${t.am}10`,borderRadius:6,borderLeft:`3px solid ${t.am}`}}>💡 ทุกคนที่บันทึกรายจ่ายในหมวดที่เลือกระหว่างชาเลนจ์ = นับเป็น Violation 1 ครั้ง<br/>คนที่ violation น้อยที่สุด + streak ยาวที่สุด = ชนะ!</div>
+    </>}
     {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
     <div style={{display:"flex",gap:6}}>
       <Btn primary t={t} onClick={submit} disabled={loading||!f.name} style={{flex:1}}>{loading?"กำลังสร้าง...":"✓ สร้าง"}</Btn>
@@ -1089,12 +1250,16 @@ function CreateChallengeForm({onClose,t,session}){
 }
 
 function EditChallengeForm({challenge,onClose,onSaved,t}){
-  const[f,set]=useF({name:challenge.name||"",description:challenge.description||"",start_date:challenge.start_date||"",end_date:challenge.end_date||"",target_amount:challenge.target_amount!=null?String(challenge.target_amount):""});
+  const isNoSpend=challenge.mode==="no_spend";
+  const[f,set]=useF({name:challenge.name||"",description:challenge.description||"",start_date:challenge.start_date||"",end_date:challenge.end_date||"",target_amount:challenge.target_amount!=null?String(challenge.target_amount):"",forbidden:Array.isArray(challenge.forbidden_categories)?challenge.forbidden_categories:[]});
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const toggleCat=v=>set("forbidden",f.forbidden.includes(v)?f.forbidden.filter(x=>x!==v):[...f.forbidden,v]);
   const submit=async()=>{
     if(!f.name){setErr("กรุณาใส่ชื่อชาเลนจ์");return;}
+    if(isNoSpend&&f.forbidden.length===0){setErr("เลือกหมวดที่ห้ามใช้เงินอย่างน้อย 1 หมวด");return;}
     setLoading(true);setErr("");
-    const payload={name:f.name,description:f.description||null,start_date:f.start_date||null,end_date:f.end_date||null,target_amount:f.target_amount===""?null:+f.target_amount};
+    const payload={name:f.name,description:f.description||null,start_date:f.start_date||null,end_date:f.end_date||null,target_amount:isNoSpend?null:(f.target_amount===""?null:+f.target_amount)};
+    if(isNoSpend)payload.forbidden_categories=f.forbidden;
     const{error}=await supabase.from("challenges").update(payload).eq("id",challenge.id);
     if(error){setErr(error.message);setLoading(false);return;}
     setLoading(false);onSaved&&onSaved();onClose();
@@ -1104,8 +1269,13 @@ function EditChallengeForm({challenge,onClose,onSaved,t}){
     <Inp label="คำอธิบาย (ไม่บังคับ)" t={t} value={f.description} onChange={e=>set("description",e.target.value)}/>
     <Inp label="วันเริ่มต้น" t={t} type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)}/>
     <Inp label="วันสิ้นสุด (ไม่บังคับ)" t={t} type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)}/>
-    <Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 1000000 = เป้า ฿1,000,000"/>
-    <div style={{fontSize:10,color:t.tm}}>* การแก้ไขเป้าหมาย/วันที่ จะมีผลกับทุกคนในชาเลนจ์ทันที</div>
+    {isNoSpend?<div>
+      <div style={{fontSize:11,color:t.tm,marginBottom:6}}>หมวดหมู่ที่ห้ามใช้เงิน 🚫</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+        {EC.map(c=>{const on=f.forbidden.includes(c.v);return(<button key={c.v} onClick={()=>toggleCat(c.v)} style={{padding:"6px 10px",border:`1px solid ${on?t.r:t.cb}`,borderRadius:6,background:on?`${t.r}15`:"transparent",cursor:"pointer",fontSize:11,color:on?t.r:t.text,fontWeight:on?600:400}}>{on?"🚫":""} {c.i} {c.l}</button>);})}
+      </div>
+    </div>:<Inp label="🎯 เป้าหมาย (จำนวนเงิน บาท, ไม่บังคับ)" t={t} type="number" step="1" value={f.target_amount} onChange={e=>set("target_amount",e.target.value)} placeholder="เช่น 1000000 = เป้า ฿1,000,000"/>}
+    <div style={{fontSize:10,color:t.tm}}>* การแก้ไขจะมีผลกับทุกคนในชาเลนจ์ทันที</div>
     {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
     <div style={{display:"flex",gap:6}}>
       <Btn primary t={t} onClick={submit} disabled={loading||!f.name} style={{flex:1}}>{loading?"กำลังบันทึก...":"💾 บันทึก"}</Btn>
@@ -1146,6 +1316,123 @@ function JoinChallengeForm({onClose,t,session,challengeId}){
   </div>);
 }
 
+function ReportViolationForm({challenge,session,onClose,onSaved,t}){
+  const fb=Array.isArray(challenge.forbidden_categories)?challenge.forbidden_categories:[];
+  const cats=EC.filter(c=>fb.includes(c.v));
+  const[f,set]=useF({date:td(),category:cats[0]?.v||"food",amount:"",note:""});
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const submit=async()=>{
+    setLoading(true);setErr("");
+    const{error}=await supabase.from("no_spend_violations").insert({challenge_id:challenge.id,user_id:session.user.id,date:f.date,category:f.category,amount:+f.amount||0,note:f.note||null});
+    if(error){setErr(error.message);setLoading(false);return;}
+    setLoading(false);onSaved&&onSaved();onClose();
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{fontSize:11,color:t.tm,padding:"6px 10px",background:`${t.r}10`,borderRadius:6,borderLeft:`3px solid ${t.r}`}}>⚠️ ซื่อสัตย์กับตัวเอง! บันทึกครั้งที่เผลอใช้เงินในหมวดที่ห้าม</div>
+    <Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/>
+    <Sel label="หมวดที่ใช้เงิน" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>
+      {cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}
+    </Sel>
+    <Inp label="จำนวนเงิน (฿) — ไม่บังคับ" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0"/>
+    <Inp label="โน้ต (ไม่บังคับ)" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="เช่น เผลอซื้อกาแฟ"/>
+    {err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}12`,borderRadius:6}}>{err}</div>}
+    <div style={{display:"flex",gap:6}}>
+      <Btn primary t={t} onClick={submit} disabled={loading} style={{flex:1}}>{loading?"กำลังบันทึก...":"📝 บันทึก Violation"}</Btn>
+      <Btn t={t} onClick={()=>onClose()}>ยกเลิก</Btn>
+    </div>
+  </div>);
+}
+
+function NoSpendChallengeView({challenge,members,session,t,onLoad}){
+  const[violations,setViolations]=useState([]);
+  const[modal,setModal]=useState(null);
+  const fb=Array.isArray(challenge.forbidden_categories)?challenge.forbidden_categories:[];
+  const fbCats=EC.filter(c=>fb.includes(c.v));
+  const load=useCallback(async()=>{
+    const{data}=await supabase.from("no_spend_violations").select("*").eq("challenge_id",challenge.id).order("date",{ascending:false});
+    setViolations(data||[]);
+  },[challenge.id]);
+  useEffect(()=>{load()},[load]);
+  const today=td();
+  const startD=challenge.start_date||today;
+  const endD=challenge.end_date||today;
+  const dayDiff=(a,b)=>Math.floor((new Date(b)-new Date(a))/86400000);
+  const totalDays=Math.max(1,dayDiff(startD,endD)+1);
+  const elapsedDays=Math.max(0,Math.min(totalDays,dayDiff(startD,today)+1));
+  const stats=members.map(m=>{
+    const myV=violations.filter(v=>v.user_id===m.user_id);
+    const violationDates=new Set(myV.map(v=>v.date));
+    let streak=0;
+    for(let i=0;i<elapsedDays;i++){
+      const d=new Date(startD);d.setDate(d.getDate()+(elapsedDays-1-i));
+      const ds=d.toISOString().slice(0,10);
+      if(violationDates.has(ds))break;
+      streak++;
+    }
+    const cleanDays=Math.max(0,elapsedDays-violationDates.size);
+    const totalSpent=myV.reduce((s,v)=>s+(+v.amount||0),0);
+    return{member:m,violations:myV,vCount:myV.length,streak,cleanDays,totalSpent};
+  });
+  const sorted=[...stats].sort((a,b)=>b.streak-a.streak||a.vCount-b.vCount||a.totalSpent-b.totalSpent);
+  const me=members.find(m=>m.user_id===session.user.id);
+  const myStat=stats.find(s=>s.member.user_id===session.user.id);
+  return(<>
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:13,fontWeight:600}}>🚫 หมวดที่ห้ามใช้เงิน</div>
+        <div style={{fontSize:11,color:t.tm}}>วันที่ {elapsedDays}/{totalDays} ของชาเลนจ์</div>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {fbCats.length===0?<span style={{fontSize:11,color:t.tm}}>ยังไม่ได้เลือกหมวด — กดแก้ไขเพื่อตั้งค่า</span>:fbCats.map(c=>(<span key={c.v} style={{padding:"6px 12px",borderRadius:20,background:`${t.r}15`,color:t.r,fontSize:11,fontWeight:500,border:`1px solid ${t.r}40`}}>🚫 {c.i} {c.l}</span>))}
+      </div>
+      <PB pct={Math.min(100,elapsedDays/totalDays*100)} color={t.ac} height={6} t={t}/>
+    </div>
+
+    {me&&<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <Btn primary t={t} onClick={()=>setModal({type:"report"})}>📝 บันทึก Violation</Btn>
+      {myStat&&<>
+        <span style={{fontSize:12,padding:"6px 12px",background:`${t.g}15`,color:t.g,borderRadius:6,fontWeight:600}}>🔥 Streak: {myStat.streak} วัน</span>
+        <span style={{fontSize:12,padding:"6px 12px",background:`${t.r}15`,color:t.r,borderRadius:6,fontWeight:600}}>⚠️ {myStat.vCount} violations</span>
+        {myStat.totalSpent>0&&<span style={{fontSize:12,padding:"6px 12px",background:`${t.am}15`,color:t.am,borderRadius:6,fontWeight:600}}>💸 {fB(myStat.totalSpent)}</span>}
+      </>}
+    </div>}
+
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🏆 Leaderboard (Streak สูงสุด)</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
+        <thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["#","ผู้เล่น","🔥 Streak","Clean Days","Violations","ใช้ไป"].map((h,i)=><th key={i} style={{padding:"8px 10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500}}>{h}</th>)}</tr></thead>
+        <tbody>{sorted.map((s,i)=>{const isMe=s.member.user_id===session.user.id;return(<tr key={s.member.id} style={{borderBottom:`1px solid ${t.cb}`,background:isMe?`${t.ac}10`:"transparent"}}>
+          <td style={{padding:"8px 10px",fontWeight:600}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</td>
+          <td style={{padding:"8px 10px"}}><div style={{display:"flex",alignItems:"center",gap:8}}><Avatar url={s.member.avatar_url} name={s.member.display_name} size={28} t={t}/><span style={{fontWeight:500}}>{s.member.display_name||"(ไม่มีชื่อ)"}{isMe&&<span style={{color:t.ac,marginLeft:6,fontSize:10}}>(คุณ)</span>}</span></div></td>
+          <td style={{padding:"8px 10px",color:s.streak>=7?t.g:s.streak>=3?t.am:t.tm,fontWeight:700}}>🔥 {s.streak}</td>
+          <td style={{padding:"8px 10px",color:t.g}}>{s.cleanDays} วัน</td>
+          <td style={{padding:"8px 10px"}}><Badge color={s.vCount===0?t.g:t.r}>{s.vCount===0?"✅ ไม่มี":`${s.vCount} ครั้ง`}</Badge></td>
+          <td style={{padding:"8px 10px",color:s.totalSpent>0?t.r:t.tm}}>{s.totalSpent>0?fB(s.totalSpent):"-"}</td>
+        </tr>);})}</tbody>
+      </table></div>
+    </div>
+
+    {violations.length>0&&<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>📋 Violations ทั้งหมด ({violations.length})</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:360,overflowY:"auto"}}>
+        {violations.map(v=>{const m=members.find(x=>x.user_id===v.user_id);const cat=EC.find(c=>c.v===v.category)||EC[EC.length-1];const isMe=v.user_id===session.user.id;return(<div key={v.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
+          <Avatar url={m?.avatar_url} name={m?.display_name} size={28} t={t}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:500}}>{m?.display_name||"?"} <span style={{color:t.r,marginLeft:6}}>{cat.i} {cat.l}</span></div>
+            <div style={{fontSize:10,color:t.tm}}>{v.date}{v.note?` · ${v.note}`:""}</div>
+          </div>
+          {v.amount>0&&<span style={{fontSize:12,color:t.r,fontWeight:600}}>-{fB(v.amount)}</span>}
+          {isMe&&<button onClick={async()=>{if(window.confirm("ลบ violation นี้?")){await supabase.from("no_spend_violations").delete().eq("id",v.id);load()}}} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:t.r}}>🗑</button>}
+        </div>);})}
+      </div>
+    </div>}
+
+    <Modal open={modal?.type==="report"} onClose={()=>setModal(null)} title="📝 บันทึก Violation" t={t}>
+      <ReportViolationForm challenge={challenge} session={session} t={t} onClose={()=>setModal(null)} onSaved={()=>{load();onLoad&&onLoad()}}/>
+    </Modal>
+  </>);
+}
+
 function ChallengeDetail({id,onBack,t,session,rate,toThb}){
   const[challenge,setChallenge]=useState(null);
   const[members,setMembers]=useState([]);
@@ -1167,7 +1454,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     const me2=members.find(m=>m.user_id===session.user.id);if(!me2)return;
     const nv=calcNetWorth(me2);
     const today=new Date().toISOString().slice(0,10);
-    supabase.from("challenge_snapshots").upsert({challenge_id:id,user_id:session.user.id,date:today,net_worth:+nv.toFixed(2)},{onConflict:"challenge_id,user_id,date"}).then(()=>{});
+    if(challenge.mode!=="no_spend")supabase.from("challenge_snapshots").upsert({challenge_id:id,user_id:session.user.id,date:today,net_worth:+nv.toFixed(2)},{onConflict:"challenge_id,user_id,date"}).then(()=>{});
     // Check challenge end-date notification
     if(challenge.end_date){
       const diff=(new Date(challenge.end_date)-new Date())/86400000;
@@ -1259,7 +1546,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:18,fontWeight:700}}>🏆 {challenge.name}</div>
           {challenge.description&&<div style={{fontSize:12,color:t.ts,marginTop:4}}>{challenge.description}</div>}
-          <div style={{fontSize:11,color:t.tm,marginTop:6}}>เริ่ม {challenge.start_date}{challenge.end_date?` · สิ้นสุด ${challenge.end_date}`:""} · {members.length} คน{targetAmount!=null?` · 🎯 เป้า ${fB(targetAmount)}`:legacyTargetPct!=null?` · 🎯 เป้า ${legacyTargetPct>=0?"+":""}${legacyTargetPct}%`:""}</div>
+          <div style={{fontSize:11,color:t.tm,marginTop:6}}>เริ่ม {challenge.start_date}{challenge.end_date?` · สิ้นสุด ${challenge.end_date}`:""} · {members.length} คน{challenge.mode==="no_spend"?` · 🚫 No-Spend Mode`:targetAmount!=null?` · 🎯 เป้า ${fB(targetAmount)}`:legacyTargetPct!=null?` · 🎯 เป้า ${legacyTargetPct>=0?"+":""}${legacyTargetPct}%`:""}</div>
           <div style={{fontSize:11,color:t.ac,marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>รหัสเชิญ: <code style={{fontWeight:600,padding:"2px 6px",background:`${t.ac}15`,borderRadius:4}}>{challenge.join_code}</code><button onClick={()=>{navigator.clipboard.writeText(challenge.join_code);window.alert("คัดลอกรหัสแล้ว ✅")}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11}}>📋 คัดลอก</button></div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1270,6 +1557,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
         </div>
       </div>
     </div>
+    {challenge.mode==="no_spend"?<NoSpendChallengeView challenge={challenge} members={members} session={session} t={t} onLoad={load}/>:<>
     <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
       <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>📊 Leaderboard</div>
       <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
@@ -1323,8 +1611,9 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
       {refresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {refresh.err}</span>}
     </div>}
     <ChallengeHistoryChart challengeId={id} members={sorted} session={session} t={t}/>
-    <ChallengePosts challengeId={id} members={members} session={session} t={t}/>
     {sorted.map(m=>(<MemberPortfolio key={m.id} member={m} isMe={m.user_id===session.user.id} onUpdate={updateMe} onEditProfile={mem=>setModal({type:"profile",member:mem})} t={t} toThb={toThb} rate={rate}/>))}
+    </>}
+    <ChallengePosts challengeId={id} members={members} session={session} t={t}/>
     <Modal open={modal?.type==="join"} onClose={()=>setModal(null)} title="เข้าร่วมชาเลนจ์" t={t}>
       <JoinChallengeForm onClose={()=>{setModal(null);load()}} t={t} session={session} challengeId={id}/>
     </Modal>
@@ -1771,7 +2060,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about","challenges"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about","challenges","calendar","envelopes"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -1822,6 +2111,8 @@ function WealthHub(){
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
       {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
       {page==="budget"&&<BudgetPage data={data} stats={stats} persist={persist} t={t}/>}
+      {page==="calendar"&&<CalendarPage data={data} t={t} onAddTxn={dt=>setModal({type:"addTxn",date:dt})} setPage={setPage}/>}
+      {page==="envelopes"&&<EnvelopesPage data={data} persist={persist} t={t}/>}
       {page==="balance"&&<><BalancePage data={data} stats={stats} persist={persist} t={t}/><div style={{marginTop:14}}><NetWorthHistoryChart session={session} t={t}/></div></>}
       {page==="cashflow"&&<CashFlowPage data={data} stats={stats} t={t}/>}
       {page==="cfdetail"&&<CashFlowDetailPage data={data} persist={persist} t={t}/>}
@@ -1871,7 +2162,7 @@ function WealthHub(){
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
-    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t}/></Modal>
+    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date}/></Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
