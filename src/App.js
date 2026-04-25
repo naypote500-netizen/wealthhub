@@ -967,10 +967,134 @@ function CashFlowDetailPage({data,persist,t}){
 }
 
 /* ═══ TXN PAGE ═══ */
-function TxnPage({data,stats,onAdd,onDel,t}){const[filter,setFilter]=useState("all");const[mf,setMf]=useState(mk(td()));const filtered=useMemo(()=>data.transactions.filter(tx=>filter==="all"||tx.type===filter).filter(tx=>mk(tx.date)===mf).sort((a,b)=>new Date(b.date)-new Date(a.date)),[data.transactions,filter,mf]);const months=useMemo(()=>{const s=new Set(data.transactions.map(tx=>mk(tx.date)));s.add(mk(td()));return[...s].sort().reverse()},[data.transactions]);
-return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่าย" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/><MC icon="💰" label="คงเหลือ" value={fB(stats.netThisMonth)} t={t} color={stats.netThisMonth>=0?t.g:t.r}/></div>
-<div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}><div style={{display:"flex",gap:4}}>{[{k:"all",l:"ทั้งหมด"},{k:"income",l:"รายรับ"},{k:"expense",l:"รายจ่าย"}].map(f=>(<button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"4px 12px",fontSize:11,border:filter===f.k?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",background:filter===f.k?(f.k==="income"?t.g:f.k==="expense"?t.r:t.ac):"transparent",color:filter===f.k?"#fff":t.ts}}>{f.l}</button>))}</div><select value={mf} onChange={e=>setMf(e.target.value)} style={{fontSize:11,padding:"4px 8px",borderRadius:7,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}>{months.map(m=><option key={m} value={m}>{fm(m)}</option>)}</select></div>
-{filtered.length===0?<Empty icon="💸" title="ไม่มีรายการ" sub="เพิ่มรายรับหรือรายจ่าย" action="+ บันทึก" onAction={onAdd} t={t}/>:(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>{filtered.map((tx,i)=>{const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none"}}><div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}</div><div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short"})}</div></div><span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span><button onClick={()=>onDel(tx.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}}>✕</button></div>)})}</div>)}</div>)}
+function TxnPage({data,stats,onAdd,onDel,t}){
+  const[filter,setFilter]=useState("all");
+  const[search,setSearch]=useState("");
+  const[catFilter,setCatFilter]=useState("all");
+  const[dateRange,setDateRange]=useState("month");
+  const[customFrom,setCustomFrom]=useState("");
+  const[customTo,setCustomTo]=useState("");
+  const[minAmt,setMinAmt]=useState("");
+  const[maxAmt,setMaxAmt]=useState("");
+  const[showAdv,setShowAdv]=useState(false);
+  const allCats=useMemo(()=>[...IC.map(c=>({...c,kind:"income"})),...EC.map(c=>({...c,kind:"expense"}))],[]);
+  const{from,to}=useMemo(()=>{
+    const tdy=new Date();const today=tdy.toISOString().slice(0,10);
+    if(dateRange==="all")return{from:null,to:null};
+    if(dateRange==="month"){const f=`${mk(today)}-01`;return{from:f,to:today}}
+    if(dateRange==="lastmonth"){const d=new Date(tdy.getFullYear(),tdy.getMonth()-1,1);const last=new Date(tdy.getFullYear(),tdy.getMonth(),0);return{from:d.toISOString().slice(0,10),to:last.toISOString().slice(0,10)}}
+    if(dateRange==="3m"){const d=new Date(tdy);d.setMonth(d.getMonth()-3);return{from:d.toISOString().slice(0,10),to:today}}
+    if(dateRange==="6m"){const d=new Date(tdy);d.setMonth(d.getMonth()-6);return{from:d.toISOString().slice(0,10),to:today}}
+    if(dateRange==="year"){return{from:`${tdy.getFullYear()}-01-01`,to:today}}
+    if(dateRange==="custom")return{from:customFrom||null,to:customTo||null};
+    return{from:null,to:null};
+  },[dateRange,customFrom,customTo]);
+  const filtered=useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    return data.transactions.filter(tx=>{
+      if(filter!=="all"&&tx.type!==filter)return false;
+      if(catFilter!=="all"&&tx.category!==catFilter)return false;
+      if(from&&tx.date<from)return false;
+      if(to&&tx.date>to)return false;
+      if(minAmt&&tx.amount<+minAmt)return false;
+      if(maxAmt&&tx.amount>+maxAmt)return false;
+      if(q){
+        const cats=tx.type==="income"?IC:EC;
+        const cat=cats.find(c=>c.v===tx.category);
+        const hay=`${tx.note||""} ${cat?.l||""} ${cat?.v||""}`.toLowerCase();
+        if(!hay.includes(q))return false;
+      }
+      return true;
+    }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  },[data.transactions,filter,catFilter,from,to,minAmt,maxAmt,search]);
+  const sumInc=filtered.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);
+  const sumExp=filtered.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);
+  const hasFilter=filter!=="all"||search||catFilter!=="all"||dateRange!=="month"||minAmt||maxAmt;
+  const clearAll=()=>{setFilter("all");setSearch("");setCatFilter("all");setDateRange("month");setCustomFrom("");setCustomTo("");setMinAmt("");setMaxAmt("")};
+  const ranges=[{k:"month",l:"เดือนนี้"},{k:"lastmonth",l:"เดือนก่อน"},{k:"3m",l:"3 เดือน"},{k:"6m",l:"6 เดือน"},{k:"year",l:"ปีนี้"},{k:"all",l:"ทั้งหมด"},{k:"custom",l:"กำหนดเอง"}];
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/>
+      <MC icon="💸" label="รายจ่าย" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/>
+      <MC icon="💰" label="คงเหลือ" value={fB(stats.netThisMonth)} t={t} color={stats.netThisMonth>=0?t.g:t.r}/>
+    </div>
+
+    {/* Search + Filter Panel */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{flex:1,position:"relative"}}>
+          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:t.tm,pointerEvents:"none"}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหา... เช่น 7-11, กาแฟ, อาหาร" style={{width:"100%",padding:"8px 32px 8px 32px",borderRadius:8,border:`1px solid ${t.ibr}`,fontSize:12,background:t.ib,color:t.text,boxSizing:"border-box"}}/>
+          {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:t.tm,fontSize:13}}>✕</button>}
+        </div>
+        <button onClick={()=>setShowAdv(s=>!s)} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${showAdv?t.ac:t.cb}`,borderRadius:8,cursor:"pointer",background:showAdv?`${t.ac}15`:"transparent",color:showAdv?t.ac:t.text,fontWeight:500,whiteSpace:"nowrap"}}>{showAdv?"⚙ ปิดตัวกรอง":"⚙ ตัวกรอง"}</button>
+      </div>
+
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {[{k:"all",l:"ทั้งหมด",c:t.ac},{k:"income",l:"💵 รายรับ",c:t.g},{k:"expense",l:"💸 รายจ่าย",c:t.r}].map(f=>(
+          <button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"5px 12px",fontSize:11,border:filter===f.k?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",background:filter===f.k?f.c:"transparent",color:filter===f.k?"#fff":t.ts,fontWeight:filter===f.k?600:400}}>{f.l}</button>
+        ))}
+      </div>
+
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {ranges.map(r=>(
+          <button key={r.k} onClick={()=>setDateRange(r.k)} style={{padding:"4px 10px",fontSize:10,border:`1px solid ${dateRange===r.k?t.ac:t.cb}`,borderRadius:6,cursor:"pointer",background:dateRange===r.k?`${t.ac}15`:"transparent",color:dateRange===r.k?t.ac:t.ts,fontWeight:dateRange===r.k?600:400}}>{r.l}</button>
+        ))}
+      </div>
+
+      {dateRange==="custom"&&(<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:11,color:t.tm}}>จาก</span>
+        <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:"5px 8px",fontSize:11,borderRadius:6,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}/>
+        <span style={{fontSize:11,color:t.tm}}>ถึง</span>
+        <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:"5px 8px",fontSize:11,borderRadius:6,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}/>
+      </div>)}
+
+      {showAdv&&(<div style={{display:"flex",flexDirection:"column",gap:10,paddingTop:10,borderTop:`1px dashed ${t.cb}`}}>
+        <div>
+          <div style={{fontSize:10,color:t.tm,marginBottom:5}}>หมวดหมู่</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <button onClick={()=>setCatFilter("all")} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${catFilter==="all"?t.ac:t.cb}`,borderRadius:6,cursor:"pointer",background:catFilter==="all"?`${t.ac}15`:"transparent",color:catFilter==="all"?t.ac:t.ts}}>ทุกหมวด</button>
+            {allCats.filter(c=>filter==="all"||c.kind===filter).map(c=>(
+              <button key={c.kind+c.v} onClick={()=>setCatFilter(c.v)} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${catFilter===c.v?t.ac:t.cb}`,borderRadius:6,cursor:"pointer",background:catFilter===c.v?`${t.ac}15`:"transparent",color:catFilter===c.v?t.ac:t.ts}}>{c.i} {c.l}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:t.tm,marginBottom:5}}>ช่วงจำนวนเงิน (฿)</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="number" value={minAmt} onChange={e=>setMinAmt(e.target.value)} placeholder="ต่ำสุด" style={{flex:1,minWidth:100,padding:"6px 10px",fontSize:11,borderRadius:6,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}/>
+            <span style={{fontSize:11,color:t.tm}}>—</span>
+            <input type="number" value={maxAmt} onChange={e=>setMaxAmt(e.target.value)} placeholder="สูงสุด" style={{flex:1,minWidth:100,padding:"6px 10px",fontSize:11,borderRadius:6,border:`1px solid ${t.ibr}`,background:t.ib,color:t.text}}/>
+          </div>
+        </div>
+      </div>)}
+
+      {hasFilter&&(<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:8,borderTop:`1px solid ${t.cb}`,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:11,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{color:t.text,fontWeight:600}}>📊 พบ {filtered.length} รายการ</span>
+          {sumInc>0&&<span style={{color:t.g}}>รายรับ +{fB(sumInc)}</span>}
+          {sumExp>0&&<span style={{color:t.r}}>รายจ่าย -{fB(sumExp)}</span>}
+          {(sumInc||sumExp)&&<span style={{color:sumInc-sumExp>=0?t.g:t.r,fontWeight:600}}>คงเหลือ {fB(sumInc-sumExp)}</span>}
+        </div>
+        <button onClick={clearAll} style={{fontSize:10,padding:"4px 10px",border:`1px solid ${t.r}40`,borderRadius:6,background:"transparent",cursor:"pointer",color:t.r}}>✕ ล้างตัวกรอง</button>
+      </div>)}
+    </div>
+
+    {filtered.length===0?<Empty icon="🔍" title={hasFilter?"ไม่พบรายการที่ตรงกับตัวกรอง":"ไม่มีรายการ"} sub={hasFilter?"ลองเปลี่ยนเงื่อนไขดู":"เพิ่มรายรับหรือรายจ่าย"} action={hasFilter?"✕ ล้างตัวกรอง":"+ บันทึก"} onAction={hasFilter?clearAll:onAdd} t={t}/>:
+      (<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>{filtered.map((tx,i)=>{
+        const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
+        return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none"}}>
+          <div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}</div>
+            <div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})} · {cat.l}</div>
+          </div>
+          <span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span>
+          <button onClick={()=>onDel(tx.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}}>✕</button>
+        </div>);
+      })}</div>)}
+  </div>);
+}
 
 /* ═══ AUTH PAGE ═══ */
 function AuthPage({theme,setTheme,t}){
