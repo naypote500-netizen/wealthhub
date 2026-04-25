@@ -3,8 +3,9 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 
 /* ═══ THEME ═══ */
-const L={bg:"#F4F6F9",sidebar:"#0F1B2D",sidebarText:"#8899AA",sidebarActive:"#38BDF8",card:"#FFFFFF",cb:"#E2E8F0",text:"#1E293B",ts:"#64748B",tm:"#94A3B8",ac:"#0EA5E9",acL:"#E0F2FE",g:"#10B981",gL:"#D1FAE5",r:"#EF4444",rL:"#FEE2E2",am:"#F59E0B",amL:"#FEF3C7",tl:"#14B8A6",pp:"#8B5CF6",ib:"#FFFFFF",ibr:"#CBD5E1",thBg:"#F8FAFC"};
-const Dk={bg:"#0B1120",sidebar:"#060D1B",sidebarText:"#4B6584",sidebarActive:"#38BDF8",card:"#111827",cb:"#1E293B",text:"#E2E8F0",ts:"#94A3B8",tm:"#475569",ac:"#38BDF8",acL:"#0C2D48",g:"#34D399",gL:"#064E3B",r:"#F87171",rL:"#450A0A",am:"#FBBF24",amL:"#451A03",tl:"#2DD4BF",pp:"#A78BFA",ib:"#1E293B",ibr:"#334155",thBg:"#0F172A"};
+const L={bg:"#F4F6F9",sidebar:"#0F1B2D",sidebarText:"#8899AA",sidebarActive:"#38BDF8",card:"#FFFFFF",cb:"#E2E8F0",text:"#1E293B",ts:"#64748B",tm:"#94A3B8",ac:"#0EA5E9",acL:"#E0F2FE",g:"#10B981",gL:"#D1FAE5",r:"#EF4444",rL:"#FEE2E2",am:"#F59E0B",amL:"#FEF3C7",tl:"#14B8A6",pp:"#8B5CF6",ib:"#FFFFFF",ibr:"#CBD5E1",thBg:"#F8FAFC",sideBorder:"#1a2744"};
+const Dk={bg:"#0B1120",sidebar:"#060D1B",sidebarText:"#4B6584",sidebarActive:"#38BDF8",card:"#111827",cb:"#1E293B",text:"#E2E8F0",ts:"#94A3B8",tm:"#475569",ac:"#38BDF8",acL:"#0C2D48",g:"#34D399",gL:"#064E3B",r:"#F87171",rL:"#450A0A",am:"#FBBF24",amL:"#451A03",tl:"#2DD4BF",pp:"#A78BFA",ib:"#1E293B",ibr:"#334155",thBg:"#0F172A",sideBorder:"#1E293B"};
+const Paper={bg:"#FAFAFA",sidebar:"#FFFFFF",sidebarText:"#6B7280",sidebarActive:"#111827",card:"#FFFFFF",cb:"#E5E7EB",text:"#111827",ts:"#6B7280",tm:"#9CA3AF",ac:"#111827",acL:"#F3F4F6",g:"#059669",gL:"#D1FAE5",r:"#DC2626",rL:"#FEE2E2",am:"#D97706",amL:"#FEF3C7",tl:"#0891B2",pp:"#7C3AED",ib:"#FFFFFF",ibr:"#D1D5DB",thBg:"#F9FAFB",sideBorder:"#E5E7EB"};
 const PC=["#0EA5E9","#10B981","#F59E0B","#8B5CF6","#EF4444","#14B8A6","#EC4899","#6366F1","#F97316"];
 
 const AT=[{v:"stock_th",l:"หุ้นไทย",i:"📊"},{v:"stock_us",l:"หุ้น US",i:"🇺🇸"},{v:"crypto",l:"Crypto",i:"₿"},{v:"gold",l:"ทองคำ",i:"🥇"},{v:"fund",l:"กองทุนรวม",i:"📈"},{v:"bond",l:"พันธบัตร",i:"🏦"},{v:"property",l:"อสังหาฯ",i:"🏠"},{v:"other",l:"อื่นๆ",i:"💼"}];
@@ -56,14 +57,15 @@ const NAV=[
 ];
 
 /* ═══ COMPONENTS ═══ */
-function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose,onLogout,userEmail}){
+function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
   const groups=[...new Set(NAV.map(n=>n.g))];
   const visible=!isMobile||open;
   const go=k=>{setPage(k);if(isMobile)onClose&&onClose()};
+  const themes=[{k:"light",i:"☀️",l:"Light"},{k:"paper",i:"📄",l:"Paper"},{k:"dark",i:"🌙",l:"Dark"}];
   return(<>
     {isMobile&&open&&<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:99}}/>}
-    <div style={{width:220,height:"100vh",background:t.sidebar,display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${dark?"#1E293B":"#1a2744"}`,overflowY:"auto",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none"}}>
-    <div style={{padding:"16px 20px 16px",borderBottom:`1px solid ${dark?"#1E293B":"#1a2744"}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,position:"sticky",top:0,background:t.sidebar,zIndex:1}}>
+    <div style={{width:220,height:"100vh",background:t.sidebar,display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${t.sideBorder}`,overflowY:"auto",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none"}}>
+    <div style={{padding:"16px 20px 16px",borderBottom:`1px solid ${t.sideBorder}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,position:"sticky",top:0,background:t.sidebar,zIndex:1}}>
       <div><div style={{fontSize:19,fontWeight:600}}><span style={{color:t.ac}}>Wealth</span><span style={{color:t.sidebarText}}>Hub</span></div>
         <div style={{fontSize:9,color:t.sidebarText,marginTop:2}}>ระบบจัดการการเงินส่วนบุคคล</div></div>
       {isMobile&&<button onClick={onClose} style={{background:"none",border:"none",color:t.sidebarText,fontSize:20,cursor:"pointer",lineHeight:1,padding:0}}>✕</button>}
@@ -71,13 +73,16 @@ function Sidebar({page,setPage,dark,setDark,t,isMobile,open,onClose,onLogout,use
     <div style={{padding:"10px 10px",flex:1}}>
       {groups.map(g=>(<div key={g}>
         <div style={{fontSize:9,color:t.sidebarText,textTransform:"uppercase",letterSpacing:1.2,padding:"10px 8px 4px",fontWeight:600}}>{g}</div>
-        {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?(dark?"#1E293B":"#162035"):"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?500:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
+        {NAV.filter(n=>n.g===g).map(n=>(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",borderRadius:7,cursor:"pointer",marginBottom:1,fontSize:12,background:page===n.k?`${t.sidebarActive}18`:"transparent",color:page===n.k?t.sidebarActive:t.sidebarText,fontWeight:page===n.k?600:400,borderLeft:page===n.k?`3px solid ${t.ac}`:"3px solid transparent"}}><span style={{fontSize:13,width:16,textAlign:"center"}}>{n.i}</span>{n.l}</button>))}
       </div>))}
     </div>
-    <div style={{padding:"10px 20px",borderTop:`1px solid ${dark?"#1E293B":"#1a2744"}`,position:"sticky",bottom:0,background:t.sidebar}}>
-      <button onClick={()=>setDark(!dark)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.sidebarText,cursor:"pointer",fontSize:11,padding:0}}><span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>{dark?"Light":"Dark"} Mode</button>
-      {userEmail&&<div style={{fontSize:9,color:t.sidebarText,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>👤 {userEmail}</div>}
-      {onLogout&&<button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.r,cursor:"pointer",fontSize:11,padding:"4px 0",marginTop:2}}>🚪 ออกจากระบบ</button>}
+    <div style={{padding:"10px 20px",borderTop:`1px solid ${t.sideBorder}`,position:"sticky",bottom:0,background:t.sidebar}}>
+      <div style={{fontSize:9,color:t.sidebarText,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>ธีม</div>
+      <div style={{display:"flex",gap:4,marginBottom:6}}>
+        {themes.map(th=>(<button key={th.k} onClick={()=>setTheme(th.k)} title={th.l} style={{flex:1,padding:"5px 2px",border:`1px solid ${theme===th.k?t.ac:t.sideBorder}`,borderRadius:6,background:theme===th.k?`${t.ac}20`:"transparent",cursor:"pointer",fontSize:12,color:theme===th.k?t.ac:t.sidebarText,fontWeight:theme===th.k?700:400,transition:"all .15s"}}>{th.i}</button>))}
+      </div>
+      {userEmail&&<div style={{fontSize:9,color:t.sidebarText,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>👤 {userEmail}</div>}
+      {onLogout&&<button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",color:t.r,cursor:"pointer",fontSize:11,padding:"4px 0"}}>🚪 ออกจากระบบ</button>}
     </div>
   </div></>);
 }
@@ -869,7 +874,7 @@ return(<div style={{display:"flex",flexDirection:"column",gap:14}}><div style={{
 {filtered.length===0?<Empty icon="💸" title="ไม่มีรายการ" sub="เพิ่มรายรับหรือรายจ่าย" action="+ บันทึก" onAction={onAdd} t={t}/>:(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>{filtered.map((tx,i)=>{const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none"}}><div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}</div><div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short"})}</div></div><span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span><button onClick={()=>onDel(tx.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}}>✕</button></div>)})}</div>)}</div>)}
 
 /* ═══ AUTH PAGE ═══ */
-function AuthPage({dark,setDark,t}){
+function AuthPage({theme,setTheme,t}){
   const[mode,setMode]=useState("login");
   const[email,setEmail]=useState("");
   const[pw,setPw]=useState("");
@@ -925,7 +930,7 @@ function AuthPage({dark,setDark,t}){
         {mode==="forgot"&&(<button type="button" onClick={()=>{setMode("login");setErr("");setMsg("")}} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11,textAlign:"center"}}>← กลับไปเข้าสู่ระบบ</button>)}
       </div>
       <div style={{marginTop:20,textAlign:"right"}}>
-        <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11}}>{dark?"☀️ Light":"🌙 Dark"}</button>
+        <button onClick={()=>setTheme(theme==="dark"?"light":"dark")} style={{background:"none",border:"none",color:t.tm,cursor:"pointer",fontSize:11}}>{theme==="dark"?"☀️ Light":"🌙 Dark"}</button>
       </div>
     </div>
   </div>);
@@ -1588,12 +1593,13 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[dark,setDark]=useState(false);const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);
   const isMobile=useIsMobile();
-  const t=useMemo(()=>({...(dark?Dk:L),m:isMobile}),[dark,isMobile]);
+  const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:L),m:isMobile}),[theme,isMobile]);
+  const dark=theme==="dark";
 
-  useEffect(()=>{try{setDark(localStorage.getItem("wealthhub-dark")==="1")}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem("wealthhub-dark",dark?"1":"0")}catch{}},[dark]);
+  useEffect(()=>{try{const saved=localStorage.getItem("wealthhub-theme");if(saved)setTheme(saved)}catch{}},[]);
+  useEffect(()=>{try{localStorage.setItem("wealthhub-theme",theme)}catch{}},[theme]);
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session:s}})=>setSession(s||null));
@@ -1754,7 +1760,7 @@ function WealthHub(){
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif"}}>
-    <Sidebar page={page} setPage={setPage} dark={dark} setDark={setDark} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
+    <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
     <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px":"20px 28px",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
@@ -1869,7 +1875,7 @@ function WealthHub(){
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
-    {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage dark={dark} setDark={setDark} t={t}/></div></div>)}
+    {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>
