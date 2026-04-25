@@ -51,7 +51,7 @@ function processRecurring(data){
 
 /* ═══ NAV ═══ */
 const NAV=[
-  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"budget",l:"งบประมาณ",i:"⊡",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},
+  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
   {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
 ];
@@ -407,42 +407,6 @@ function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,t}){
 }
 
 /* ═══ BUDGET PAGE ═══ */
-function BudgetPage({data,stats,persist,t}){
-  const budgets=data.budgets||{};
-  const tm=mk(td());
-  const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
-  const setBudget=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
-  const totalBudget=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
-  const totalSpent=Object.values(spent).reduce((s,v)=>s+v,0);
-  const totalPct=totalBudget>0?(totalSpent/totalBudget*100):0;
-  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-      <MC icon="🎯" label="งบประมาณรวม/เดือน" value={fB(totalBudget)} t={t} color={t.ac}/>
-      <MC icon="💸" label="ใช้ไปเดือนนี้" value={fB(totalSpent)} t={t} color={t.r}/>
-      <MC icon="💰" label="คงเหลือ" value={fB(Math.max(0,totalBudget-totalSpent))} sub={totalBudget>0?`${totalPct.toFixed(0)}% ของงบ`:""} t={t} color={totalSpent<=totalBudget?t.g:t.r}/>
-    </div>
-    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
-      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>⊡ งบประมาณรายหมวด (เดือนนี้)</div>
-      <div style={{fontSize:11,color:t.tm,marginBottom:12}}>ตั้งเพดานรายจ่ายแต่ละหมวด ระบบจะเตือนเมื่อใกล้เกิน/เกินงบ</div>
-      {EC.map((c,i)=>{const b=+budgets[c.v]||0;const s=spent[c.v]||0;const p=b>0?(s/b*100):0;const col=p>=100?t.r:p>=80?t.am:t.g;return(<div key={c.v} style={{padding:"10px 0",borderBottom:i<EC.length-1?`1px solid ${t.cb}`:"none"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-          <span style={{fontSize:15,width:24}}>{c.i}</span>
-          <span style={{fontSize:12,fontWeight:500,flex:1}}>{c.l}</span>
-          <span style={{fontSize:11,color:t.tm}}>ใช้ไป {fB(s)}</span>
-          <input type="number" value={b||""} onChange={e=>setBudget(c.v,e.target.value)} placeholder="ตั้งงบ" style={{width:100,padding:"5px 8px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:12,background:t.ib,color:t.text,textAlign:"right"}}/>
-          <span style={{fontSize:11,color:t.tm,width:30}}>฿</span>
-        </div>
-        {b>0&&(<><PB pct={p} color={col} height={6} t={t}/>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:10}}>
-            <span style={{color:col}}>{p>=100?`⚠️ เกินงบ ${fB(s-b)}`:p>=80?`⚠ ใกล้เต็มงบ`:`เหลือ ${fB(b-s)}`}</span>
-            <span style={{color:t.tm}}>{p.toFixed(0)}%</span>
-          </div></>)}
-      </div>)})}
-    </div>
-    <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ตัวเลขใช้จ่ายคำนวณจากธุรกรรมประเภท "รายจ่าย" ของเดือนปัจจุบัน</div>
-  </div>);
-}
-
 const fBshort=v=>{const a=Math.abs(v);if(a>=1000000)return`${(v/1000000).toFixed(1)}M`;if(a>=1000)return`${(v/1000).toFixed(0)}k`;return`${Math.round(v)}`};
 
 function CalendarPage({data,t,onAddTxn,setPage}){
@@ -2060,7 +2024,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","budget","cfdetail","tax","about","challenges","calendar","envelopes"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -2110,7 +2074,6 @@ function WealthHub(){
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
       {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
-      {page==="budget"&&<BudgetPage data={data} stats={stats} persist={persist} t={t}/>}
       {page==="calendar"&&<CalendarPage data={data} t={t} onAddTxn={dt=>setModal({type:"addTxn",date:dt})} setPage={setPage}/>}
       {page==="envelopes"&&<EnvelopesPage data={data} persist={persist} t={t}/>}
       {page==="balance"&&<><BalancePage data={data} stats={stats} persist={persist} t={t}/><div style={{marginTop:14}}><NetWorthHistoryChart session={session} t={t}/></div></>}
