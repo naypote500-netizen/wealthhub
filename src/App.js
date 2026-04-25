@@ -51,7 +51,7 @@ function processRecurring(data){
 
 /* ═══ NAV ═══ */
 const NAV=[
-  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},
+  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},{k:"analytics",l:"วิเคราะห์รายจ่าย",i:"📊",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
   {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
 ];
@@ -327,18 +327,93 @@ function RetirePage({t}){
 
 /* ═══ FINANCIAL HEALTH ═══ */
 function PlanPage({data,stats,t}){
-  const inc=stats.incomeThisMonth||0;const exp=stats.expenseThisMonth||0;const sr=inc>0?((inc-exp)/inc*100):0;
-  const ef=exp*6;const ce=data.goals.filter(g=>g.name.includes("ฉุกเฉิน")).reduce((s,g)=>s+g.saved,0);
+  const inc=stats.incomeThisMonth||0;const exp=stats.expenseThisMonth||0;
+  const sr=inc>0?((inc-exp)/inc*100):0;
+  const ef=exp*6;
+  const ce=data.goals.filter(g=>g.name.includes("ฉุกเฉิน")).reduce((s,g)=>s+g.saved,0);
+  const efMonths=exp>0?(ce/exp):0;
   const di=inc>0?(stats.debtRemaining/(inc*12)*100):0;
-  return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><MC icon="💰" label="อัตราการออม" value={`${sr.toFixed(1)}%`} sub={sr>=20?"ดีมาก":sr>=10?"พอใช้":"ปรับปรุง"} t={t} color={sr>=20?t.g:sr>=10?t.am:t.r}/><MC icon="🛡️" label="เงินฉุกเฉิน 6 เดือน" value={fB(ef)} sub={`มี ${fB(ce)}`} t={t} color={ce>=ef?t.g:t.am}/><MC icon="📊" label="หนี้/รายได้ต่อปี" value={`${di.toFixed(1)}%`} t={t} color={di<=30?t.g:di<=50?t.am:t.r}/><MC icon="💎" label="Net Worth" value={fB(stats.netWorth)} t={t} color={t.ac}/></div>
+  // Score components (0-100)
+  const sSavings=sr>=20?25:sr>=15?20:sr>=10?15:sr>=5?8:sr>0?3:0;
+  const sEmergency=efMonths>=6?25:efMonths>=3?18:efMonths>=1?10:efMonths>0?4:0;
+  const sDebt=stats.debtRemaining===0?25:di<=20?22:di<=30?18:di<=50?10:di<=80?5:0;
+  const sInvest=stats.totalPortfolio>0?(stats.totalPortfolio>=inc*6?15:stats.totalPortfolio>=inc?10:5):0;
+  const sGoals=data.goals.length>0?(data.goals.some(g=>g.saved>0)?10:5):0;
+  const score=Math.round(sSavings+sEmergency+sDebt+sInvest+sGoals);
+  const grade=score>=85?"A+":score>=75?"A":score>=65?"B":score>=50?"C":score>=35?"D":"F";
+  const gradeColor=score>=75?t.g:score>=50?t.am:t.r;
+  const gradeLabel=score>=85?"ยอดเยี่ยม":score>=75?"ดีมาก":score>=65?"ดี":score>=50?"พอใช้":score>=35?"ต้องปรับปรุง":"วิกฤต";
+  // Tips
+  const tips=[];
+  if(sr<20)tips.push({i:"💰",t:`เพิ่ม Savings Rate ให้ถึง 20% (ตอนนี้ ${sr.toFixed(0)}%)`,p:"ตัดรายจ่ายไม่จำเป็น หรือหารายได้เสริม"});
+  if(efMonths<6)tips.push({i:"🛡️",t:`สร้างเงินฉุกเฉินให้ครบ 6 เดือนก่อน`,p:`ตอนนี้มี ${efMonths.toFixed(1)} เดือน · ขาดอีก ${fB(Math.max(0,ef-ce))}`});
+  if(di>30)tips.push({i:"🏦",t:"ลดสัดส่วนหนี้ต่อรายได้",p:`ตอนนี้ ${di.toFixed(0)}% ของรายได้ต่อปี — ควรไม่เกิน 30%`});
+  if(stats.totalPortfolio===0)tips.push({i:"📈",t:"เริ่มลงทุนเพื่อสร้างความมั่งคั่ง",p:"DCA กองทุนรวมเดือนละ 5-10% ของรายได้"});
+  if(data.goals.length===0)tips.push({i:"🎯",t:"ตั้งเป้าหมายการเงิน",p:"การมีเป้าชัดทำให้ออมเงินมีจุดมุ่งหมาย"});
+  if(!tips.length)tips.push({i:"🌟",t:"คุณจัดการการเงินได้ยอดเยี่ยม!",p:"รักษามาตรฐานนี้ไว้ และพิจารณาขยับเป้าหมายให้ใหญ่ขึ้น"});
+  const breakdown=[
+    {l:"💰 อัตราการออม",val:sSavings,max:25,desc:`${sr.toFixed(1)}% ของรายได้`},
+    {l:"🛡️ เงินฉุกเฉิน",val:sEmergency,max:25,desc:`${efMonths.toFixed(1)} / 6 เดือน`},
+    {l:"🏦 หนี้สิน",val:sDebt,max:25,desc:stats.debtRemaining===0?"ไม่มีหนี้":`${di.toFixed(0)}% ของรายได้/ปี`},
+    {l:"📈 ลงทุน",val:sInvest,max:15,desc:stats.totalPortfolio>0?fB(stats.totalPortfolio):"ยังไม่มี"},
+    {l:"🎯 เป้าหมาย",val:sGoals,max:10,desc:data.goals.length>0?`${data.goals.length} เป้าหมาย`:"ยังไม่ตั้ง"},
+  ];
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Score Hero */}
+    <div style={{background:t.card,border:`2px solid ${gradeColor}`,borderRadius:14,padding:20,display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+      <div style={{position:"relative",width:130,height:130,flexShrink:0}}>
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="55" stroke={t.cb} strokeWidth="10" fill="none"/>
+          <circle cx="65" cy="65" r="55" stroke={gradeColor} strokeWidth="10" fill="none" strokeLinecap="round" strokeDasharray={`${score/100*345.6} 345.6`} transform="rotate(-90 65 65)" style={{transition:"stroke-dasharray 1s ease"}}/>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontSize:32,fontWeight:700,color:gradeColor,lineHeight:1}}>{score}</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>/ 100</div>
+          <div style={{fontSize:18,fontWeight:700,color:gradeColor,marginTop:3}}>{grade}</div>
+        </div>
+      </div>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{fontSize:11,color:t.tm,marginBottom:4}}>คะแนนสุขภาพการเงิน</div>
+        <div style={{fontSize:22,fontWeight:700,color:t.text,marginBottom:6}}>{gradeLabel}</div>
+        <div style={{fontSize:12,color:t.ts,lineHeight:1.5}}>คำนวณจาก 5 ด้าน: การออม, เงินฉุกเฉิน, หนี้สิน, การลงทุน, และเป้าหมาย</div>
+      </div>
+    </div>
+
+    {/* Score Breakdown */}
     <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
-      <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>📋 เช็คลิสต์สุขภาพการเงิน</div>
-      {[{rule:"กฎ 50/30/20",desc:"ออมอย่างน้อย 20%",ok:sr>=20,val:`ออม ${sr.toFixed(0)}%`},{rule:"เงินฉุกเฉิน 6 เดือน",desc:`ควรมี ${fB(ef)}`,ok:ce>=ef,val:`${fB(ce)}`},{rule:"หนี้ไม่เกิน 30%",desc:"ของรายได้ต่อปี",ok:di<=30,val:`${di.toFixed(0)}%`},{rule:"มีพอร์ตลงทุน",desc:"ลงทุนเพื่ออนาคต",ok:stats.totalPortfolio>0,val:stats.totalPortfolio>0?fB(stats.totalPortfolio):"ยังไม่มี"}].map((r,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<3?`1px solid ${t.cb}`:"none"}}>
-        <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,background:r.ok?`${t.g}18`:`${t.r}18`,color:r.ok?t.g:t.r,flexShrink:0}}>{r.ok?"✓":"✗"}</div>
-        <div style={{flex:1}}><div style={{fontSize:12,fontWeight:500}}>{r.rule}</div><div style={{fontSize:10,color:t.tm}}>{r.desc}</div></div>
-        <Badge color={r.ok?t.g:t.r}>{r.val}</Badge>
-      </div>))}
+      <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>📊 คะแนนแยกรายด้าน</div>
+      {breakdown.map((b,i)=>{const pct=b.val/b.max*100;const c=pct>=80?t.g:pct>=50?t.am:t.r;return(<div key={i} style={{marginBottom:i<breakdown.length-1?12:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5,fontSize:12}}>
+          <span style={{fontWeight:500}}>{b.l}</span>
+          <span style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{color:t.tm,fontSize:10}}>{b.desc}</span>
+            <span style={{fontWeight:700,color:c}}>{b.val}/{b.max}</span>
+          </span>
+        </div>
+        <PB pct={pct} color={c} height={7} t={t}/>
+      </div>);})}
+    </div>
+
+    {/* Tips */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>💡 คำแนะนำ ({tips.length})</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {tips.map((tip,i)=>(<div key={i} style={{display:"flex",gap:12,padding:"10px 12px",background:t.bg,borderRadius:8,borderLeft:`3px solid ${t.ac}`}}>
+          <div style={{fontSize:22,flexShrink:0}}>{tip.i}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:600,marginBottom:3}}>{tip.t}</div>
+            <div style={{fontSize:11,color:t.tm,lineHeight:1.5}}>{tip.p}</div>
+          </div>
+        </div>))}
+      </div>
+    </div>
+
+    {/* Quick Stats Cards */}
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💰" label="อัตราการออม" value={`${sr.toFixed(1)}%`} sub={sr>=20?"ดีมาก":sr>=10?"พอใช้":"ปรับปรุง"} t={t} color={sr>=20?t.g:sr>=10?t.am:t.r}/>
+      <MC icon="🛡️" label="เงินฉุกเฉิน" value={`${efMonths.toFixed(1)} เดือน`} sub={`เป้า 6 เดือน · มี ${fB(ce)}`} t={t} color={efMonths>=6?t.g:efMonths>=3?t.am:t.r}/>
+      <MC icon="📊" label="หนี้/รายได้/ปี" value={`${di.toFixed(1)}%`} t={t} color={di<=30?t.g:di<=50?t.am:t.r}/>
+      <MC icon="💎" label="Net Worth" value={fB(stats.netWorth)} t={t} color={t.ac}/>
     </div>
   </div>);
 }
@@ -346,7 +421,7 @@ function PlanPage({data,stats,t}){
 /* ═══ FORMS ═══ */
 function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||{name:"",type:"stock_th",units:"",avgCost:"",currentPrice:"",currency:"THB",note:""});const ok=f.name&&+f.units>0&&+f.avgCost>0&&+f.currentPrice>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><Inp label="ชื่อ/Symbol" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="KBANK, AAPL"/><div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}><Sel label="ประเภท" t={t} value={f.type} onChange={e=>set("type",e.target.value)}>{AT.map(a=><option key={a.v} value={a.v}>{a.i} {a.l}</option>)}</Sel><Sel label="สกุลเงิน" t={t} value={f.currency} onChange={e=>set("currency",e.target.value)}><option value="THB">🇹🇭 THB</option><option value="USD">🇺🇸 USD</option></Sel></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวน" t={t} type="number" step="any" value={f.units} onChange={e=>set("units",e.target.value)}/><Inp label={`ต้นทุน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.avgCost} onChange={e=>set("avgCost",e.target.value)}/></div><Inp label={`ราคาปัจจุบัน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.currentPrice} onChange={e=>set("currentPrice",e.target.value)}/>{f.currency==="USD"&&+f.currentPrice>0&&<div style={{fontSize:10,color:t.ac}}>≈ {fB(+f.currentPrice*rate)}/unit</div>}<Inp label="โน้ต" t={t} value={f.note||""} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
-function TxnForm({onSave,onCancel,t,initialDate}){const[f,set]=useF({type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div><Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div><Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)}/><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)}>✓ บันทึก</Btn></div>)}
+function TxnForm({onSave,onCancel,t,initialDate,initial}){const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||""}:{type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div><Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div><Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div></div>)}
 
 function GoalForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:"",icon:"🎯",target:"",saved:"0",deadline:""});const ok=f.name&&+f.target>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:4}}>{"🎯🏠🚗✈️💍🎓💰🛡️".split("").filter((_,i)=>i%2===0||(i===1)).length&&["🎯","🏠","🚗","✈️","💍","🎓","💰","🛡️"].map(ic=>(<button key={ic} onClick={()=>set("icon",ic)} style={{width:34,height:34,borderRadius:7,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",border:f.icon===ic?`2px solid ${t.ac}`:`1px solid ${t.cb}`,background:f.icon===ic?t.acL:"transparent",cursor:"pointer"}}>{ic}</button>))}</div><Inp label="ชื่อเป้าหมาย" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="เป้าหมาย (฿)" t={t} type="number" value={f.target} onChange={e=>set("target",e.target.value)}/><Inp label="ออมแล้ว (฿)" t={t} type="number" value={f.saved} onChange={e=>set("saved",e.target.value)}/></div><Inp label="กำหนด" t={t} type="date" value={f.deadline||""} onChange={e=>set("deadline",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ สร้าง"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
@@ -539,6 +614,117 @@ function EnvelopesPage({data,persist,t}){
         </div>);
       })}
     </div>
+  </div>);
+}
+
+function AnalyticsPage({data,stats,t}){
+  const[range,setRange]=useState("6m");
+  const tdy=new Date();
+  const monthsBack=range==="3m"?3:range==="12m"?12:6;
+  const months=useMemo(()=>{
+    const arr=[];
+    for(let i=monthsBack-1;i>=0;i--){const d=new Date(tdy.getFullYear(),tdy.getMonth()-i,1);arr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`)}
+    return arr;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[monthsBack]);
+  const tm=mk(td());
+  // Pie data this month
+  const expByCat={};
+  data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{expByCat[tx.category]=(expByCat[tx.category]||0)+tx.amount});
+  const pieData=EC.map(c=>({name:c.l,icon:c.i,key:c.v,value:expByCat[c.v]||0,color:c.v==="food"?"#EF4444":c.v==="transport"?"#F59E0B":c.v==="shopping"?"#EC4899":c.v==="bills"?"#8B5CF6":c.v==="health"?"#10B981":c.v==="entertainment"?"#3B82F6":c.v==="education"?"#06B6D4":"#6B7280"})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+  const totalExpThis=pieData.reduce((s,d)=>s+d.value,0);
+  // Monthly trend per category
+  const trend=months.map(m=>{const row={month:m.slice(5)+"/"+m.slice(2,4)};EC.forEach(c=>{row[c.v]=0});data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).forEach(tx=>{row[tx.category]=(row[tx.category]||0)+tx.amount});row.total=Object.keys(row).filter(k=>k!=="month"&&k!=="total").reduce((s,k)=>s+row[k],0);return row});
+  // Savings rate trend
+  const srTrend=months.map(m=>{const inc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0);const exp=data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0);return{month:m.slice(5)+"/"+m.slice(2,4),income:inc,expense:exp,saving:inc-exp,rate:inc>0?+((inc-exp)/inc*100).toFixed(1):0}});
+  // Top categories with prev-month comparison
+  const prevTm=months[months.length-2];
+  const prevByCat={};
+  if(prevTm)data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===prevTm).forEach(tx=>{prevByCat[tx.category]=(prevByCat[tx.category]||0)+tx.amount});
+  const topCats=pieData.slice(0,5).map(d=>{const prev=prevByCat[d.key]||0;const change=prev>0?((d.value-prev)/prev*100):(d.value>0?100:0);return{...d,prev,change}});
+  // Avg expense per day
+  const dayInMonth=tdy.getDate();
+  const avgPerDay=dayInMonth>0?totalExpThis/dayInMonth:0;
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+      <div style={{display:"flex",gap:5}}>
+        {[{k:"3m",l:"3 เดือน"},{k:"6m",l:"6 เดือน"},{k:"12m",l:"12 เดือน"}].map(r=>(<button key={r.k} onClick={()=>setRange(r.k)} style={{padding:"6px 14px",fontSize:11,border:`1px solid ${range===r.k?t.ac:t.cb}`,borderRadius:7,cursor:"pointer",background:range===r.k?`${t.ac}15`:"transparent",color:range===r.k?t.ac:t.text,fontWeight:range===r.k?600:400}}>{r.l}</button>))}
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(totalExpThis)} t={t} color={t.r}/>
+      <MC icon="📅" label="เฉลี่ย/วัน" value={fB(avgPerDay)} t={t}/>
+      <MC icon="📊" label="หมวดที่ใช้สุด" value={topCats[0]?(topCats[0].icon+" "+topCats[0].name):"-"} sub={topCats[0]?fB(topCats[0].value):""} t={t} color={t.am}/>
+      <MC icon="💰" label="Savings Rate ล่าสุด" value={`${srTrend[srTrend.length-1]?.rate||0}%`} t={t} color={(srTrend[srTrend.length-1]?.rate||0)>=20?t.g:t.am}/>
+    </div>
+
+    {/* Pie chart this month */}
+    {pieData.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>🥧 สัดส่วนรายจ่าย (เดือนนี้)</div>
+      <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:18,alignItems:"center"}}>
+        <ResponsiveContainer width="100%" height={250}>
+          <PieChart>
+            <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2}>{pieData.map((d,i)=><Cell key={i} fill={d.color}/>)}</Pie>
+            <Tooltip formatter={v=>fB(v)} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}}/>
+          </PieChart>
+        </ResponsiveContainer>
+        <div>{pieData.map((d,i)=>{const pct=totalExpThis>0?(d.value/totalExpThis*100):0;return(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<pieData.length-1?`1px solid ${t.cb}`:"none"}}>
+          <div style={{width:14,height:14,borderRadius:4,background:d.color,flexShrink:0}}/>
+          <span style={{fontSize:13}}>{d.icon}</span>
+          <span style={{flex:1,fontSize:12,fontWeight:500}}>{d.name}</span>
+          <span style={{fontSize:11,color:t.tm}}>{pct.toFixed(0)}%</span>
+          <span style={{fontSize:12,fontWeight:600,minWidth:70,textAlign:"right"}}>{fB(d.value)}</span>
+        </div>);})}</div>
+      </div>
+    </div>)}
+
+    {/* Top 5 categories with comparison */}
+    {topCats.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>🏆 Top 5 หมวดที่ใช้เยอะสุด</div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>เปรียบเทียบกับเดือนก่อนหน้า</div>
+      {topCats.map((c,i)=>{const up=c.change>0;const sym=c.prev>0?(up?"▲":"▼"):"NEW";const col=c.prev===0?t.ac:up?t.r:t.g;return(<div key={c.key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<topCats.length-1?`1px solid ${t.cb}`:"none"}}>
+        <div style={{width:24,height:24,borderRadius:"50%",background:`${c.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:c.color}}>{i+1}</div>
+        <span style={{fontSize:16}}>{c.icon}</span>
+        <span style={{flex:1,fontSize:12,fontWeight:500}}>{c.name}</span>
+        <span style={{fontSize:10,color:t.tm}}>เดือนก่อน {fB(c.prev)}</span>
+        <Badge color={col}>{sym} {c.prev>0?`${Math.abs(c.change).toFixed(0)}%`:""}</Badge>
+        <span style={{fontSize:13,fontWeight:600,minWidth:80,textAlign:"right"}}>{fB(c.value)}</span>
+      </div>);})}
+    </div>)}
+
+    {/* Trend by category - stacked bar */}
+    {trend.some(r=>r.total>0)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>📊 รายจ่ายแยกหมวด ({monthsBack} เดือน)</div>
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={trend} margin={{top:10,right:10,left:0,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.cb} vertical={false}/>
+          <XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/>
+          <YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(0)}K`:v}/>
+          <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={(v,n)=>[fB(v),EC.find(c=>c.v===n)?.l||n]}/>
+          <Legend wrapperStyle={{fontSize:10}} formatter={n=>EC.find(c=>c.v===n)?.l||n}/>
+          {EC.map((c,i)=>{const colors=["#EF4444","#F59E0B","#EC4899","#8B5CF6","#10B981","#3B82F6","#06B6D4","#6B7280"];return<Bar key={c.v} dataKey={c.v} stackId="a" fill={colors[i]}/>})}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>)}
+
+    {/* Savings rate trend */}
+    {srTrend.some(r=>r.income>0)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:18}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>💰 Savings Rate ({monthsBack} เดือน)</div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:12}}>% ของรายได้ที่เก็บออม (เกิน 20% = ดีมาก)</div>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={srTrend} margin={{top:10,right:10,left:0,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.cb}/>
+          <XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/>
+          <YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>`${v}%`} domain={[(min)=>Math.min(0,min),(max)=>Math.max(40,max)]}/>
+          <Tooltip contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:6,fontSize:11}} formatter={(v,n)=>n==="rate"?[`${v}%`,"Savings Rate"]:[fB(v),n]}/>
+          <ReferenceLine y={20} stroke={t.g} strokeDasharray="5 3" label={{value:"เป้า 20%",fill:t.g,fontSize:10,position:"insideTopRight"}}/>
+          <Line type="monotone" dataKey="rate" stroke={t.ac} strokeWidth={3} dot={{fill:t.ac,r:5}} activeDot={{r:7}}/>
+        </LineChart>
+      </ResponsiveContainer>
+    </div>)}
+
+    {pieData.length===0&&<Empty icon="📊" title="ยังไม่มีข้อมูลรายจ่าย" sub="เพิ่มรายการรายจ่ายเพื่อดูสถิติ" t={t}/>}
   </div>);
 }
 
@@ -967,7 +1153,7 @@ function CashFlowDetailPage({data,persist,t}){
 }
 
 /* ═══ TXN PAGE ═══ */
-function TxnPage({data,stats,onAdd,onDel,t}){
+function TxnPage({data,stats,onAdd,onEdit,onDel,t}){
   const[filter,setFilter]=useState("all");
   const[search,setSearch]=useState("");
   const[catFilter,setCatFilter]=useState("all");
@@ -1012,6 +1198,24 @@ function TxnPage({data,stats,onAdd,onDel,t}){
   const hasFilter=filter!=="all"||search||catFilter!=="all"||dateRange!=="month"||minAmt||maxAmt;
   const clearAll=()=>{setFilter("all");setSearch("");setCatFilter("all");setDateRange("month");setCustomFrom("");setCustomTo("");setMinAmt("");setMaxAmt("")};
   const ranges=[{k:"month",l:"เดือนนี้"},{k:"lastmonth",l:"เดือนก่อน"},{k:"3m",l:"3 เดือน"},{k:"6m",l:"6 เดือน"},{k:"year",l:"ปีนี้"},{k:"all",l:"ทั้งหมด"},{k:"custom",l:"กำหนดเอง"}];
+  const exportCSV=()=>{
+    if(!filtered.length){window.alert("ไม่มีรายการให้ส่งออก");return;}
+    const esc=v=>{const s=String(v??"").replace(/"/g,'""');return /[",\n]/.test(s)?`"${s}"`:s};
+    const rows=[["วันที่","ประเภท","หมวดหมู่","จำนวนเงิน","โน้ต"]];
+    filtered.forEach(tx=>{const cats=tx.type==="income"?IC:EC;const cat=cats.find(c=>c.v===tx.category);rows.push([tx.date,tx.type==="income"?"รายรับ":"รายจ่าย",cat?.l||tx.category,tx.amount,tx.note||""])});
+    rows.push([]);
+    rows.push(["สรุป",`${filtered.length} รายการ`,"","",""]);
+    rows.push(["รายรับรวม","","",sumInc,""]);
+    rows.push(["รายจ่ายรวม","","",sumExp,""]);
+    rows.push(["คงเหลือ","","",sumInc-sumExp,""]);
+    const csv="\uFEFF"+rows.map(r=>r.map(esc).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`wealthhub-transactions-${td()}.csv`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/>
@@ -1028,6 +1232,7 @@ function TxnPage({data,stats,onAdd,onDel,t}){
           {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:t.tm,fontSize:13}}>✕</button>}
         </div>
         <button onClick={()=>setShowAdv(s=>!s)} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${showAdv?t.ac:t.cb}`,borderRadius:8,cursor:"pointer",background:showAdv?`${t.ac}15`:"transparent",color:showAdv?t.ac:t.text,fontWeight:500,whiteSpace:"nowrap"}}>{showAdv?"⚙ ปิดตัวกรอง":"⚙ ตัวกรอง"}</button>
+        <button onClick={exportCSV} disabled={!filtered.length} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${t.g}40`,borderRadius:8,cursor:filtered.length?"pointer":"not-allowed",background:filtered.length?`${t.g}15`:"transparent",color:t.g,fontWeight:500,whiteSpace:"nowrap",opacity:filtered.length?1:0.4}} title="ส่งออกเป็น CSV (รายการที่กรองไว้)">📤 Export</button>
       </div>
 
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1090,7 +1295,8 @@ function TxnPage({data,stats,onAdd,onDel,t}){
             <div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})} · {cat.l}</div>
           </div>
           <span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span>
-          <button onClick={()=>onDel(tx.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}}>✕</button>
+          {onEdit&&<button onClick={()=>onEdit(tx)} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.ts}} title="แก้ไข">✏</button>}
+          <button onClick={()=>{if(window.confirm("ลบรายการนี้?"))onDel(tx.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}} title="ลบ">✕</button>
         </div>);
       })}</div>)}
   </div>);
@@ -2081,6 +2287,7 @@ function WealthHub(){
   const updateAsset=(id,f)=>{persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
   const delAsset=id=>persist({...data,assets:data.assets.filter(a=>a.id!==id)});
   const addTxn=f=>{persist({...data,transactions:[...data.transactions,{...f,id:uid(),amount:+f.amount}]});setModal(null)};
+  const updateTxn=(id,f)=>{persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount}:tx)});setModal(null)};
   const delTxn=id=>persist({...data,transactions:data.transactions.filter(tx=>tx.id!==id)});
   const addGoal=f=>{persist({...data,goals:[...data.goals,{...f,id:uid(),target:+f.target,saved:+f.saved}]});setModal(null)};
   const updateGoal=(id,f)=>{persist({...data,goals:data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g)});setModal(null)};
@@ -2148,7 +2355,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>
 
@@ -2196,10 +2403,11 @@ function WealthHub(){
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
       </div>)}
 
-      {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onDel={delTxn} t={t}/>}
+      {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} t={t}/>}
       {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
       {page==="calendar"&&<CalendarPage data={data} t={t} onAddTxn={dt=>setModal({type:"addTxn",date:dt})} setPage={setPage}/>}
       {page==="envelopes"&&<EnvelopesPage data={data} persist={persist} t={t}/>}
+      {page==="analytics"&&<AnalyticsPage data={data} stats={stats} t={t}/>}
       {page==="balance"&&<><BalancePage data={data} stats={stats} persist={persist} t={t}/><div style={{marginTop:14}}><NetWorthHistoryChart session={session} t={t}/></div></>}
       {page==="cashflow"&&<CashFlowPage data={data} stats={stats} t={t}/>}
       {page==="cfdetail"&&<CashFlowDetailPage data={data} persist={persist} t={t}/>}
@@ -2250,6 +2458,7 @@ function WealthHub(){
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
     <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date}/></Modal>
+    <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn}/>}</Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
