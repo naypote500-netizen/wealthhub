@@ -2406,67 +2406,178 @@ function NavIcon({name,size=26}){
   }
 }
 
+/* ═══ MENU ILLUSTRATION ═══
+ * Multi-color flat-design illustration per nav key. Designed to read
+ * clearly at small sizes (28-32px) and pop on a neutral circle.
+ */
+function MenuIllustration({navKey,size=30}){
+  const s={width:size,height:size,viewBox:"0 0 24 24",style:{display:"block"}};
+  switch(navKey){
+    case"dashboard":return<svg {...s}>
+      <rect x="3" y="3" width="8" height="9" rx="1.5" fill="#3B82F6"/>
+      <rect x="13" y="3" width="8" height="5" rx="1.5" fill="#10B981"/>
+      <rect x="13" y="10" width="8" height="11" rx="1.5" fill="#F59E0B"/>
+      <rect x="3" y="14" width="8" height="7" rx="1.5" fill="#EC4899"/>
+    </svg>;
+    case"portfolio":return<svg {...s}>
+      <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" fill="none" stroke="#78350F" strokeWidth="1.6" strokeLinecap="round"/>
+      <rect x="2.5" y="7" width="19" height="13" rx="1.8" fill="#92400E"/>
+      <rect x="2.5" y="12" width="19" height="2.2" fill="#FBBF24"/>
+      <rect x="10.5" y="11" width="3" height="4" rx="0.4" fill="#FCD34D"/>
+      <rect x="2.5" y="7" width="19" height="3" fill="#A16207" opacity="0.5"/>
+    </svg>;
+    case"txn":return<svg {...s}>
+      <path d="M7 4v14m-3-3 3 3 3-3" fill="none" stroke="#10B981" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M17 20V6m-3 3 3-3 3 3" fill="none" stroke="#EF4444" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+    case"calendar":return<svg {...s}>
+      <rect x="3" y="5" width="18" height="16" rx="2" fill="#FFFFFF"/>
+      <rect x="3" y="5" width="18" height="6" rx="2" fill="#EF4444"/>
+      <rect x="3" y="9" width="18" height="2" fill="#EF4444"/>
+      <rect x="6.5" y="3" width="2" height="4.5" rx="0.8" fill="#7F1D1D"/>
+      <rect x="15.5" y="3" width="2" height="4.5" rx="0.8" fill="#7F1D1D"/>
+      <circle cx="8" cy="14.5" r="1" fill="#3B82F6"/>
+      <circle cx="12" cy="14.5" r="1" fill="#10B981"/>
+      <circle cx="16" cy="14.5" r="1" fill="#F59E0B"/>
+      <circle cx="8" cy="18.5" r="1" fill="#9CA3AF"/>
+      <circle cx="12" cy="18.5" r="1.7" fill="#EF4444"/>
+      <circle cx="16" cy="18.5" r="1" fill="#9CA3AF"/>
+      <rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="#D1D5DB" strokeWidth="0.5"/>
+    </svg>;
+    case"recurring":return<svg {...s}>
+      <path d="M3.5 12a8.5 8.5 0 0 1 14-6.5" fill="none" stroke="#06B6D4" strokeWidth="2.4" strokeLinecap="round"/>
+      <path d="M20.5 12a8.5 8.5 0 0 1-14 6.5" fill="none" stroke="#0891B2" strokeWidth="2.4" strokeLinecap="round"/>
+      <path d="M18 2v4h-4" fill="none" stroke="#06B6D4" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6 22v-4h4" fill="none" stroke="#0891B2" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+    case"envelopes":return<svg {...s}>
+      <rect x="2" y="6" width="20" height="14" rx="1.5" fill="#FBCFE8"/>
+      <path d="M2 8l10 6.5L22 8" fill="none" stroke="#EC4899" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M2 20l7-6M22 20l-7-6" fill="none" stroke="#F9A8D4" strokeWidth="1.4"/>
+      <circle cx="12" cy="13" r="3" fill="#DC2626"/>
+      <path d="M10.6 13l1 1.1 2-2.1" fill="none" stroke="#FFF" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+    case"analytics":return<svg {...s}>
+      <rect x="3" y="20" width="18" height="1.6" rx="0.5" fill="#9CA3AF"/>
+      <rect x="3" y="3" width="1.6" height="18" rx="0.5" fill="#9CA3AF"/>
+      <rect x="6.5" y="14" width="3.5" height="6" rx="0.6" fill="#3B82F6"/>
+      <rect x="11" y="9" width="3.5" height="11" rx="0.6" fill="#10B981"/>
+      <rect x="15.5" y="5" width="3.5" height="15" rx="0.6" fill="#F59E0B"/>
+    </svg>;
+    case"balance":return<svg {...s}>
+      <rect x="11" y="3" width="2" height="18" rx="0.4" fill="#92400E"/>
+      <rect x="6" y="20" width="12" height="2" rx="0.6" fill="#78350F"/>
+      <line x1="3" y1="6" x2="21" y2="6" stroke="#92400E" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M3 6 L 6 13 H 0 Z" fill="#FBBF24"/>
+      <path d="M21 6 L 24 13 H 18 Z" fill="#FBBF24"/>
+      <ellipse cx="3" cy="13" rx="3.5" ry="0.8" fill="#D97706"/>
+      <ellipse cx="21" cy="13" rx="3.5" ry="0.8" fill="#D97706"/>
+      <circle cx="12" cy="4" r="1.5" fill="#FBBF24"/>
+    </svg>;
+    case"cashflow":return<svg {...s}>
+      <path d="M2 7c2 0 2.5-2.5 5-2.5s 2.5 2.5 5 2.5 2.5-2.5 5-2.5 2.5 2.5 5 2.5" fill="none" stroke="#3B82F6" strokeWidth="2.2" strokeLinecap="round"/>
+      <path d="M2 13c2 0 2.5-2.5 5-2.5s 2.5 2.5 5 2.5 2.5-2.5 5-2.5 2.5 2.5 5 2.5" fill="none" stroke="#06B6D4" strokeWidth="2.2" strokeLinecap="round"/>
+      <path d="M2 19c2 0 2.5-2.5 5-2.5s 2.5 2.5 5 2.5 2.5-2.5 5-2.5 2.5 2.5 5 2.5" fill="none" stroke="#0891B2" strokeWidth="2.2" strokeLinecap="round"/>
+    </svg>;
+    case"cfdetail":return<svg {...s}>
+      <path d="M3 18 L 12 22 L 21 18 L 21 16 L 12 20 L 3 16 Z" fill="#10B981"/>
+      <path d="M3 13 L 12 17 L 21 13 L 21 11 L 12 15 L 3 11 Z" fill="#06B6D4"/>
+      <path d="M12 3 L 3 7 L 12 11 L 21 7 Z" fill="#3B82F6"/>
+    </svg>;
+    case"goals":return<svg {...s}>
+      <circle cx="12" cy="12" r="10" fill="#FFFFFF" stroke="#9CA3AF" strokeWidth="0.6"/>
+      <circle cx="12" cy="12" r="8" fill="#EF4444"/>
+      <circle cx="12" cy="12" r="6" fill="#FFFFFF"/>
+      <circle cx="12" cy="12" r="4" fill="#EF4444"/>
+      <circle cx="12" cy="12" r="2" fill="#FFFFFF"/>
+      <circle cx="12" cy="12" r="0.9" fill="#EF4444"/>
+    </svg>;
+    case"debts":return<svg {...s}>
+      <rect x="2" y="5" width="20" height="14" rx="2" fill="#7C3AED"/>
+      <rect x="2" y="9" width="20" height="3" fill="#1F2937"/>
+      <rect x="5" y="14" width="6" height="3" rx="0.4" fill="#FBBF24"/>
+      <rect x="6" y="15" width="4" height="0.8" fill="#92400E" opacity="0.6"/>
+      <rect x="13" y="15" width="6" height="0.8" rx="0.3" fill="#FFFFFF"/>
+      <rect x="13" y="16.6" width="4" height="0.8" rx="0.3" fill="#FFFFFF"/>
+    </svg>;
+    case"dca":return<svg {...s}>
+      <rect x="4" y="2" width="16" height="20" rx="2" fill="#6B7280"/>
+      <rect x="6" y="4" width="12" height="4.5" rx="0.6" fill="#86EFAC"/>
+      <text x="12" y="7.6" fontSize="3.4" fontWeight="700" fill="#065F46" textAnchor="middle">123</text>
+      <rect x="6" y="10" width="3" height="3" rx="0.5" fill="#EF4444"/>
+      <rect x="10.5" y="10" width="3" height="3" rx="0.5" fill="#3B82F6"/>
+      <rect x="15" y="10" width="3" height="3" rx="0.5" fill="#FBBF24"/>
+      <rect x="6" y="14" width="3" height="3" rx="0.5" fill="#3B82F6"/>
+      <rect x="10.5" y="14" width="3" height="3" rx="0.5" fill="#3B82F6"/>
+      <rect x="15" y="14" width="3" height="3" rx="0.5" fill="#3B82F6"/>
+      <rect x="6" y="18" width="7.5" height="3" rx="0.5" fill="#3B82F6"/>
+      <rect x="15" y="18" width="3" height="3" rx="0.5" fill="#EF4444"/>
+    </svg>;
+    case"retire":return<svg {...s}>
+      <g stroke="#FBBF24" strokeWidth="2.2" strokeLinecap="round">
+        <line x1="12" y1="2" x2="12" y2="4.5"/>
+        <line x1="12" y1="19.5" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="4.5" y2="12"/>
+        <line x1="19.5" y1="12" x2="22" y2="12"/>
+        <line x1="4.5" y1="4.5" x2="6.3" y2="6.3"/>
+        <line x1="17.7" y1="17.7" x2="19.5" y2="19.5"/>
+        <line x1="4.5" y1="19.5" x2="6.3" y2="17.7"/>
+        <line x1="17.7" y1="6.3" x2="19.5" y2="4.5"/>
+      </g>
+      <circle cx="12" cy="12" r="5" fill="#F59E0B"/>
+      <circle cx="12" cy="12" r="3.2" fill="#FBBF24"/>
+    </svg>;
+    case"plan":return<svg {...s}>
+      <path d="M19.5 13.8c1.4-1.4 2.5-2.9 2.5-5A4.7 4.7 0 0 0 17.3 4c-1.6 0-2.7.5-4 1.8-1.3-1.3-2.4-1.8-4-1.8A4.7 4.7 0 0 0 4.6 8.8c0 2.1 1.1 3.6 2.5 5l6.2 6.2 6.2-6.2Z" fill="#EC4899"/>
+      <path d="M3.5 12.5h5.6l.6-1.2 1.7 4.2 1.9-6.5 1.4 3.5h5.5" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+    case"tax":return<svg {...s}>
+      <path d="M5 2v20l1.5-1 1.5 1 1.5-1 1.5 1 1.5-1 1.5 1 1.5-1 1.5 1 1.5-1 V 2 Z" fill="#FFFFFF" stroke="#9CA3AF" strokeWidth="0.7"/>
+      <path d="M8 6.5h8" stroke="#3B82F6" strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M8 10h8" stroke="#374151" strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M8 13h5" stroke="#374151" strokeWidth="1.2" strokeLinecap="round"/>
+      <circle cx="16" cy="16" r="3.6" fill="#EF4444"/>
+      <text x="16" y="17.4" fontSize="3.6" fontWeight="800" fill="#FFFFFF" textAnchor="middle">฿</text>
+    </svg>;
+    case"reports":return<svg {...s}>
+      <path d="M5 2h10l5 5v15a1.5 1.5 0 0 1-1.5 1.5h-13.5A1.5 1.5 0 0 1 4 22V3.5A1.5 1.5 0 0 1 5.5 2Z" fill="#FFFFFF" stroke="#9CA3AF" strokeWidth="0.7"/>
+      <path d="M14 2v5h6" fill="#E5E7EB" stroke="#9CA3AF" strokeWidth="0.7"/>
+      <rect x="6.5" y="12" width="2.2" height="6" rx="0.4" fill="#3B82F6"/>
+      <rect x="9.5" y="14" width="2.2" height="4" rx="0.4" fill="#10B981"/>
+      <rect x="12.5" y="10" width="2.2" height="8" rx="0.4" fill="#F59E0B"/>
+      <rect x="15.5" y="13" width="2.2" height="5" rx="0.4" fill="#EC4899"/>
+    </svg>;
+    case"challenges":return<svg {...s}>
+      <path d="M5 4H3.5a2 2 0 1 0 0 4H6" fill="none" stroke="#D97706" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M19 4h1.5a2 2 0 1 1 0 4H18" fill="none" stroke="#D97706" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M5 2h14v6.5a7 7 0 0 1-14 0V2Z" fill="#FBBF24"/>
+      <path d="M5 2h14v3a7 7 0 0 1-14 0V2Z" fill="#FCD34D"/>
+      <path d="M9 14.5h6L14.5 19h-5z" fill="#F59E0B"/>
+      <rect x="6.5" y="20" width="11" height="2.5" rx="0.6" fill="#92400E"/>
+      <text x="12" y="9" fontSize="5.5" fontWeight="800" fill="#92400E" textAnchor="middle">★</text>
+    </svg>;
+    case"about":return<svg {...s}>
+      <circle cx="12" cy="12" r="10" fill="#3B82F6"/>
+      <circle cx="12" cy="7.5" r="1.4" fill="#FFFFFF"/>
+      <rect x="10.7" y="10.5" width="2.6" height="7.5" rx="1" fill="#FFFFFF"/>
+    </svg>;
+    default:return null;
+  }
+}
+
 /* ═══ MENU AVATAR ═══
- * Mesh-gradient avatar (iOS-style abstract). 3-color radial mesh
- * with deterministic blob positions seeded from the nav key, so each
- * menu item has a unique-but-cohesive composition.
+ * Uniform soft-cream circle background for every menu item.
+ * Colorful per-item illustration sits centered on top.
  */
 function MenuAvatar({navKey,size=56}){
-  // Hash the key into 4 floats [0,1) — used for blob positions
-  let h=0;for(let i=0;i<navKey.length;i++)h=(h*131+navKey.charCodeAt(i))>>>0;
-  const r=n=>(((h+n*9301+49297)%233280)/233280);
-  // 3 cohesive color stops per item (primary, light pair, accent)
-  const PAL={
-    dashboard:["#0EA5E9","#7DD3FC","#A78BFA"],portfolio:["#8B5CF6","#C4B5FD","#F0ABFC"],
-    txn:["#10B981","#86EFAC","#5EEAD4"],calendar:["#3B82F6","#93C5FD","#A5B4FC"],
-    recurring:["#06B6D4","#67E8F9","#7DD3FC"],envelopes:["#EC4899","#F9A8D4","#FDA4AF"],
-    analytics:["#F59E0B","#FCD34D","#FDBA74"],balance:["#14B8A6","#5EEAD4","#86EFAC"],
-    cashflow:["#22C55E","#86EFAC","#5EEAD4"],cfdetail:["#65A30D","#BEF264","#86EFAC"],
-    goals:["#FBBF24","#FDE68A","#FCA5A5"],debts:["#EF4444","#FCA5A5","#FDA4AF"],
-    dca:["#6366F1","#A5B4FC","#C4B5FD"],retire:["#F97316","#FDBA74","#FCD34D"],
-    plan:["#0D9488","#5EEAD4","#86EFAC"],tax:["#F472B6","#F9A8D4","#FDA4AF"],
-    reports:["#0891B2","#67E8F9","#7DD3FC"],challenges:["#EAB308","#FDE68A","#FCD34D"],
-    about:["#64748B","#CBD5E1","#94A3B8"],
-  };
-  const[c1,c2,c3]=PAL[navKey]||["#0EA5E9","#7DD3FC","#A78BFA"];
-  // Blob positions (px in a 56-unit viewBox, scales with size)
-  const b1x=8+r(0)*16,b1y=6+r(1)*14;
-  const b2x=24+r(2)*22,b2y=22+r(3)*22;
-  const rot=Math.floor(r(4)*360);
-  return(<div style={{position:"relative",width:size,height:size,flexShrink:0,borderRadius:"50%",boxShadow:`0 4px 14px ${c1}55, 0 1px 2px ${c1}40`}}>
-    <svg width={size} height={size} viewBox="0 0 56 56" style={{borderRadius:"50%",display:"block",position:"absolute",inset:0}}>
-      <defs>
-        <linearGradient id={`bg-${navKey}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={c1}/>
-          <stop offset="100%" stopColor={c2}/>
-        </linearGradient>
-        <radialGradient id={`b1-${navKey}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={c3} stopOpacity="0.85"/>
-          <stop offset="100%" stopColor={c3} stopOpacity="0"/>
-        </radialGradient>
-        <radialGradient id={`b2-${navKey}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55"/>
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
-        </radialGradient>
-        <radialGradient id={`shine-${navKey}`} cx="30%" cy="22%" r="35%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7"/>
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
-        </radialGradient>
-        <clipPath id={`clip-${navKey}`}><circle cx="28" cy="28" r="28"/></clipPath>
-      </defs>
-      <g clipPath={`url(#clip-${navKey})`}>
-        <rect width="56" height="56" fill={`url(#bg-${navKey})`}/>
-        <ellipse cx={b2x} cy={b2y} rx="22" ry="22" fill={`url(#b1-${navKey})`} transform={`rotate(${rot} ${b2x} ${b2y})`}/>
-        <ellipse cx={b1x} cy={b1y} rx="14" ry="14" fill={`url(#b2-${navKey})`}/>
-        <rect width="56" height="56" fill={`url(#shine-${navKey})`}/>
-        <circle cx="28" cy="28" r="27" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
-        <circle cx="28" cy="28" r="27.5" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="1"/>
-      </g>
-    </svg>
-    {/* White illustration overlay — clearly represents the menu */}
-    <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.25))",pointerEvents:"none"}}>
-      <NavIcon name={navKey} size={Math.round(size*0.5)}/>
-    </div>
+  return(<div style={{
+    position:"relative",width:size,height:size,flexShrink:0,
+    borderRadius:"50%",
+    background:"linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 100%)",
+    boxShadow:"0 2px 6px rgba(15,23,42,0.08), inset 0 0 0 1px rgba(15,23,42,0.05)",
+    display:"flex",alignItems:"center",justifyContent:"center"
+  }}>
+    <MenuIllustration navKey={navKey} size={Math.round(size*0.62)}/>
   </div>);
 }
 
