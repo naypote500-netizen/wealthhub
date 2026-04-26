@@ -2406,20 +2406,76 @@ function NavIcon({name,size=26}){
   }
 }
 
+/* ═══ MENU AVATAR ═══
+ * Mesh-gradient avatar (iOS-style abstract). 3-color radial mesh
+ * with deterministic blob positions seeded from the nav key, so each
+ * menu item has a unique-but-cohesive composition.
+ */
+function MenuAvatar({navKey,size=56}){
+  // Hash the key into 4 floats [0,1) — used for blob positions
+  let h=0;for(let i=0;i<navKey.length;i++)h=(h*131+navKey.charCodeAt(i))>>>0;
+  const r=n=>(((h+n*9301+49297)%233280)/233280);
+  // 3 cohesive color stops per item (primary, light pair, accent)
+  const PAL={
+    dashboard:["#0EA5E9","#7DD3FC","#A78BFA"],portfolio:["#8B5CF6","#C4B5FD","#F0ABFC"],
+    txn:["#10B981","#86EFAC","#5EEAD4"],calendar:["#3B82F6","#93C5FD","#A5B4FC"],
+    recurring:["#06B6D4","#67E8F9","#7DD3FC"],envelopes:["#EC4899","#F9A8D4","#FDA4AF"],
+    analytics:["#F59E0B","#FCD34D","#FDBA74"],balance:["#14B8A6","#5EEAD4","#86EFAC"],
+    cashflow:["#22C55E","#86EFAC","#5EEAD4"],cfdetail:["#65A30D","#BEF264","#86EFAC"],
+    goals:["#FBBF24","#FDE68A","#FCA5A5"],debts:["#EF4444","#FCA5A5","#FDA4AF"],
+    dca:["#6366F1","#A5B4FC","#C4B5FD"],retire:["#F97316","#FDBA74","#FCD34D"],
+    plan:["#0D9488","#5EEAD4","#86EFAC"],tax:["#F472B6","#F9A8D4","#FDA4AF"],
+    reports:["#0891B2","#67E8F9","#7DD3FC"],challenges:["#EAB308","#FDE68A","#FCD34D"],
+    about:["#64748B","#CBD5E1","#94A3B8"],
+  };
+  const[c1,c2,c3]=PAL[navKey]||["#0EA5E9","#7DD3FC","#A78BFA"];
+  // Blob positions (px in a 56-unit viewBox, scales with size)
+  const b1x=8+r(0)*16,b1y=6+r(1)*14;
+  const b2x=24+r(2)*22,b2y=22+r(3)*22;
+  const rot=Math.floor(r(4)*360);
+  return(<svg width={size} height={size} viewBox="0 0 56 56" style={{borderRadius:"50%",display:"block",flexShrink:0,boxShadow:`0 4px 14px ${c1}55, 0 1px 2px ${c1}40`}}>
+    <defs>
+      <linearGradient id={`bg-${navKey}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor={c1}/>
+        <stop offset="100%" stopColor={c2}/>
+      </linearGradient>
+      <radialGradient id={`b1-${navKey}`} cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor={c3} stopOpacity="0.85"/>
+        <stop offset="100%" stopColor={c3} stopOpacity="0"/>
+      </radialGradient>
+      <radialGradient id={`b2-${navKey}`} cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55"/>
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
+      </radialGradient>
+      <radialGradient id={`shine-${navKey}`} cx="30%" cy="22%" r="35%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7"/>
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
+      </radialGradient>
+      <clipPath id={`clip-${navKey}`}><circle cx="28" cy="28" r="28"/></clipPath>
+    </defs>
+    <g clipPath={`url(#clip-${navKey})`}>
+      {/* base diagonal gradient */}
+      <rect width="56" height="56" fill={`url(#bg-${navKey})`}/>
+      {/* big accent blob */}
+      <ellipse cx={b2x} cy={b2y} rx="22" ry="22" fill={`url(#b1-${navKey})`} transform={`rotate(${rot} ${b2x} ${b2y})`}/>
+      {/* white soft glow blob */}
+      <ellipse cx={b1x} cy={b1y} rx="14" ry="14" fill={`url(#b2-${navKey})`}/>
+      {/* top-left shine */}
+      <rect width="56" height="56" fill={`url(#shine-${navKey})`}/>
+      {/* subtle inner ring */}
+      <circle cx="28" cy="28" r="27" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
+      <circle cx="28" cy="28" r="27.5" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="1"/>
+    </g>
+  </svg>);
+}
+
 /* ═══ MOBILE MENU PAGE ═══
- * MochiHub-style card list: circular gradient avatar (no icons) + title +
+ * MochiHub-style card list: mesh-gradient avatar (no icons) + title +
  * group/number subtitle. Each row a tappable card. Mobile only.
  */
 function MobileMenuPage({page,setPage,t}){
   const groups=[...new Set(NAV.map(n=>n.g))];
   const go=k=>{haptic(8);setPage(k)};
-  // Per-item secondary color for two-tone gradient (paired by nav key for variety)
-  const PAIR={dashboard:"#7DD3FC",portfolio:"#C4B5FD",txn:"#86EFAC",calendar:"#93C5FD",
-    recurring:"#67E8F9",envelopes:"#F9A8D4",analytics:"#FCD34D",
-    balance:"#5EEAD4",cashflow:"#86EFAC",cfdetail:"#BEF264",
-    goals:"#FDE68A",debts:"#FCA5A5",
-    dca:"#A5B4FC",retire:"#FDBA74",plan:"#5EEAD4",tax:"#F9A8D4",
-    reports:"#67E8F9",challenges:"#FDE68A",about:"#CBD5E1"};
   let counter=0;
   return(<div style={{display:"flex",flexDirection:"column",gap:18,padding:"2px 0 8px"}}>
     {groups.map(g=>(<div key={g}>
@@ -2429,7 +2485,6 @@ function MobileMenuPage({page,setPage,t}){
           counter++;
           const num=counter;
           const c1=NAV_COLORS[n.k]||t.ac;
-          const c2=PAIR[n.k]||c1;
           const isActive=page===n.k;
           return(<button key={n.k} onClick={()=>go(n.k)} style={{
             display:"flex",alignItems:"center",gap:14,
@@ -2446,20 +2501,7 @@ function MobileMenuPage({page,setPage,t}){
             onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
             onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
           >
-            {/* Decorative gradient avatar (no icon) */}
-            <div style={{
-              width:56,height:56,borderRadius:"50%",
-              background:`linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
-              flexShrink:0,position:"relative",overflow:"hidden",
-              boxShadow:`0 4px 12px ${c1}40, inset 0 1px 1px rgba(255,255,255,0.4)`
-            }}>
-              {/* Abstract decorative bubbles */}
-              <div style={{position:"absolute",top:"-25%",right:"-15%",width:"65%",height:"65%",borderRadius:"50%",background:"rgba(255,255,255,0.22)"}}/>
-              <div style={{position:"absolute",bottom:"-20%",left:"-10%",width:"45%",height:"45%",borderRadius:"50%",background:"rgba(255,255,255,0.14)"}}/>
-              <div style={{position:"absolute",top:"35%",left:"55%",width:"18%",height:"18%",borderRadius:"50%",background:"rgba(255,255,255,0.35)"}}/>
-              {/* Soft inner ring */}
-              <div style={{position:"absolute",inset:3,borderRadius:"50%",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.2)",pointerEvents:"none"}}/>
-            </div>
+            <MenuAvatar navKey={n.k} size={56}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:3,letterSpacing:-0.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.l}</div>
               <div style={{fontSize:11,color:t.tm,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{num}. {g}</div>
