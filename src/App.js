@@ -2433,40 +2433,41 @@ function MenuAvatar({navKey,size=56}){
   const b1x=8+r(0)*16,b1y=6+r(1)*14;
   const b2x=24+r(2)*22,b2y=22+r(3)*22;
   const rot=Math.floor(r(4)*360);
-  return(<svg width={size} height={size} viewBox="0 0 56 56" style={{borderRadius:"50%",display:"block",flexShrink:0,boxShadow:`0 4px 14px ${c1}55, 0 1px 2px ${c1}40`}}>
-    <defs>
-      <linearGradient id={`bg-${navKey}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor={c1}/>
-        <stop offset="100%" stopColor={c2}/>
-      </linearGradient>
-      <radialGradient id={`b1-${navKey}`} cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor={c3} stopOpacity="0.85"/>
-        <stop offset="100%" stopColor={c3} stopOpacity="0"/>
-      </radialGradient>
-      <radialGradient id={`b2-${navKey}`} cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55"/>
-        <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
-      </radialGradient>
-      <radialGradient id={`shine-${navKey}`} cx="30%" cy="22%" r="35%">
-        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7"/>
-        <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
-      </radialGradient>
-      <clipPath id={`clip-${navKey}`}><circle cx="28" cy="28" r="28"/></clipPath>
-    </defs>
-    <g clipPath={`url(#clip-${navKey})`}>
-      {/* base diagonal gradient */}
-      <rect width="56" height="56" fill={`url(#bg-${navKey})`}/>
-      {/* big accent blob */}
-      <ellipse cx={b2x} cy={b2y} rx="22" ry="22" fill={`url(#b1-${navKey})`} transform={`rotate(${rot} ${b2x} ${b2y})`}/>
-      {/* white soft glow blob */}
-      <ellipse cx={b1x} cy={b1y} rx="14" ry="14" fill={`url(#b2-${navKey})`}/>
-      {/* top-left shine */}
-      <rect width="56" height="56" fill={`url(#shine-${navKey})`}/>
-      {/* subtle inner ring */}
-      <circle cx="28" cy="28" r="27" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
-      <circle cx="28" cy="28" r="27.5" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="1"/>
-    </g>
-  </svg>);
+  return(<div style={{position:"relative",width:size,height:size,flexShrink:0,borderRadius:"50%",boxShadow:`0 4px 14px ${c1}55, 0 1px 2px ${c1}40`}}>
+    <svg width={size} height={size} viewBox="0 0 56 56" style={{borderRadius:"50%",display:"block",position:"absolute",inset:0}}>
+      <defs>
+        <linearGradient id={`bg-${navKey}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor={c1}/>
+          <stop offset="100%" stopColor={c2}/>
+        </linearGradient>
+        <radialGradient id={`b1-${navKey}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={c3} stopOpacity="0.85"/>
+          <stop offset="100%" stopColor={c3} stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id={`b2-${navKey}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55"/>
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id={`shine-${navKey}`} cx="30%" cy="22%" r="35%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7"/>
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
+        </radialGradient>
+        <clipPath id={`clip-${navKey}`}><circle cx="28" cy="28" r="28"/></clipPath>
+      </defs>
+      <g clipPath={`url(#clip-${navKey})`}>
+        <rect width="56" height="56" fill={`url(#bg-${navKey})`}/>
+        <ellipse cx={b2x} cy={b2y} rx="22" ry="22" fill={`url(#b1-${navKey})`} transform={`rotate(${rot} ${b2x} ${b2y})`}/>
+        <ellipse cx={b1x} cy={b1y} rx="14" ry="14" fill={`url(#b2-${navKey})`}/>
+        <rect width="56" height="56" fill={`url(#shine-${navKey})`}/>
+        <circle cx="28" cy="28" r="27" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
+        <circle cx="28" cy="28" r="27.5" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="1"/>
+      </g>
+    </svg>
+    {/* White illustration overlay — clearly represents the menu */}
+    <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.25))",pointerEvents:"none"}}>
+      <NavIcon name={navKey} size={Math.round(size*0.5)}/>
+    </div>
+  </div>);
 }
 
 /* ═══ MOBILE MENU PAGE ═══
