@@ -2372,6 +2372,37 @@ const NAV_COLORS={
   reports:"#0891B2",challenges:"#FACC15",about:"#94A3B8",
 };
 
+/* ═══ NAV ICONS (Lucide-style SVG) ═══
+ * Cohesive line-icon set used in MobileMenuSheet.
+ * 24×24 viewBox, stroke=currentColor, strokeWidth=2, round caps/joins.
+ * Renders white on the gradient tile.
+ */
+function NavIcon({name,size=26}){
+  const s={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+  switch(name){
+    case"dashboard":return<svg {...s}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>;
+    case"portfolio":return<svg {...s}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><path d="M2 13h20"/></svg>;
+    case"txn":return<svg {...s}><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>;
+    case"calendar":return<svg {...s}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>;
+    case"recurring":return<svg {...s}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>;
+    case"envelopes":return<svg {...s}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>;
+    case"analytics":return<svg {...s}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>;
+    case"balance":return<svg {...s}><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>;
+    case"cashflow":return<svg {...s}><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2C17 7 17 5 19.5 5c1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>;
+    case"cfdetail":return<svg {...s}><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>;
+    case"goals":return<svg {...s}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+    case"debts":return<svg {...s}><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/><path d="M6 15h2"/><path d="M11 15h3"/></svg>;
+    case"dca":return<svg {...s}><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M8 6h8"/><path d="M16 14v4"/><circle cx="8" cy="10" r=".5" fill="currentColor"/><circle cx="12" cy="10" r=".5" fill="currentColor"/><circle cx="16" cy="10" r=".5" fill="currentColor"/><circle cx="8" cy="14" r=".5" fill="currentColor"/><circle cx="12" cy="14" r=".5" fill="currentColor"/><circle cx="8" cy="18" r=".5" fill="currentColor"/><circle cx="12" cy="18" r=".5" fill="currentColor"/></svg>;
+    case"retire":return<svg {...s}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
+    case"plan":return<svg {...s}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>;
+    case"tax":return<svg {...s}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>;
+    case"reports":return<svg {...s}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>;
+    case"challenges":return<svg {...s}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>;
+    case"about":return<svg {...s}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+    default:return null;
+  }
+}
+
 function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,userEmail}){
   const[mounted,setMounted]=useState(false);
   const[visible,setVisible]=useState(false);
@@ -2397,7 +2428,14 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
 
   if(!mounted)return null;
 
-  const themes=[{k:"light",i:"☀️",l:"Light"},{k:"paper",i:"📄",l:"Paper"},{k:"cream",i:"🍵",l:"Cream"},{k:"dark",i:"🌙",l:"Dark"}];
+  const themeIcon=k=>{
+    const sv={width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+    if(k==="light")return<svg {...sv}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
+    if(k==="dark")return<svg {...sv}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
+    if(k==="paper")return<svg {...sv}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>;
+    return<svg {...sv}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v3"/><path d="M10 2v3"/><path d="M14 2v3"/></svg>;
+  };
+  const themes=[{k:"light",l:"Light"},{k:"paper",l:"Paper"},{k:"cream",l:"Cream"},{k:"dark",l:"Dark"}];
   const groups=[...new Set(NAV.map(n=>n.g))];
   const go=k=>{haptic(8);setPage(k);onClose()};
 
@@ -2426,10 +2464,14 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
               onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
               onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
             >
-              <div style={{width:56,height:56,borderRadius:14,background:`linear-gradient(135deg, ${color}, ${color}cc)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}`:`0 6px 16px ${color}40, 0 2px 4px ${color}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,color:"#fff",fontWeight:700,position:"relative",overflow:"hidden"}}>
-                {/* Subtle gloss highlight */}
-                <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 50%)",pointerEvents:"none"}}/>
-                <span style={{position:"relative",lineHeight:1,filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.2))"}}>{n.i}</span>
+              <div style={{width:58,height:58,borderRadius:16,background:`linear-gradient(140deg, ${color} 0%, ${color}d9 60%, ${color}b3 100%)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}, 0 8px 18px ${color}55`:`0 8px 18px ${color}45, 0 2px 5px ${color}30, inset 0 1px 0 rgba(255,255,255,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",position:"relative",overflow:"hidden"}}>
+                {/* Top gloss highlight */}
+                <div style={{position:"absolute",top:0,left:0,right:0,height:"50%",background:"linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%)",pointerEvents:"none",borderRadius:"16px 16px 0 0"}}/>
+                {/* Soft inner border */}
+                <div style={{position:"absolute",inset:0,borderRadius:16,boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.12)",pointerEvents:"none"}}/>
+                <div style={{position:"relative",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.18))",display:"flex"}}>
+                  <NavIcon name={n.k} size={26}/>
+                </div>
               </div>
               <span style={{fontSize:11,fontWeight:isActive?700:500,color:isActive?color:t.text,textAlign:"center",lineHeight:1.3,minHeight:28,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{n.l}</span>
             </button>);
@@ -2441,16 +2483,19 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
       <div style={{marginTop:8,marginBottom:18}}>
         <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>ธีม</div>
         <div style={{display:"flex",gap:8,padding:"0 4px"}}>
-          {themes.map(th=>(<button key={th.k} onClick={()=>{haptic(5);setTheme(th.k)}} style={{flex:1,padding:"14px 4px",border:`2px solid ${theme===th.k?t.ac:t.cb}`,borderRadius:12,background:theme===th.k?`${t.ac}15`:t.card,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,transition:"all .15s",WebkitTapHighlightColor:"transparent"}}>
-            <span style={{fontSize:22,lineHeight:1}}>{th.i}</span>
-            <span style={{fontSize:10,fontWeight:theme===th.k?700:500,color:theme===th.k?t.ac:t.ts}}>{th.l}</span>
-          </button>))}
+          {themes.map(th=>{const sel=theme===th.k;return(<button key={th.k} onClick={()=>{haptic(5);setTheme(th.k)}} style={{flex:1,padding:"14px 4px",border:`2px solid ${sel?t.ac:t.cb}`,borderRadius:12,background:sel?`${t.ac}15`:t.card,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all .15s",WebkitTapHighlightColor:"transparent",color:sel?t.ac:t.ts}}>
+            <div style={{lineHeight:1,display:"flex"}}>{themeIcon(th.k)}</div>
+            <span style={{fontSize:10,fontWeight:sel?700:500}}>{th.l}</span>
+          </button>)})}
         </div>
       </div>
 
       {/* Logout */}
       {onLogout&&<div style={{padding:"0 4px"}}>
-        <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:"14px",border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>🚪 ออกจากระบบ</button>
+        <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:"14px",border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          ออกจากระบบ
+        </button>
       </div>}
     </div>
   </div>);
@@ -2459,18 +2504,22 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
 function BottomTabBar({page,setPage,t,onMore,disabled}){
   if(disabled)return null;
   const tabs=[
-    {k:"dashboard",i:"⬡",l:"หน้าแรก"},
-    {k:"txn",i:"⇄",l:"รายการ"},
-    {k:"analytics",i:"📊",l:"วิเคราะห์"},
-    {k:"envelopes",i:"💌",l:"ซองเงิน"},
-    {k:"_more",i:"☰",l:"เพิ่มเติม"},
+    {k:"dashboard",l:"หน้าแรก"},
+    {k:"txn",l:"รายการ"},
+    {k:"analytics",l:"วิเคราะห์"},
+    {k:"envelopes",l:"ซองเงิน"},
+    {k:"_more",l:"เพิ่มเติม"},
   ];
+  // SVG menu icon for "_more"
+  const MoreIcon=({size=22})=>(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg>);
   return(<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:97,background:t.card,borderTop:`1px solid ${t.cb}`,boxShadow:"0 -2px 10px rgba(0,0,0,0.06)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)"}}>
-    <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:58}}>
-      {tabs.map(tab=>{const active=tab.k!=="_more"&&page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>tab.k==="_more"?onMore():setPage(tab.k)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s"}}>
+    <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:60}}>
+      {tabs.map(tab=>{const active=tab.k!=="_more"&&page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>tab.k==="_more"?onMore():setPage(tab.k)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s",WebkitTapHighlightColor:"transparent"}}>
         {active&&<div style={{position:"absolute",top:0,left:"30%",right:"30%",height:3,background:t.ac,borderRadius:"0 0 3px 3px"}}/>}
-        <span style={{fontSize:20,lineHeight:1}}>{tab.i}</span>
-        <span style={{fontSize:10,fontWeight:active?600:400,letterSpacing:0.2}}>{tab.l}</span>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+          {tab.k==="_more"?<MoreIcon size={22}/>:<NavIcon name={tab.k} size={22}/>}
+        </div>
+        <span style={{fontSize:10,fontWeight:active?600:500,letterSpacing:0.2}}>{tab.l}</span>
       </button>)})}
     </div>
   </div>);
