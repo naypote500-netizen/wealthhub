@@ -2636,12 +2636,23 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
   const[saving,setSaving]=useState(false);
   const[uploading,setUploading]=useState(false);
   const[err,setErr]=useState("");
+  const[setupNeeded,setSetupNeeded]=useState(false);
   const fileRef=useRef();
+
+  // Detect "relation does not exist" / table missing → show setup banner
+  const isSetupErr=msg=>{const s=(msg||"").toLowerCase();return s.includes("does not exist")||s.includes("not found")||s.includes("404")||s.includes("schema cache")||s.includes("could not find")};
 
   useEffect(()=>{
     if(!session)return;
     supabase.from("user_profiles").select("*").eq("user_id",session.user.id).maybeSingle()
-      .then(({data})=>{
+      .then(({data,error})=>{
+        if(error){
+          console.error("[profile load]",error);
+          if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง user_profiles ยังไม่ถูกสร้าง — กรุณารัน SQL ก่อน")}
+          else setErr(error.message);
+          setName(session.user.email?.split("@")[0]||"");
+          return;
+        }
         if(data){setProfile(data);setName(data.display_name||"")}
         else setName(session.user.email?.split("@")[0]||"");
       });
@@ -2650,8 +2661,12 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
   const saveName=async()=>{
     if(!session||!name.trim())return;
     setSaving(true);setErr("");
-    const{error}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name.trim(),avatar_url:profile.avatar_url||null,updated_at:new Date().toISOString()});
-    if(error){setErr(error.message)}
+    const{error}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name.trim(),avatar_url:profile.avatar_url||null,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+    if(error){
+      console.error("[saveName]",error);
+      if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง user_profiles ยังไม่ถูกสร้าง — กรุณารัน SUPABASE-SETUP-CHAT-PROFILE.sql ก่อน")}
+      else setErr("บันทึกไม่ได้: "+error.message);
+    }
     else{setProfile(p=>({...p,display_name:name.trim()}));haptic(15)}
     setSaving(false);
   };
@@ -2663,11 +2678,24 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
     const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
     const path=`${session.user.id}/avatar.${ext}`;
     const{error:upErr}=await supabase.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
-    if(upErr){setErr(upErr.message);setUploading(false);return}
+    if(upErr){
+      console.error("[upload avatar]",upErr);
+      const m=upErr.message||"";
+      if(m.toLowerCase().includes("bucket")||m.toLowerCase().includes("not found")){
+        setSetupNeeded(true);setErr("ยังไม่มี Storage bucket 'avatars' — กรุณารัน SUPABASE-SETUP-CHAT-PROFILE.sql ก่อน");
+      }else if(m.toLowerCase().includes("policy")||m.toLowerCase().includes("permission")||m.toLowerCase().includes("row-level")){
+        setErr("RLS policy ปิดอยู่: "+m+" (รัน SQL setup ใหม่อีกครั้ง)");
+      }else setErr("อัปโหลดไม่ได้: "+m);
+      setUploading(false);return;
+    }
     const{data:pub}=supabase.storage.from("avatars").getPublicUrl(path);
     const url=pub.publicUrl+"?t="+Date.now();
-    const{error:dbErr}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name||(session.user.email?.split("@")[0]||""),avatar_url:url,updated_at:new Date().toISOString()});
-    if(dbErr){setErr(dbErr.message)}
+    const{error:dbErr}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name||(session.user.email?.split("@")[0]||""),avatar_url:url,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+    if(dbErr){
+      console.error("[save avatar url]",dbErr);
+      if(isSetupErr(dbErr.message)){setSetupNeeded(true);setErr("ตาราง user_profiles ยังไม่ถูกสร้าง — กรุณารัน SQL ก่อน")}
+      else setErr("บันทึก URL ไม่ได้: "+dbErr.message);
+    }
     else{setProfile(p=>({...p,avatar_url:url}));haptic(15)}
     setUploading(false);
   };
@@ -2689,6 +2717,14 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
   const initial=(name||session.user.email||"U")[0]?.toUpperCase()||"U";
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {setupNeeded&&<div style={{background:`${t.am}15`,border:`1px solid ${t.am}55`,borderRadius:12,padding:12,fontSize:12,color:t.text,lineHeight:1.5}}>
+      <div style={{fontWeight:700,marginBottom:6,color:t.am,display:"flex",alignItems:"center",gap:6}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+        ต้องตั้งค่า Supabase ก่อน
+      </div>
+      เปิด <span style={{fontFamily:"monospace",background:t.bg,padding:"1px 6px",borderRadius:4,border:`1px solid ${t.cb}`}}>SUPABASE-SETUP-CHAT-PROFILE.sql</span> แล้ววางใน <b>Supabase Dashboard → SQL Editor → New query → Run</b> ครับ จากนั้นรีเฟรชหน้านี้
+    </div>}
+    {err&&!setupNeeded&&<div style={{background:`${t.r}10`,border:`1px solid ${t.r}40`,borderRadius:10,padding:10,fontSize:12,color:t.r,fontWeight:500}}>{err}</div>}
     {/* Avatar card */}
     <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:"22px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
       <div style={{position:"relative"}}>
@@ -2715,9 +2751,8 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
       <div style={{fontSize:11,color:t.tm,fontWeight:600,marginBottom:8}}>ชื่อที่แสดง</div>
       <div style={{display:"flex",gap:8}}>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อของคุณ" maxLength={32} style={{flex:1,padding:"10px 12px",border:`1px solid ${t.ibr}`,borderRadius:8,background:t.ib,color:t.text,fontSize:13,minWidth:0}}/>
-        <button onClick={saveName} disabled={saving||!name.trim()||name===profile.display_name} style={{padding:"10px 16px",borderRadius:8,border:"none",background:t.ac,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",opacity:(saving||!name.trim()||name===profile.display_name)?0.5:1,WebkitTapHighlightColor:"transparent"}}>{saving?"...":"บันทึก"}</button>
+        <button onClick={saveName} disabled={saving||!name.trim()} style={{padding:"10px 16px",borderRadius:8,border:"none",background:t.ac,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",opacity:(saving||!name.trim())?0.5:1,WebkitTapHighlightColor:"transparent"}}>{saving?"...":"บันทึก"}</button>
       </div>
-      {err&&<div style={{fontSize:11,color:t.r,marginTop:6}}>{err}</div>}
     </div>
 
     {/* Theme */}
@@ -2749,14 +2784,26 @@ function ChatPage({session,t}){
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(true);
   const[sending,setSending]=useState(false);
+  const[err,setErr]=useState("");
+  const[setupNeeded,setSetupNeeded]=useState(false);
   const scrollRef=useRef();
+  const isSetupErr=msg=>{const s=(msg||"").toLowerCase();return s.includes("does not exist")||s.includes("not found")||s.includes("404")||s.includes("schema cache")||s.includes("could not find")};
 
   // Load history + subscribe
   useEffect(()=>{
     if(!session)return;
     let mounted=true;
     supabase.from("chat_messages").select("*").order("created_at",{ascending:false}).limit(100)
-      .then(({data})=>{if(mounted){setMsgs((data||[]).reverse());setLoading(false)}});
+      .then(({data,error})=>{
+        if(!mounted)return;
+        if(error){
+          console.error("[chat load]",error);
+          if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง chat_messages ยังไม่ถูกสร้าง — กรุณารัน SQL ก่อน")}
+          else setErr(error.message);
+          setLoading(false);return;
+        }
+        setMsgs((data||[]).reverse());setLoading(false);
+      });
     supabase.from("user_profiles").select("user_id,display_name,avatar_url")
       .then(({data})=>{if(!mounted)return;const m={};(data||[]).forEach(p=>m[p.user_id]=p);setProfiles(m)});
     const ch=supabase.channel("chat-room").on("postgres_changes",{event:"INSERT",schema:"public",table:"chat_messages"},payload=>{
@@ -2782,10 +2829,23 @@ function ChatPage({session,t}){
 
   const send=async()=>{
     const m=input.trim();if(!m||!session||sending)return;
-    setSending(true);haptic(10);
+    setSending(true);haptic(10);setErr("");
     setInput("");
-    const{error}=await supabase.from("chat_messages").insert({user_id:session.user.id,message:m});
-    if(error){console.error(error);setInput(m)}
+    // Optimistic insert (gives instant feedback even before realtime echoes back)
+    const tempId="tmp-"+Date.now();
+    const tempMsg={id:tempId,user_id:session.user.id,message:m,created_at:new Date().toISOString(),_pending:true};
+    setMsgs(prev=>[...prev,tempMsg]);
+    const{data,error}=await supabase.from("chat_messages").insert({user_id:session.user.id,message:m}).select().single();
+    if(error){
+      console.error("[chat send]",error);
+      setMsgs(prev=>prev.filter(x=>x.id!==tempId));
+      setInput(m);
+      if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง chat_messages ยังไม่ถูกสร้าง — กรุณารัน SUPABASE-SETUP-CHAT-PROFILE.sql ก่อน")}
+      else setErr("ส่งไม่ได้: "+error.message);
+    }else if(data){
+      // Replace temp with real row (realtime listener may also add it; dedup by id)
+      setMsgs(prev=>{const w=prev.filter(x=>x.id!==tempId);return w.some(x=>x.id===data.id)?w:[...w,data]});
+    }
     setSending(false);
   };
 
@@ -2800,7 +2860,16 @@ function ChatPage({session,t}){
     return d.toLocaleDateString("th-TH",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
   };
 
-  return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 200px)",minHeight:400,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {setupNeeded&&<div style={{background:`${t.am}15`,border:`1px solid ${t.am}55`,borderRadius:12,padding:12,fontSize:12,color:t.text,lineHeight:1.5}}>
+      <div style={{fontWeight:700,marginBottom:6,color:t.am,display:"flex",alignItems:"center",gap:6}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+        ต้องตั้งค่า Supabase ก่อนใช้แชท
+      </div>
+      เปิด <span style={{fontFamily:"monospace",background:t.bg,padding:"1px 6px",borderRadius:4,border:`1px solid ${t.cb}`}}>SUPABASE-SETUP-CHAT-PROFILE.sql</span> แล้ววางใน <b>Supabase Dashboard → SQL Editor → New query → Run</b> ครับ จากนั้นรีเฟรชหน้านี้
+    </div>}
+    {err&&!setupNeeded&&<div style={{background:`${t.r}10`,border:`1px solid ${t.r}40`,borderRadius:10,padding:10,fontSize:12,color:t.r,fontWeight:500}}>{err}</div>}
+    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 230px)",minHeight:380,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
     <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"14px 12px",WebkitOverflowScrolling:"touch"}}>
       {loading&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:20}}>กำลังโหลด...</div>}
       {!loading&&msgs.length===0&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:30}}>ยังไม่มีข้อความ — เริ่มทักทายเลย!</div>}
@@ -2811,7 +2880,7 @@ function ChatPage({session,t}){
         const showAvatar=!prev||prev.user_id!==m.user_id;
         const name=p.display_name||"ผู้ใช้";
         const initial=name[0]?.toUpperCase()||"U";
-        return(<div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:showAvatar?10:2}}>
+        return(<div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:showAvatar?10:2,opacity:m._pending?0.6:1}}>
           <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,visibility:showAvatar?"visible":"hidden",overflow:"hidden",background:`linear-gradient(135deg, ${isMe?t.ac:t.pp}, ${isMe?t.ac:t.pp}99)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>
             {p.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initial}
           </div>
@@ -2828,6 +2897,7 @@ function ChatPage({session,t}){
       <button onClick={send} disabled={!input.trim()||sending} aria-label="ส่ง" style={{width:40,height:40,borderRadius:"50%",border:"none",background:input.trim()?t.ac:t.cb,color:"#fff",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s",WebkitTapHighlightColor:"transparent"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
       </button>
+    </div>
     </div>
   </div>);
 }

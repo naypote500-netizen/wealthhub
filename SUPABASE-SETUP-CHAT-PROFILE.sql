@@ -29,7 +29,8 @@ CREATE POLICY "profiles_upsert_own"
 DROP POLICY IF EXISTS "profiles_update_own" ON public.user_profiles;
 CREATE POLICY "profiles_update_own"
   ON public.user_profiles FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 
 -- ─── 2) CHAT MESSAGES TABLE ─────────────────────────────────────
@@ -61,7 +62,21 @@ CREATE POLICY "chat_insert_own"
   WITH CHECK (auth.uid() = user_id);
 
 -- เปิด realtime broadcast (ตารางจะส่ง INSERT event ไปยัง subscriber)
-ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+-- ใช้ DO block เพราะ ALTER PUBLICATION ADD TABLE จะ error ถ้า table ถูกเพิ่มแล้ว
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'chat_messages'
+  ) THEN
+    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages';
+  END IF;
+END$$;
+
+-- บันทึกข้อมูลเดิม (REPLICA IDENTITY) เพื่อให้ realtime ส่ง full row
+ALTER TABLE public.chat_messages REPLICA IDENTITY FULL;
 
 
 -- ─── 3) AVATAR STORAGE BUCKET ───────────────────────────────────
