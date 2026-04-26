@@ -2358,6 +2358,104 @@ function Toast({toast,onClose,t}){
 }
 
 /* ═══ BOTTOM TAB BAR (mobile) ═══ */
+/* ═══ MOBILE MENU SHEET ═══
+ * Full-screen icon grid menu (DRMK-style) for mobile only.
+ * Triggered by BottomTabBar's "เพิ่มเติม" tab. Replaces the slide-in
+ * sidebar on mobile. Desktop still uses the regular Sidebar component.
+ */
+const NAV_COLORS={
+  dashboard:"#0EA5E9",portfolio:"#8B5CF6",txn:"#10B981",calendar:"#3B82F6",
+  recurring:"#06B6D4",envelopes:"#EC4899",analytics:"#F59E0B",
+  balance:"#14B8A6",cashflow:"#22C55E",cfdetail:"#65A30D",
+  goals:"#FBBF24",debts:"#EF4444",
+  dca:"#6366F1",retire:"#F97316",plan:"#0D9488",tax:"#F472B6",
+  reports:"#0891B2",challenges:"#FACC15",about:"#94A3B8",
+};
+
+function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,userEmail}){
+  const[mounted,setMounted]=useState(false);
+  const[visible,setVisible]=useState(false);
+
+  useEffect(()=>{
+    if(open){
+      setMounted(true);
+      const id=requestAnimationFrame(()=>setVisible(true));
+      return()=>cancelAnimationFrame(id);
+    }else{
+      setVisible(false);
+      const tm=setTimeout(()=>setMounted(false),300);
+      return()=>clearTimeout(tm);
+    }
+  },[open]);
+
+  useEffect(()=>{
+    if(!mounted)return;
+    const prev=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return()=>{document.body.style.overflow=prev};
+  },[mounted]);
+
+  if(!mounted)return null;
+
+  const themes=[{k:"light",i:"☀️",l:"Light"},{k:"paper",i:"📄",l:"Paper"},{k:"cream",i:"🍵",l:"Cream"},{k:"dark",i:"🌙",l:"Dark"}];
+  const groups=[...new Set(NAV.map(n=>n.g))];
+  const go=k=>{haptic(8);setPage(k);onClose()};
+
+  return(<div style={{position:"fixed",inset:0,zIndex:200,background:t.bg,transform:visible?"translateX(0)":"translateX(100%)",transition:"transform .32s cubic-bezier(0.32, 0.72, 0, 1)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"env(safe-area-inset-top)",paddingBottom:"calc(20px + env(safe-area-inset-bottom))"}}>
+    {/* Header */}
+    <div style={{position:"sticky",top:"env(safe-area-inset-top)",zIndex:1,padding:"16px 18px 14px",background:t.card,borderBottom:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 1px 0 rgba(0,0,0,0.02)"}}>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{fontSize:18,fontWeight:700,letterSpacing:-0.3}}>
+          <span style={{color:t.ac}}>Wealth</span><span style={{color:t.text}}>Hub</span>
+        </div>
+        <div style={{fontSize:10,color:t.tm,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userEmail||"เครื่องมือทั้งหมด"}</div>
+      </div>
+      <button onClick={()=>{haptic(5);onClose()}} aria-label="ปิด" style={{background:t.bg,border:`1px solid ${t.cb}`,fontSize:18,cursor:"pointer",color:t.tm,padding:"6px 12px",borderRadius:10,lineHeight:1}}>✕</button>
+    </div>
+
+    {/* Icon Grid */}
+    <div style={{padding:"18px 14px 8px"}}>
+      {groups.map(g=>(<div key={g} style={{marginBottom:22}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>{g}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
+          {NAV.filter(n=>n.g===g).map(n=>{
+            const color=NAV_COLORS[n.k]||t.ac;
+            const isActive=page===n.k;
+            return(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"14px 4px 12px",background:isActive?`${color}12`:"transparent",border:`1px solid ${isActive?color+"40":"transparent"}`,cursor:"pointer",borderRadius:14,transition:"transform .15s ease",WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}
+              onTouchStart={e=>{e.currentTarget.style.transform="scale(0.93)"}}
+              onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
+              onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
+            >
+              <div style={{width:56,height:56,borderRadius:14,background:`linear-gradient(135deg, ${color}, ${color}cc)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}`:`0 6px 16px ${color}40, 0 2px 4px ${color}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,color:"#fff",fontWeight:700,position:"relative",overflow:"hidden"}}>
+                {/* Subtle gloss highlight */}
+                <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 50%)",pointerEvents:"none"}}/>
+                <span style={{position:"relative",lineHeight:1,filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.2))"}}>{n.i}</span>
+              </div>
+              <span style={{fontSize:11,fontWeight:isActive?700:500,color:isActive?color:t.text,textAlign:"center",lineHeight:1.3,minHeight:28,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{n.l}</span>
+            </button>);
+          })}
+        </div>
+      </div>))}
+
+      {/* Theme switcher */}
+      <div style={{marginTop:8,marginBottom:18}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>ธีม</div>
+        <div style={{display:"flex",gap:8,padding:"0 4px"}}>
+          {themes.map(th=>(<button key={th.k} onClick={()=>{haptic(5);setTheme(th.k)}} style={{flex:1,padding:"14px 4px",border:`2px solid ${theme===th.k?t.ac:t.cb}`,borderRadius:12,background:theme===th.k?`${t.ac}15`:t.card,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,transition:"all .15s",WebkitTapHighlightColor:"transparent"}}>
+            <span style={{fontSize:22,lineHeight:1}}>{th.i}</span>
+            <span style={{fontSize:10,fontWeight:theme===th.k?700:500,color:theme===th.k?t.ac:t.ts}}>{th.l}</span>
+          </button>))}
+        </div>
+      </div>
+
+      {/* Logout */}
+      {onLogout&&<div style={{padding:"0 4px"}}>
+        <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:"14px",border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>🚪 ออกจากระบบ</button>
+      </div>}
+    </div>
+  </div>);
+}
+
 function BottomTabBar({page,setPage,t,onMore,disabled}){
   if(disabled)return null;
   const tabs=[
@@ -2562,7 +2660,9 @@ function WealthHub(){
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)",boxSizing:"border-box"}}>
-    <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>
+    {isMobile
+      ? <MobileMenuSheet open={sbOpen} onClose={()=>setSbOpen(false)} page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} onLogout={logout} userEmail={session?.user?.email}/>
+      : <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>}
     <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 150px":"20px 28px",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
