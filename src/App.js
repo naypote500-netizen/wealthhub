@@ -1,61 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
-
-/* ═══ THEME ═══ */
-const L={bg:"#F4F6F9",sidebar:"#0F1B2D",sidebarText:"#8899AA",sidebarActive:"#38BDF8",card:"#FFFFFF",cb:"#E2E8F0",text:"#1E293B",ts:"#64748B",tm:"#94A3B8",ac:"#0EA5E9",acL:"#E0F2FE",g:"#10B981",gL:"#D1FAE5",r:"#EF4444",rL:"#FEE2E2",am:"#F59E0B",amL:"#FEF3C7",tl:"#14B8A6",pp:"#8B5CF6",ib:"#FFFFFF",ibr:"#CBD5E1",thBg:"#F8FAFC",sideBorder:"#1a2744"};
-const Dk={bg:"#0B1120",sidebar:"#060D1B",sidebarText:"#4B6584",sidebarActive:"#38BDF8",card:"#111827",cb:"#1E293B",text:"#E2E8F0",ts:"#94A3B8",tm:"#475569",ac:"#38BDF8",acL:"#0C2D48",g:"#34D399",gL:"#064E3B",r:"#F87171",rL:"#450A0A",am:"#FBBF24",amL:"#451A03",tl:"#2DD4BF",pp:"#A78BFA",ib:"#1E293B",ibr:"#334155",thBg:"#0F172A",sideBorder:"#1E293B"};
-const Paper={bg:"#FAFAFA",sidebar:"#FFFFFF",sidebarText:"#6B7280",sidebarActive:"#111827",card:"#FFFFFF",cb:"#E5E7EB",text:"#111827",ts:"#6B7280",tm:"#9CA3AF",ac:"#111827",acL:"#F3F4F6",g:"#059669",gL:"#D1FAE5",r:"#DC2626",rL:"#FEE2E2",am:"#D97706",amL:"#FEF3C7",tl:"#0891B2",pp:"#7C3AED",ib:"#FFFFFF",ibr:"#D1D5DB",thBg:"#F9FAFB",sideBorder:"#E5E7EB"};
-const Cream={bg:"#FBF6E7",sidebar:"#3A2E20",sidebarText:"#A89A7E",sidebarActive:"#D4A05E",card:"#FFFCF0",cb:"#E3D8B9",text:"#3A3326",ts:"#6B5E47",tm:"#9B8E73",ac:"#A0734A",acL:"#F1E6D0",g:"#7A9968",gL:"#E2EBD5",r:"#C26B5C",rL:"#F4DCD4",am:"#C99654",amL:"#F5E5C5",tl:"#5E9D8A",pp:"#9F7BA7",ib:"#FFFCF0",ibr:"#D0C2A0",thBg:"#F4ECD2",sideBorder:"#4A3C2C"};
-const PC=["#0EA5E9","#10B981","#F59E0B","#8B5CF6","#EF4444","#14B8A6","#EC4899","#6366F1","#F97316"];
-
-const AT=[{v:"stock_th",l:"หุ้นไทย",i:"📊"},{v:"stock_us",l:"หุ้น US",i:"🇺🇸"},{v:"crypto",l:"Crypto",i:"₿"},{v:"gold",l:"ทองคำ",i:"🥇"},{v:"fund",l:"กองทุนรวม",i:"📈"},{v:"bond",l:"พันธบัตร",i:"🏦"},{v:"property",l:"อสังหาฯ",i:"🏠"},{v:"other",l:"อื่นๆ",i:"💼"}];
-const EC=[{v:"food",l:"อาหาร",i:"🍜"},{v:"transport",l:"เดินทาง",i:"🚗"},{v:"shopping",l:"ช้อปปิ้ง",i:"🛍️"},{v:"bills",l:"ค่าบิล",i:"💡"},{v:"health",l:"สุขภาพ",i:"💊"},{v:"entertainment",l:"บันเทิง",i:"🎬"},{v:"education",l:"การศึกษา",i:"📚"},{v:"other",l:"อื่นๆ",i:"📦"}];
-const IC=[{v:"salary",l:"เงินเดือน",i:"💰"},{v:"freelance",l:"ฟรีแลนซ์",i:"💻"},{v:"investment",l:"ผลตอบแทนลงทุน",i:"📈"},{v:"bonus",l:"โบนัส",i:"🎁"},{v:"other",l:"อื่นๆ",i:"📦"}];
-
-/* Cash-flow statement line items (มาตรฐานไทย) */
-const CFI=[{k:"salary",l:"เงินเดือน (รวมค่าล่วงเวลา, ค่าคอมมิชชั่น, โบนัส)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
-const CFF=[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
-const CFV=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค (ค่าไฟฟ้า, ค่าน้ำประปา, อื่นๆ)"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้าและค่าใช้จ่ายในการบำรุงรักษาตนเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
-const CFS=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
-const CF_DEFAULTS={inflow:CFI,fixed:CFF,variable:CFV,saving:CFS};
-
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const fB=n=>`฿${Math.abs(n).toLocaleString("th-TH",{maximumFractionDigits:0})}`;
-const fP=n=>`${n>=0?"+":""}${n.toFixed(1)}%`;
-const td=()=>new Date().toISOString().slice(0,10);
-const mk=d=>d.slice(0,7);
-const fm=d=>new Date(d+"-01").toLocaleDateString("th-TH",{month:"short",year:"2-digit"});
-
-const SK="wealthhub-v6";const OSK="wealthhub-v5";
-const DF={assets:[],transactions:[],goals:[],debts:[],recurring:[],budgets:{},cashFlow:{monthly:{},yearly:{}},cfItems:null,balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},settings:{rate:35.5}};
-function ld(){try{const r=localStorage.getItem(SK)||localStorage.getItem(OSK);if(!r)return null;const d=JSON.parse(r);return{...DF,...d,balanceSheet:{...DF.balanceSheet,...(d.balanceSheet||{})},settings:{...DF.settings,...(d.settings||{})},recurring:d.recurring||[],budgets:d.budgets||{},cashFlow:{monthly:{...(d.cashFlow?.monthly||{})},yearly:{...(d.cashFlow?.yearly||{})}},cfItems:d.cfItems||null}}catch{return null}}
-function sv(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){console.error(e)}}
-
-/* Process recurring: generate txn for current month if day-of-month has passed and not yet run this month */
-function processRecurring(data){
-  if(!data.recurring?.length)return data;
-  const today=new Date();const curDay=today.getDate();const curMonth=mk(td());
-  const newTxns=[];
-  const updated=data.recurring.map(r=>{
-    if(!r.active)return r;
-    if(r.lastRun===curMonth)return r;
-    if(curDay<(r.dayOfMonth||1))return r;
-    const day=Math.min(r.dayOfMonth||1,28);
-    const date=`${curMonth}-${String(day).padStart(2,"0")}`;
-    newTxns.push({id:uid(),type:r.type,category:r.category,amount:+r.amount,date,note:(r.name||"รายการประจำ")+" (auto)",recurringId:r.id});
-    return{...r,lastRun:curMonth};
-  });
-  if(!newTxns.length)return data;
-  return{...data,transactions:[...data.transactions,...newTxns],recurring:updated};
-}
-
-/* ═══ NAV ═══ */
-const NAV=[
-  {k:"dashboard",l:"Dashboard",i:"⬡",g:"ภาพรวม"},{k:"portfolio",l:"พอร์ตลงทุน",i:"◈",g:"ภาพรวม"},{k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},{k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},{k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},{k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},{k:"analytics",l:"วิเคราะห์รายจ่าย",i:"📊",g:"ภาพรวม"},
-  {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},{k:"cashflow",l:"งบกระแสเงินสด",i:"≋",g:"การเงิน"},{k:"cfdetail",l:"กระแสเงินสดละเอียด",i:"☳",g:"การเงิน"},
-  {k:"goals",l:"เป้าหมาย",i:"◎",g:"วางแผน"},{k:"debts",l:"หนี้สิน",i:"▤",g:"วางแผน"},{k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},{k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},{k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},{k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},{k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},{k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},{k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
-];
+import { L, Dk, Paper, Cream, PC } from "./theme";
+import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF } from "./constants";
+import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
