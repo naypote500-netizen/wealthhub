@@ -2407,32 +2407,64 @@ function NavIcon({name,size=26}){
 }
 
 /* ═══ MOBILE MENU PAGE ═══
- * Renders all NAV items as a DRMK-style icon grid (mobile only).
- * Now a regular page (page==="menu") instead of a slide-over sheet.
+ * MochiHub-style card list: circular gradient avatar (no icons) + title +
+ * group/number subtitle. Each row a tappable card. Mobile only.
  */
 function MobileMenuPage({page,setPage,t}){
   const groups=[...new Set(NAV.map(n=>n.g))];
   const go=k=>{haptic(8);setPage(k)};
-  return(<div style={{padding:"4px 0 8px"}}>
-    {groups.map(g=>(<div key={g} style={{marginBottom:22}}>
-      <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>{g}</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
+  // Per-item secondary color for two-tone gradient (paired by nav key for variety)
+  const PAIR={dashboard:"#7DD3FC",portfolio:"#C4B5FD",txn:"#86EFAC",calendar:"#93C5FD",
+    recurring:"#67E8F9",envelopes:"#F9A8D4",analytics:"#FCD34D",
+    balance:"#5EEAD4",cashflow:"#86EFAC",cfdetail:"#BEF264",
+    goals:"#FDE68A",debts:"#FCA5A5",
+    dca:"#A5B4FC",retire:"#FDBA74",plan:"#5EEAD4",tax:"#F9A8D4",
+    reports:"#67E8F9",challenges:"#FDE68A",about:"#CBD5E1"};
+  let counter=0;
+  return(<div style={{display:"flex",flexDirection:"column",gap:18,padding:"2px 0 8px"}}>
+    {groups.map(g=>(<div key={g}>
+      <div style={{fontSize:11,color:t.tm,fontWeight:700,padding:"0 6px 8px",letterSpacing:0.4}}>{g}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {NAV.filter(n=>n.g===g).map(n=>{
-          const color=NAV_COLORS[n.k]||t.ac;
+          counter++;
+          const num=counter;
+          const c1=NAV_COLORS[n.k]||t.ac;
+          const c2=PAIR[n.k]||c1;
           const isActive=page===n.k;
-          return(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"14px 4px 12px",background:isActive?`${color}12`:"transparent",border:`1px solid ${isActive?color+"40":"transparent"}`,cursor:"pointer",borderRadius:14,transition:"transform .15s ease",WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}
-            onTouchStart={e=>{e.currentTarget.style.transform="scale(0.93)"}}
+          return(<button key={n.k} onClick={()=>go(n.k)} style={{
+            display:"flex",alignItems:"center",gap:14,
+            padding:"12px 14px",width:"100%",
+            background:t.card,
+            border:`1px solid ${isActive?c1+"60":t.cb}`,
+            borderRadius:16,cursor:"pointer",textAlign:"left",
+            transition:"transform .15s ease, border-color .15s, box-shadow .15s",
+            WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+            boxShadow:isActive?`0 4px 14px ${c1}30`:"0 1px 2px rgba(15,23,42,0.04)",
+            color:t.text
+          }}
+            onTouchStart={e=>{e.currentTarget.style.transform="scale(0.98)"}}
             onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
             onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
           >
-            <div style={{width:58,height:58,borderRadius:16,background:`linear-gradient(140deg, ${color} 0%, ${color}d9 60%, ${color}b3 100%)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}, 0 8px 18px ${color}55`:`0 8px 18px ${color}45, 0 2px 5px ${color}30, inset 0 1px 0 rgba(255,255,255,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",position:"relative",overflow:"hidden"}}>
-              <div style={{position:"absolute",top:0,left:0,right:0,height:"50%",background:"linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%)",pointerEvents:"none",borderRadius:"16px 16px 0 0"}}/>
-              <div style={{position:"absolute",inset:0,borderRadius:16,boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.12)",pointerEvents:"none"}}/>
-              <div style={{position:"relative",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.18))",display:"flex"}}>
-                <NavIcon name={n.k} size={26}/>
-              </div>
+            {/* Decorative gradient avatar (no icon) */}
+            <div style={{
+              width:56,height:56,borderRadius:"50%",
+              background:`linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+              flexShrink:0,position:"relative",overflow:"hidden",
+              boxShadow:`0 4px 12px ${c1}40, inset 0 1px 1px rgba(255,255,255,0.4)`
+            }}>
+              {/* Abstract decorative bubbles */}
+              <div style={{position:"absolute",top:"-25%",right:"-15%",width:"65%",height:"65%",borderRadius:"50%",background:"rgba(255,255,255,0.22)"}}/>
+              <div style={{position:"absolute",bottom:"-20%",left:"-10%",width:"45%",height:"45%",borderRadius:"50%",background:"rgba(255,255,255,0.14)"}}/>
+              <div style={{position:"absolute",top:"35%",left:"55%",width:"18%",height:"18%",borderRadius:"50%",background:"rgba(255,255,255,0.35)"}}/>
+              {/* Soft inner ring */}
+              <div style={{position:"absolute",inset:3,borderRadius:"50%",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.2)",pointerEvents:"none"}}/>
             </div>
-            <span style={{fontSize:11,fontWeight:isActive?700:500,color:isActive?color:t.text,textAlign:"center",lineHeight:1.3,minHeight:28,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{n.l}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:700,color:t.text,marginBottom:3,letterSpacing:-0.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.l}</div>
+              <div style={{fontSize:11,color:t.tm,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{num}. {g}</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isActive?c1:t.tm} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:isActive?1:0.5}}><path d="m9 18 6-6-6-6"/></svg>
           </button>);
         })}
       </div>
