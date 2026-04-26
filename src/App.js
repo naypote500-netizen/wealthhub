@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
@@ -38,7 +38,80 @@ function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,u
 
 function MC({icon,label,value,sub,color,t}){return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:"14px 16px",flex:"1 1 140px",minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}><div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",background:color?`${color}18`:t.acL,fontSize:14}}>{icon}</div><span style={{fontSize:11,color:t.ts}}>{label}</span></div><div style={{fontSize:19,fontWeight:600,color:color||t.text,letterSpacing:-0.5}}>{value}</div>{sub&&<div style={{fontSize:10,color:color||t.tm,marginTop:1}}>{sub}</div>}</div>)}
 
-function Modal({open,onClose,title,children,t,w}){if(!open)return null;return(<div style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.5)",padding:16}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:14,padding:22,width:"100%",maxWidth:w||440,maxHeight:"85vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><h3 style={{margin:0,fontSize:16,fontWeight:600,color:t.text}}>{title}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:t.tm}}>✕</button></div>{children}</div></div>)}
+function Modal({open,onClose,title,children,t,w}){
+  const isMobile=t.m;
+  const[mounted,setMounted]=useState(false);
+  const[visible,setVisible]=useState(false);
+  const[dragY,setDragY]=useState(0);
+  const[isDragging,setIsDragging]=useState(false);
+  const startY=useRef(0);
+
+  // Mount/unmount with delay for exit animation
+  useEffect(()=>{
+    if(open){
+      setMounted(true);
+      const id=requestAnimationFrame(()=>setVisible(true));
+      return()=>cancelAnimationFrame(id);
+    }else{
+      setVisible(false);
+      const tm=setTimeout(()=>{setMounted(false);setDragY(0)},280);
+      return()=>clearTimeout(tm);
+    }
+  },[open]);
+
+  // Lock body scroll while open (especially helps iOS rubber-band behind sheet)
+  useEffect(()=>{
+    if(!mounted)return;
+    const prev=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return()=>{document.body.style.overflow=prev};
+  },[mounted]);
+
+  if(!mounted)return null;
+
+  // Touch handlers for drag-to-dismiss (mobile only, attached to drag-handle area)
+  const onTouchStart=e=>{startY.current=e.touches[0].clientY;setIsDragging(true)};
+  const onTouchMove=e=>{
+    if(!isDragging)return;
+    const dy=e.touches[0].clientY-startY.current;
+    if(dy>0)setDragY(dy);
+  };
+  const onTouchEnd=()=>{
+    setIsDragging(false);
+    if(dragY>100){onClose()}else{setDragY(0)}
+  };
+
+  // ── Mobile: bottom sheet ──
+  if(isMobile){
+    const wh=typeof window!=="undefined"?window.innerHeight:800;
+    const transY=visible?dragY:wh;
+    const backdropOpacity=visible?Math.max(0,0.5-dragY/600):0;
+    return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:999,background:`rgba(0,0,0,${backdropOpacity})`,transition:isDragging?"none":"background .25s ease",display:"flex",alignItems:"flex-end"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:t.card,width:"100%",maxHeight:"90vh",borderRadius:"20px 20px 0 0",padding:"0 18px 18px",paddingBottom:"calc(18px + env(safe-area-inset-bottom))",transform:`translateY(${transY}px)`,transition:isDragging?"none":"transform .28s cubic-bezier(0.32, 0.72, 0, 1)",overflowY:"auto",boxShadow:"0 -8px 28px rgba(0,0,0,0.25)",willChange:"transform",WebkitOverflowScrolling:"touch"}}>
+        {/* Drag handle */}
+        <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} style={{padding:"10px 0 6px",display:"flex",justifyContent:"center",cursor:"grab",touchAction:"none",position:"sticky",top:0,background:t.card,zIndex:1}}>
+          <div style={{width:40,height:4,borderRadius:2,background:t.cb}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingTop:6}}>
+          <h3 style={{margin:0,fontSize:16,fontWeight:600,color:t.text}}>{title}</h3>
+          <button onClick={onClose} aria-label="ปิด" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:t.tm,padding:"4px 8px",lineHeight:1,marginRight:-8}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>);
+  }
+
+  // ── Desktop: centered popup with fade+scale ──
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",background:`rgba(0,0,0,${visible?0.5:0})`,padding:16,transition:"background .2s ease"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:14,padding:22,width:"100%",maxWidth:w||440,maxHeight:"85vh",overflowY:"auto",opacity:visible?1:0,transform:visible?"translateY(0) scale(1)":"translateY(8px) scale(0.97)",transition:"opacity .18s ease, transform .2s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:600,color:t.text}}>{title}</h3>
+        <button onClick={onClose} aria-label="ปิด" style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:t.tm}}>✕</button>
+      </div>
+      {children}
+    </div>
+  </div>);
+}
 
 function Btn({children,onClick,primary,danger,small,disabled,t,style:s}){return<button onClick={disabled?undefined:onClick} style={{padding:small?"5px 12px":"8px 18px",fontSize:small?11:13,fontWeight:500,cursor:disabled?"not-allowed":"pointer",borderRadius:8,border:"none",opacity:disabled?0.5:1,...(primary?{background:t.ac,color:"#fff"}:danger?{background:t.r,color:"#fff"}:{background:"transparent",border:`1px solid ${t.cb}`,color:t.ts}),...s}}>{children}</button>}
 
