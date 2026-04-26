@@ -2399,126 +2399,268 @@ function NavIcon({name,size=26}){
     case"reports":return<svg {...s}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>;
     case"challenges":return<svg {...s}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>;
     case"about":return<svg {...s}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+    case"menu":return<svg {...s}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
+    case"chat":return<svg {...s}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>;
+    case"profile":return<svg {...s}><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>;
     default:return null;
   }
 }
 
-function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,userEmail}){
-  const[mounted,setMounted]=useState(false);
-  const[visible,setVisible]=useState(false);
+/* ═══ MOBILE MENU PAGE ═══
+ * Renders all NAV items as a DRMK-style icon grid (mobile only).
+ * Now a regular page (page==="menu") instead of a slide-over sheet.
+ */
+function MobileMenuPage({page,setPage,t}){
+  const groups=[...new Set(NAV.map(n=>n.g))];
+  const go=k=>{haptic(8);setPage(k)};
+  return(<div style={{padding:"4px 0 8px"}}>
+    {groups.map(g=>(<div key={g} style={{marginBottom:22}}>
+      <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>{g}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
+        {NAV.filter(n=>n.g===g).map(n=>{
+          const color=NAV_COLORS[n.k]||t.ac;
+          const isActive=page===n.k;
+          return(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"14px 4px 12px",background:isActive?`${color}12`:"transparent",border:`1px solid ${isActive?color+"40":"transparent"}`,cursor:"pointer",borderRadius:14,transition:"transform .15s ease",WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}
+            onTouchStart={e=>{e.currentTarget.style.transform="scale(0.93)"}}
+            onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
+            onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
+          >
+            <div style={{width:58,height:58,borderRadius:16,background:`linear-gradient(140deg, ${color} 0%, ${color}d9 60%, ${color}b3 100%)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}, 0 8px 18px ${color}55`:`0 8px 18px ${color}45, 0 2px 5px ${color}30, inset 0 1px 0 rgba(255,255,255,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:0,left:0,right:0,height:"50%",background:"linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%)",pointerEvents:"none",borderRadius:"16px 16px 0 0"}}/>
+              <div style={{position:"absolute",inset:0,borderRadius:16,boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.12)",pointerEvents:"none"}}/>
+              <div style={{position:"relative",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.18))",display:"flex"}}>
+                <NavIcon name={n.k} size={26}/>
+              </div>
+            </div>
+            <span style={{fontSize:11,fontWeight:isActive?700:500,color:isActive?color:t.text,textAlign:"center",lineHeight:1.3,minHeight:28,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{n.l}</span>
+          </button>);
+        })}
+      </div>
+    </div>))}
+  </div>);
+}
+
+/* ═══ PROFILE PAGE ═══
+ * Avatar (Supabase Storage 'avatars' bucket), display name (user_profiles
+ * table), email, theme switcher, logout. Required tables: see SQL doc.
+ */
+function ProfilePage({session,t,theme,setTheme,onLogout}){
+  const[profile,setProfile]=useState({display_name:"",avatar_url:""});
+  const[name,setName]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[uploading,setUploading]=useState(false);
+  const[err,setErr]=useState("");
+  const fileRef=useRef();
 
   useEffect(()=>{
-    if(open){
-      setMounted(true);
-      const id=requestAnimationFrame(()=>setVisible(true));
-      return()=>cancelAnimationFrame(id);
-    }else{
-      setVisible(false);
-      const tm=setTimeout(()=>setMounted(false),300);
-      return()=>clearTimeout(tm);
-    }
-  },[open]);
+    if(!session)return;
+    supabase.from("user_profiles").select("*").eq("user_id",session.user.id).maybeSingle()
+      .then(({data})=>{
+        if(data){setProfile(data);setName(data.display_name||"")}
+        else setName(session.user.email?.split("@")[0]||"");
+      });
+  },[session]);
 
-  useEffect(()=>{
-    if(!mounted)return;
-    const prev=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    return()=>{document.body.style.overflow=prev};
-  },[mounted]);
+  const saveName=async()=>{
+    if(!session||!name.trim())return;
+    setSaving(true);setErr("");
+    const{error}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name.trim(),avatar_url:profile.avatar_url||null,updated_at:new Date().toISOString()});
+    if(error){setErr(error.message)}
+    else{setProfile(p=>({...p,display_name:name.trim()}));haptic(15)}
+    setSaving(false);
+  };
 
-  if(!mounted)return null;
+  const uploadAvatar=async(e)=>{
+    const file=e.target.files?.[0];if(!file||!session)return;
+    if(file.size>3*1024*1024){setErr("รูปต้องไม่เกิน 3 MB");return}
+    setUploading(true);setErr("");
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+    const path=`${session.user.id}/avatar.${ext}`;
+    const{error:upErr}=await supabase.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
+    if(upErr){setErr(upErr.message);setUploading(false);return}
+    const{data:pub}=supabase.storage.from("avatars").getPublicUrl(path);
+    const url=pub.publicUrl+"?t="+Date.now();
+    const{error:dbErr}=await supabase.from("user_profiles").upsert({user_id:session.user.id,display_name:name||(session.user.email?.split("@")[0]||""),avatar_url:url,updated_at:new Date().toISOString()});
+    if(dbErr){setErr(dbErr.message)}
+    else{setProfile(p=>({...p,avatar_url:url}));haptic(15)}
+    setUploading(false);
+  };
 
   const themeIcon=k=>{
-    const sv={width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+    const sv={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
     if(k==="light")return<svg {...sv}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
     if(k==="dark")return<svg {...sv}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
     if(k==="paper")return<svg {...sv}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>;
     return<svg {...sv}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v3"/><path d="M10 2v3"/><path d="M14 2v3"/></svg>;
   };
   const themes=[{k:"light",l:"Light"},{k:"paper",l:"Paper"},{k:"cream",l:"Cream"},{k:"dark",l:"Dark"}];
-  const groups=[...new Set(NAV.map(n=>n.g))];
-  const go=k=>{haptic(8);setPage(k);onClose()};
 
-  return(<div style={{position:"fixed",inset:0,zIndex:200,background:t.bg,transform:visible?"translateX(0)":"translateX(100%)",transition:"transform .32s cubic-bezier(0.32, 0.72, 0, 1)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"env(safe-area-inset-top)",paddingBottom:"calc(20px + env(safe-area-inset-bottom))"}}>
-    {/* Floating close button */}
-    <button onClick={()=>{haptic(5);onClose()}} aria-label="ปิด" style={{position:"fixed",top:`calc(12px + env(safe-area-inset-top))`,right:14,zIndex:2,width:38,height:38,background:t.card,border:`1px solid ${t.cb}`,cursor:"pointer",color:t.ts,padding:0,borderRadius:"50%",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.08)",WebkitTapHighlightColor:"transparent"}}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-    </button>
+  if(!session)return(<div style={{padding:"30px 16px",textAlign:"center",color:t.ts}}>
+    <div style={{fontSize:48,marginBottom:12,opacity:0.5}}>🔒</div>
+    <div>กรุณาเข้าสู่ระบบเพื่อดูโปรไฟล์</div>
+  </div>);
 
-    {/* Icon Grid */}
-    <div style={{padding:"22px 14px 8px"}}>
-      {groups.map(g=>(<div key={g} style={{marginBottom:22}}>
-        <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>{g}</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
-          {NAV.filter(n=>n.g===g).map(n=>{
-            const color=NAV_COLORS[n.k]||t.ac;
-            const isActive=page===n.k;
-            return(<button key={n.k} onClick={()=>go(n.k)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"14px 4px 12px",background:isActive?`${color}12`:"transparent",border:`1px solid ${isActive?color+"40":"transparent"}`,cursor:"pointer",borderRadius:14,transition:"transform .15s ease",WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}
-              onTouchStart={e=>{e.currentTarget.style.transform="scale(0.93)"}}
-              onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
-              onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
-            >
-              <div style={{width:58,height:58,borderRadius:16,background:`linear-gradient(140deg, ${color} 0%, ${color}d9 60%, ${color}b3 100%)`,boxShadow:isActive?`0 0 0 3px ${t.bg}, 0 0 0 5px ${color}, 0 8px 18px ${color}55`:`0 8px 18px ${color}45, 0 2px 5px ${color}30, inset 0 1px 0 rgba(255,255,255,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",position:"relative",overflow:"hidden"}}>
-                {/* Top gloss highlight */}
-                <div style={{position:"absolute",top:0,left:0,right:0,height:"50%",background:"linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 100%)",pointerEvents:"none",borderRadius:"16px 16px 0 0"}}/>
-                {/* Soft inner border */}
-                <div style={{position:"absolute",inset:0,borderRadius:16,boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.12)",pointerEvents:"none"}}/>
-                <div style={{position:"relative",filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.18))",display:"flex"}}>
-                  <NavIcon name={n.k} size={26}/>
-                </div>
-              </div>
-              <span style={{fontSize:11,fontWeight:isActive?700:500,color:isActive?color:t.text,textAlign:"center",lineHeight:1.3,minHeight:28,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}}>{n.l}</span>
-            </button>);
-          })}
+  const initial=(name||session.user.email||"U")[0]?.toUpperCase()||"U";
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Avatar card */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:"22px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+      <div style={{position:"relative"}}>
+        <div style={{width:96,height:96,borderRadius:"50%",overflow:"hidden",background:`linear-gradient(135deg, ${t.ac}, ${t.ac}99)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:36,fontWeight:700,boxShadow:`0 6px 20px ${t.ac}40`}}>
+          {profile.avatar_url
+            ?<img src={profile.avatar_url} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            :initial}
         </div>
-      </div>))}
-
-      {/* Theme switcher */}
-      <div style={{marginTop:8,marginBottom:18}}>
-        <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>ธีม</div>
-        <div style={{display:"flex",gap:8,padding:"0 4px"}}>
-          {themes.map(th=>{const sel=theme===th.k;return(<button key={th.k} onClick={()=>{haptic(5);setTheme(th.k)}} style={{flex:1,padding:"14px 4px",border:`2px solid ${sel?t.ac:t.cb}`,borderRadius:12,background:sel?`${t.ac}15`:t.card,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all .15s",WebkitTapHighlightColor:"transparent",color:sel?t.ac:t.ts}}>
-            <div style={{lineHeight:1,display:"flex"}}>{themeIcon(th.k)}</div>
-            <span style={{fontSize:10,fontWeight:sel?700:500}}>{th.l}</span>
-          </button>)})}
-        </div>
-      </div>
-
-      {/* Account + Logout */}
-      {onLogout&&<div style={{padding:"0 4px"}}>
-        {userEmail&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",marginBottom:8,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12}}>
-          <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg, ${t.ac}, ${t.ac}cc)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>{userEmail[0]?.toUpperCase()||"U"}</div>
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:11,color:t.tm,lineHeight:1.2}}>เข้าสู่ระบบเป็น</div>
-            <div style={{fontSize:12,color:t.text,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userEmail}</div>
-          </div>
-        </div>}
-        <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:"14px",border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-          ออกจากระบบ
+        <button onClick={()=>{haptic(5);fileRef.current?.click()}} disabled={uploading} style={{position:"absolute",bottom:0,right:0,width:32,height:32,borderRadius:"50%",border:`2px solid ${t.card}`,background:t.ac,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
+          {uploading
+            ?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>
+            :<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>}
         </button>
-      </div>}
+        <input ref={fileRef} type="file" accept="image/*" onChange={uploadAvatar} style={{display:"none"}}/>
+      </div>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:16,fontWeight:600,color:t.text}}>{profile.display_name||name||"ผู้ใช้ใหม่"}</div>
+        <div style={{fontSize:11,color:t.tm,marginTop:2}}>{session.user.email}</div>
+      </div>
+    </div>
+
+    {/* Name editor */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:11,color:t.tm,fontWeight:600,marginBottom:8}}>ชื่อที่แสดง</div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อของคุณ" maxLength={32} style={{flex:1,padding:"10px 12px",border:`1px solid ${t.ibr}`,borderRadius:8,background:t.ib,color:t.text,fontSize:13,minWidth:0}}/>
+        <button onClick={saveName} disabled={saving||!name.trim()||name===profile.display_name} style={{padding:"10px 16px",borderRadius:8,border:"none",background:t.ac,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",opacity:(saving||!name.trim()||name===profile.display_name)?0.5:1,WebkitTapHighlightColor:"transparent"}}>{saving?"...":"บันทึก"}</button>
+      </div>
+      {err&&<div style={{fontSize:11,color:t.r,marginTop:6}}>{err}</div>}
+    </div>
+
+    {/* Theme */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:11,color:t.tm,fontWeight:600,marginBottom:10}}>ธีม</div>
+      <div style={{display:"flex",gap:8}}>
+        {themes.map(th=>{const sel=theme===th.k;return(<button key={th.k} onClick={()=>{haptic(5);setTheme(th.k)}} style={{flex:1,padding:"12px 4px",border:`2px solid ${sel?t.ac:t.cb}`,borderRadius:10,background:sel?`${t.ac}15`:t.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,transition:"all .15s",WebkitTapHighlightColor:"transparent",color:sel?t.ac:t.ts}}>
+          <div style={{lineHeight:1,display:"flex"}}>{themeIcon(th.k)}</div>
+          <span style={{fontSize:10,fontWeight:sel?700:500}}>{th.l}</span>
+        </button>)})}
+      </div>
+    </div>
+
+    {/* Logout */}
+    <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:14,border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+      ออกจากระบบ
+    </button>
+  </div>);
+}
+
+/* ═══ CHAT PAGE ═══
+ * Global chatroom — every signed-in user sees the same stream.
+ * Tables: chat_messages (with realtime), user_profiles (for display_name/avatar).
+ */
+function ChatPage({session,t}){
+  const[msgs,setMsgs]=useState([]);
+  const[profiles,setProfiles]=useState({});
+  const[input,setInput]=useState("");
+  const[loading,setLoading]=useState(true);
+  const[sending,setSending]=useState(false);
+  const scrollRef=useRef();
+
+  // Load history + subscribe
+  useEffect(()=>{
+    if(!session)return;
+    let mounted=true;
+    supabase.from("chat_messages").select("*").order("created_at",{ascending:false}).limit(100)
+      .then(({data})=>{if(mounted){setMsgs((data||[]).reverse());setLoading(false)}});
+    supabase.from("user_profiles").select("user_id,display_name,avatar_url")
+      .then(({data})=>{if(!mounted)return;const m={};(data||[]).forEach(p=>m[p.user_id]=p);setProfiles(m)});
+    const ch=supabase.channel("chat-room").on("postgres_changes",{event:"INSERT",schema:"public",table:"chat_messages"},payload=>{
+      setMsgs(prev=>prev.some(m=>m.id===payload.new.id)?prev:[...prev,payload.new]);
+      // Lazy-load profile if unknown
+      const uid=payload.new.user_id;
+      setProfiles(prev=>{
+        if(prev[uid])return prev;
+        supabase.from("user_profiles").select("*").eq("user_id",uid).maybeSingle().then(({data})=>{
+          if(data)setProfiles(p=>({...p,[uid]:data}));
+        });
+        return prev;
+      });
+    }).subscribe();
+    return()=>{mounted=false;supabase.removeChannel(ch)};
+  },[session]);
+
+  // Auto-scroll on new message
+  useEffect(()=>{
+    const el=scrollRef.current;if(!el)return;
+    el.scrollTop=el.scrollHeight;
+  },[msgs]);
+
+  const send=async()=>{
+    const m=input.trim();if(!m||!session||sending)return;
+    setSending(true);haptic(10);
+    setInput("");
+    const{error}=await supabase.from("chat_messages").insert({user_id:session.user.id,message:m});
+    if(error){console.error(error);setInput(m)}
+    setSending(false);
+  };
+
+  if(!session)return(<div style={{padding:"30px 16px",textAlign:"center",color:t.ts}}>
+    <div style={{fontSize:48,marginBottom:12,opacity:0.5}}>💬</div>
+    <div>กรุณาเข้าสู่ระบบเพื่อแชท</div>
+  </div>);
+
+  const fmtTime=ts=>{
+    const d=new Date(ts);const now=new Date();
+    if(d.toDateString()===now.toDateString())return d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+    return d.toLocaleDateString("th-TH",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+  };
+
+  return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 200px)",minHeight:400,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+    <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"14px 12px",WebkitOverflowScrolling:"touch"}}>
+      {loading&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:20}}>กำลังโหลด...</div>}
+      {!loading&&msgs.length===0&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:30}}>ยังไม่มีข้อความ — เริ่มทักทายเลย!</div>}
+      {msgs.map((m,i)=>{
+        const isMe=m.user_id===session.user.id;
+        const p=profiles[m.user_id]||{};
+        const prev=msgs[i-1];
+        const showAvatar=!prev||prev.user_id!==m.user_id;
+        const name=p.display_name||"ผู้ใช้";
+        const initial=name[0]?.toUpperCase()||"U";
+        return(<div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:showAvatar?10:2}}>
+          <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,visibility:showAvatar?"visible":"hidden",overflow:"hidden",background:`linear-gradient(135deg, ${isMe?t.ac:t.pp}, ${isMe?t.ac:t.pp}99)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>
+            {p.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initial}
+          </div>
+          <div style={{maxWidth:"72%",display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start"}}>
+            {showAvatar&&!isMe&&<div style={{fontSize:10,color:t.tm,marginBottom:3,padding:"0 8px"}}>{name}</div>}
+            <div style={{padding:"8px 12px",borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",background:isMe?t.ac:t.bg,color:isMe?"#fff":t.text,fontSize:13,lineHeight:1.4,wordBreak:"break-word",whiteSpace:"pre-wrap",border:isMe?"none":`1px solid ${t.cb}`}}>{m.message}</div>
+            <div style={{fontSize:9,color:t.tm,marginTop:2,padding:"0 4px"}}>{fmtTime(m.created_at)}</div>
+          </div>
+        </div>);
+      })}
+    </div>
+    <div style={{borderTop:`1px solid ${t.cb}`,padding:10,display:"flex",gap:8,background:t.card}}>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="พิมพ์ข้อความ..." maxLength={500} style={{flex:1,padding:"10px 14px",border:`1px solid ${t.ibr}`,borderRadius:20,background:t.ib,color:t.text,fontSize:13,minWidth:0,outline:"none"}}/>
+      <button onClick={send} disabled={!input.trim()||sending} aria-label="ส่ง" style={{width:40,height:40,borderRadius:"50%",border:"none",background:input.trim()?t.ac:t.cb,color:"#fff",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s",WebkitTapHighlightColor:"transparent"}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+      </button>
     </div>
   </div>);
 }
 
-function BottomTabBar({page,setPage,t,onMore,disabled}){
+function BottomTabBar({page,setPage,t,disabled}){
   if(disabled)return null;
   const tabs=[
     {k:"dashboard",l:"หน้าแรก"},
-    {k:"txn",l:"รายการ"},
-    {k:"analytics",l:"วิเคราะห์"},
-    {k:"envelopes",l:"ซองเงิน"},
-    {k:"_more",l:"เพิ่มเติม"},
+    {k:"menu",l:"เมนู"},
+    {k:"challenges",l:"ชาเลนจ์"},
+    {k:"chat",l:"แชท"},
+    {k:"profile",l:"โปรไฟล์"},
   ];
-  // SVG menu icon for "_more"
-  const MoreIcon=({size=22})=>(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg>);
   return(<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:97,background:t.card,borderTop:`1px solid ${t.cb}`,boxShadow:"0 -2px 10px rgba(0,0,0,0.06)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)"}}>
     <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:60}}>
-      {tabs.map(tab=>{const active=tab.k!=="_more"&&page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>tab.k==="_more"?onMore():setPage(tab.k)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s",WebkitTapHighlightColor:"transparent"}}>
+      {tabs.map(tab=>{const active=page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>{haptic(5);setPage(tab.k)}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s",WebkitTapHighlightColor:"transparent"}}>
         {active&&<div style={{position:"absolute",top:0,left:"30%",right:"30%",height:3,background:t.ac,borderRadius:"0 0 3px 3px"}}/>}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
-          {tab.k==="_more"?<MoreIcon size={22}/>:<NavIcon name={tab.k} size={22}/>}
+          <NavIcon name={tab.k} size={22}/>
         </div>
         <span style={{fontSize:10,fontWeight:active?600:500,letterSpacing:0.2}}>{tab.l}</span>
       </button>)})}
@@ -2709,23 +2851,32 @@ function WealthHub(){
 
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
+  // Pages that should hide the top header on mobile (full-bleed look)
+  const mobileFullPages=["menu","chat","profile"];
+  const hideMobileHeader=isMobile&&mobileFullPages.includes(page);
+  // Custom mobile titles for new tab pages
+  const mobileTitle=page==="menu"?"เมนู":page==="chat"?"แชทสนทนา":page==="profile"?"โปรไฟล์":pl;
+
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)",boxSizing:"border-box"}}>
-    {isMobile
-      ? <MobileMenuSheet open={sbOpen} onClose={()=>setSbOpen(false)} page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} onLogout={logout} userEmail={session?.user?.email}/>
-      : <Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>}
-    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 150px":"20px 28px",minWidth:0}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
+    {!isMobile&&<Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>}
+    <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 90px":"20px 28px",minWidth:0}}>
+      {/* Mobile minimal header for menu/chat/profile pages */}
+      {hideMobileHeader&&(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,gap:10}}>
+        <h1 style={{margin:0,fontSize:20,fontWeight:700,letterSpacing:-0.3}}>{mobileTitle}</h1>
+        <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
+      </div>)}
+      {/* Standard header (desktop always; mobile when not on minimal-header pages) */}
+      {!hideMobileHeader&&(<div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:isMobile?"1 1 100%":"0 1 auto"}}>
-          {isMobile&&<button onClick={()=>setSbOpen(true)} aria-label="menu" style={{background:t.card,border:`1px solid ${t.cb}`,color:t.text,fontSize:18,padding:"6px 10px",borderRadius:8,cursor:"pointer",lineHeight:1}}>☰</button>}
           <div style={{minWidth:0}}><h1 style={{margin:0,fontSize:isMobile?17:20,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl}</h1><div style={{fontSize:10,color:t.tm,marginTop:1}}>WealthHub / {pl}</div></div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","chat","profile"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
-      </div>
+      </div>)}
 
       {/* DASHBOARD */}
       {page==="dashboard"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2802,6 +2953,10 @@ function WealthHub(){
       </div>)}
 
       {page==="challenges"&&(session?<ChallengesPage t={t} session={session} rate={rate} toThb={toThb} detailId={challengeDetailId} setDetailId={setChallengeDetailId}/>:<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}><div style={{fontSize:42,marginBottom:10}}>🏆</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>ชาเลนจ์การลงทุน</div><div style={{fontSize:12,color:t.ts,marginBottom:14,lineHeight:1.7}}>เข้าร่วมชาเลนจ์ลงทุนกับเพื่อน เปรียบเทียบพอร์ตหุ้น + เงินสด<br/>ดูกระดานคะแนนแบบเรียลไทม์</div><div style={{fontSize:11,color:t.tm,marginBottom:14}}>กรุณาเข้าสู่ระบบเพื่อใช้งานฟีเจอร์นี้</div><Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 เข้าสู่ระบบ</Btn></div>)}
+      {page==="menu"&&<MobileMenuPage page={page} setPage={setPage} t={t}/>}
+      {page==="chat"&&<ChatPage session={session} t={t}/>}
+      {page==="profile"&&<ProfilePage session={session} t={t} theme={theme} setTheme={setTheme} onLogout={logout}/>}
+
       {page==="about"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>♥</div>
         <div style={{fontSize:18,fontWeight:600,marginBottom:8,color:t.tp}}>เกี่ยวกับเรา</div>
@@ -2814,14 +2969,14 @@ function WealthHub(){
         </div>
       </div>)}
 
-      <div style={{marginTop:28,paddingTop:14,borderTop:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      {!hideMobileHeader&&<div style={{marginTop:28,paddingTop:14,borderTop:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <Btn small t={t} onClick={exportData}>💾 Export JSON</Btn>
           <label style={{display:"inline-block"}}><span style={{padding:"5px 12px",fontSize:11,fontWeight:500,cursor:"pointer",borderRadius:8,border:`1px solid ${t.cb}`,color:t.ts,display:"inline-block"}}>📂 Import JSON</span><input type="file" accept="application/json" onChange={importData} style={{display:"none"}}/></label>
           <span style={{fontSize:10,color:t.tm}}>สำรอง/กู้คืนข้อมูลทั้งหมด</span>
         </div>
         <button onClick={()=>{if(window.confirm("ล้างทั้งหมด?"))persist(DF)}} style={{fontSize:9,color:t.tm,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>🗑 ล้างข้อมูล</button>
-      </div>
+      </div>}
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
@@ -2831,8 +2986,8 @@ function WealthHub(){
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
-    <BottomTabBar page={page} setPage={setPage} t={t} onMore={()=>setSbOpen(true)} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
-    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
+    <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery}/>
+    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||showAuth||recovery||["menu","chat","profile"].includes(page)}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
