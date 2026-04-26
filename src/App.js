@@ -506,8 +506,8 @@ function CalendarPage({data,t,onAddTxn,setPage}){
   const[y,m]=ym.split("-").map(Number);
   const firstDay=new Date(y,m-1,1).getDay();
   const daysInMonth=new Date(y,m,0).getDate();
+  const dayData=useCallback(d=>{const date=`${ym}-${String(d).padStart(2,"0")}`;const txns=data.transactions.filter(tx=>tx.date===date);const inc=txns.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);const exp=txns.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);return{txns,inc,exp}},[data.transactions,ym]);
   const fmt=d=>`${ym}-${String(d).padStart(2,"0")}`;
-  const dayData=useCallback(d=>{const date=fmt(d);const txns=data.transactions.filter(tx=>tx.date===date);const inc=txns.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);const exp=txns.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);return{txns,inc,exp}},[data.transactions,ym]);
   const monthInc=Array.from({length:daysInMonth},(_,i)=>dayData(i+1).inc).reduce((s,v)=>s+v,0);
   const monthExp=Array.from({length:daysInMonth},(_,i)=>dayData(i+1).exp).reduce((s,v)=>s+v,0);
   const selData=(()=>{const[yy,mm,dd]=selDay.split("-").map(Number);if(`${yy}-${String(mm).padStart(2,"0")}`!==ym)return{txns:[],inc:0,exp:0};return dayData(dd)})();
@@ -583,7 +583,6 @@ function EnvelopesPage({data,persist,t}){
   const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
   const monthInc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===tm).reduce((s,tx)=>s+tx.amount,0);
   const totalAlloc=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
-  const totalSpent=Object.values(spent).reduce((s,v)=>s+v,0);
   const unalloc=monthInc-totalAlloc;
   const setEnv=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
   const autoAlloc=()=>{if(!window.confirm("จัดสรรอัตโนมัติตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด?\n(จะเขียนทับซองเดิมที่ตั้งไว้)"))return;const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}const totals={};let grand=0;EC.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});if(grand===0){window.alert("ยังไม่มีข้อมูลรายจ่าย 3 เดือนย้อนหลังพอที่จะจัดสรรอัตโนมัติ");return}const newB={...budgets};EC.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});persist({...data,budgets:newB})};
@@ -2355,7 +2354,6 @@ function WealthHub(){
   const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:L),m:isMobile}),[theme,isMobile]);
-  const dark=theme==="dark";
 
   useEffect(()=>{try{const saved=localStorage.getItem("wealthhub-theme");if(saved)setTheme(saved)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("wealthhub-theme",theme)}catch{}},[theme]);
@@ -2457,7 +2455,7 @@ function WealthHub(){
     }
   };
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
-  const toThb=(v,cur)=>cur==="USD"?v*rate:v;
+  const toThb=useCallback((v,cur)=>cur==="USD"?v*rate:v,[rate]);
 
   const addAsset=f=>{persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
   const updateAsset=(id,f)=>{persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
@@ -2498,7 +2496,7 @@ function WealthHub(){
     const ec={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{ec[tx.category]=(ec[tx.category]||0)+tx.amount});
     const ecd=Object.entries(ec).map(([k,v],i)=>{const cat=EC.find(c=>c.v===k)||EC[7];return{name:cat.l,value:v,color:PC[i%PC.length],icon:cat.i}}).sort((a,b)=>b.value-a.value);
     return{totalPortfolio:tp,totalCost:tc,portfolioPL:pl,portfolioPct:pp,allocation:alloc,incomeThisMonth:iM,expenseThisMonth:eM,netThisMonth:nM,totalGoalSaved:gs,totalGoalTarget:gt,totalDebt:td2,totalDebtPaid:dp,debtRemaining:dr,netWorth:nw,totalAssets:tp+gs+(data.balanceSheet?((data.balanceSheet.cash||0)+(data.balanceSheet.savings||0)+(data.balanceSheet.car||0)+(data.balanceSheet.house||0)+(data.balanceSheet.otherAssets||0)):0),totalLiab:dr+(data.balanceSheet?((data.balanceSheet.creditCard||0)+(data.balanceSheet.carLoan||0)+(data.balanceSheet.homeLoan||0)+(data.balanceSheet.otherLiab||0)):0),monthlyTrend:mt,expCatData:ecd};
-  },[data,rate]);
+  },[data,toThb]);
 
   // Daily net worth snapshot
   useEffect(()=>{
@@ -2578,7 +2576,7 @@ function WealthHub(){
           {priceRefresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {priceRefresh.err}</span>}
         </div>)}
         {data.assets.length===0?<Empty icon="📊" title="ยังไม่มีสินทรัพย์" sub="เพิ่มหุ้น กองทุน คริปโต" action="+ เพิ่ม" onAction={()=>setModal({type:"addAsset"})} t={t}/>:(
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
+          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
       </div>)}
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} t={t}/>}
