@@ -2440,19 +2440,13 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
   const go=k=>{haptic(8);setPage(k);onClose()};
 
   return(<div style={{position:"fixed",inset:0,zIndex:200,background:t.bg,transform:visible?"translateX(0)":"translateX(100%)",transition:"transform .32s cubic-bezier(0.32, 0.72, 0, 1)",overflowY:"auto",WebkitOverflowScrolling:"touch",paddingTop:"env(safe-area-inset-top)",paddingBottom:"calc(20px + env(safe-area-inset-bottom))"}}>
-    {/* Header */}
-    <div style={{position:"sticky",top:"env(safe-area-inset-top)",zIndex:1,padding:"16px 18px 14px",background:t.card,borderBottom:`1px solid ${t.cb}`,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 1px 0 rgba(0,0,0,0.02)"}}>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{fontSize:18,fontWeight:700,letterSpacing:-0.3}}>
-          <span style={{color:t.ac}}>Wealth</span><span style={{color:t.text}}>Hub</span>
-        </div>
-        <div style={{fontSize:10,color:t.tm,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userEmail||"เครื่องมือทั้งหมด"}</div>
-      </div>
-      <button onClick={()=>{haptic(5);onClose()}} aria-label="ปิด" style={{background:t.bg,border:`1px solid ${t.cb}`,fontSize:18,cursor:"pointer",color:t.tm,padding:"6px 12px",borderRadius:10,lineHeight:1}}>✕</button>
-    </div>
+    {/* Floating close button */}
+    <button onClick={()=>{haptic(5);onClose()}} aria-label="ปิด" style={{position:"fixed",top:`calc(12px + env(safe-area-inset-top))`,right:14,zIndex:2,width:38,height:38,background:t.card,border:`1px solid ${t.cb}`,cursor:"pointer",color:t.ts,padding:0,borderRadius:"50%",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.08)",WebkitTapHighlightColor:"transparent"}}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
 
     {/* Icon Grid */}
-    <div style={{padding:"18px 14px 8px"}}>
+    <div style={{padding:"22px 14px 8px"}}>
       {groups.map(g=>(<div key={g} style={{marginBottom:22}}>
         <div style={{fontSize:10,color:t.tm,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"0 6px 12px"}}>{g}</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
@@ -2490,8 +2484,15 @@ function MobileMenuSheet({open,onClose,page,setPage,theme,setTheme,t,onLogout,us
         </div>
       </div>
 
-      {/* Logout */}
+      {/* Account + Logout */}
       {onLogout&&<div style={{padding:"0 4px"}}>
+        {userEmail&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",marginBottom:8,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg, ${t.ac}, ${t.ac}cc)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>{userEmail[0]?.toUpperCase()||"U"}</div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:11,color:t.tm,lineHeight:1.2}}>เข้าสู่ระบบเป็น</div>
+            <div style={{fontSize:12,color:t.text,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userEmail}</div>
+          </div>
+        </div>}
         <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:"14px",border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
           ออกจากระบบ
