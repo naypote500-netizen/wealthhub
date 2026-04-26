@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF } from "./constants";
-import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring } from "./utils";
+import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -454,9 +454,16 @@ function TxnForm({onSave,onCancel,t,initialDate,initial,data}){
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div>
     <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
     {sugCat&&<button type="button" onClick={()=>set("category",suggestion)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",border:`1px dashed ${t.ac}`,borderRadius:8,background:`${t.ac}10`,cursor:"pointer",color:t.ac,fontSize:11,textAlign:"left"}}>💡 น่าจะเป็นหมวด <b>{sugCat.i} {sugCat.l}</b> ใช่ไหม? <span style={{marginLeft:"auto",fontSize:10,color:t.tm}}>คลิกเพื่อเปลี่ยน →</span></button>}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" inputMode="decimal" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div>
+    {/* Quick amount chips — tap to add to current amount */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {(f.type==="income"?[[1000,"1K"],[5000,"5K"],[10000,"10K"],[15000,"15K"],[20000,"20K"]]:[[50,"50"],[100,"100"],[200,"200"],[500,"500"],[1000,"1K"]]).map(([v,l])=>(
+        <button key={v} type="button" onClick={()=>{haptic(5);set("amount",String((+f.amount||0)+v))}} style={{padding:"7px 14px",border:`1px solid ${t.cb}`,borderRadius:99,background:t.bg,color:t.text,fontSize:12,fontWeight:600,cursor:"pointer",minHeight:34,touchAction:"manipulation"}}>+{l}</button>
+      ))}
+      {+f.amount>0&&<button type="button" onClick={()=>{haptic(5);set("amount","")}} aria-label="ล้างจำนวน" title="ล้าง" style={{padding:"7px 11px",border:`1px solid ${t.cb}`,borderRadius:99,background:"transparent",color:t.tm,fontSize:12,cursor:"pointer",minHeight:34,marginLeft:"auto"}}>✕</button>}
+    </div>
     <Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="เช่น เซเว่น, กาแฟสตาร์บัค, ค่าน้ำมัน"/>
-    <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div>
+    <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>{haptic(15);onSave(f)}} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div>
   </div>);
 }
 
@@ -2339,12 +2346,13 @@ function QuickAddFAB({data,t,onQuickAdd,onOpenFull,disabled}){
   </>);
 }
 
-function Toast({toast,onUndo,onClose,t}){
-  useEffect(()=>{if(!toast)return;const id=setTimeout(onClose,5000);return()=>clearTimeout(id)},[toast,onClose]);
+function Toast({toast,onClose,t}){
+  useEffect(()=>{if(!toast)return;const id=setTimeout(onClose,toast.duration||5000);return()=>clearTimeout(id)},[toast,onClose]);
   if(!toast)return null;
+  const handleUndo=()=>{haptic(10);toast.onUndo&&toast.onUndo();onClose()};
   return(<div style={{position:"fixed",left:"50%",bottom:"calc(146px + env(safe-area-inset-bottom))",transform:"translateX(-50%)",zIndex:1001,background:t.text,color:t.bg,padding:"11px 18px",borderRadius:24,boxShadow:"0 6px 20px rgba(0,0,0,0.32)",display:"flex",alignItems:"center",gap:14,fontSize:13,maxWidth:"calc(100vw - 32px)",animation:"toastIn .25s ease"}}>
     <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast.msg}</span>
-    {toast.undoId&&<button onClick={onUndo} style={{background:"transparent",border:"none",color:t.ac,fontWeight:600,cursor:"pointer",fontSize:13,padding:0,whiteSpace:"nowrap"}}>↶ ยกเลิก</button>}
+    {toast.onUndo&&<button onClick={handleUndo} style={{background:"transparent",border:"none",color:t.ac,fontWeight:600,cursor:"pointer",fontSize:13,padding:0,whiteSpace:"nowrap"}}>↶ {toast.undoLabel||"ยกเลิก"}</button>}
     <style>{`@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
   </div>);
 }
@@ -2478,23 +2486,36 @@ function WealthHub(){
   const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
   const toThb=useCallback((v,cur)=>cur==="USD"?v*rate:v,[rate]);
 
-  const addAsset=f=>{persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
-  const updateAsset=(id,f)=>{persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
-  const delAsset=id=>persist({...data,assets:data.assets.filter(a=>a.id!==id)});
-  const addTxn=f=>{persist({...data,transactions:[...data.transactions,{...f,id:uid(),amount:+f.amount}]});setModal(null)};
-  const updateTxn=(id,f)=>{persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount}:tx)});setModal(null)};
-  const delTxn=id=>persist({...data,transactions:data.transactions.filter(tx=>tx.id!==id)});
-  const quickAddTxn=tpl=>{const id=uid();const newTxn={type:"expense",category:tpl.category,amount:+tpl.amount,date:td(),note:tpl.note||"",id};persist({...data,transactions:[...data.transactions,newTxn]});setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}`,undoId:id})};
-  const undoLastTxn=id=>{persist({...data,transactions:data.transactions.filter(tx=>tx.id!==id)});setToast(null)};
-  const addGoal=f=>{persist({...data,goals:[...data.goals,{...f,id:uid(),target:+f.target,saved:+f.saved}]});setModal(null)};
-  const updateGoal=(id,f)=>{persist({...data,goals:data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g)});setModal(null)};
-  const delGoal=id=>persist({...data,goals:data.goals.filter(g=>g.id!==id)});
-  const addDebt=f=>{persist({...data,debts:[...data.debts,{...f,id:uid(),total:+f.total,paid:+f.paid,rate:+f.rate}]});setModal(null)};
-  const updateDebt=(id,f)=>{persist({...data,debts:data.debts.map(d=>d.id===id?{...d,...f,total:+f.total,paid:+f.paid,rate:+f.rate}:d)});setModal(null)};
-  const delDebt=id=>persist({...data,debts:data.debts.filter(d=>d.id!==id)});
-  const addRecurring=f=>{persist({...data,recurring:[...(data.recurring||[]),{...f,id:uid(),amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active,lastRun:null}]});setModal(null)};
-  const updateRecurring=(id,f)=>{persist({...data,recurring:(data.recurring||[]).map(r=>r.id===id?{...r,...f,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active}:r)});setModal(null)};
-  const delRecurring=id=>persist({...data,recurring:(data.recurring||[]).filter(r=>r.id!==id)});
+  // Generic delete + undo: snapshot before delete, show toast w/ "ยกเลิก" for 5s
+  const deleteWithUndo=(label,filterFn)=>{
+    const snap=data;
+    haptic([10,40,10]);
+    persist(filterFn(data));
+    setToast({msg:`🗑️ ลบ${label?` "${label}"`:""} แล้ว`,onUndo:()=>persist(snap)});
+  };
+
+  const addAsset=f=>{haptic(15);persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
+  const updateAsset=(id,f)=>{haptic(15);persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
+  const delAsset=id=>{const a=data.assets.find(x=>x.id===id);deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id)}))};
+  const addTxn=f=>{haptic(15);persist({...data,transactions:[...data.transactions,{...f,id:uid(),amount:+f.amount}]});setModal(null)};
+  const updateTxn=(id,f)=>{haptic(15);persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount}:tx)});setModal(null)};
+  const delTxn=id=>{const tx=data.transactions.find(x=>x.id===id);const lab=tx?.note||(EC.find(c=>c.v===tx?.category)?.l)||"";deleteWithUndo(lab,d=>({...d,transactions:d.transactions.filter(x=>x.id!==id)}))};
+  const quickAddTxn=tpl=>{
+    const snap=data;
+    haptic(15);
+    const newTxn={type:"expense",category:tpl.category,amount:+tpl.amount,date:td(),note:tpl.note||"",id:uid()};
+    persist({...data,transactions:[...data.transactions,newTxn]});
+    setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}`,onUndo:()=>persist(snap)});
+  };
+  const addGoal=f=>{haptic(15);persist({...data,goals:[...data.goals,{...f,id:uid(),target:+f.target,saved:+f.saved}]});setModal(null)};
+  const updateGoal=(id,f)=>{haptic(15);persist({...data,goals:data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g)});setModal(null)};
+  const delGoal=id=>{const g=data.goals.find(x=>x.id===id);deleteWithUndo(g?.name,d=>({...d,goals:d.goals.filter(x=>x.id!==id)}))};
+  const addDebt=f=>{haptic(15);persist({...data,debts:[...data.debts,{...f,id:uid(),total:+f.total,paid:+f.paid,rate:+f.rate}]});setModal(null)};
+  const updateDebt=(id,f)=>{haptic(15);persist({...data,debts:data.debts.map(d=>d.id===id?{...d,...f,total:+f.total,paid:+f.paid,rate:+f.rate}:d)});setModal(null)};
+  const delDebt=id=>{const d2=data.debts.find(x=>x.id===id);deleteWithUndo(d2?.name,d=>({...d,debts:d.debts.filter(x=>x.id!==id)}))};
+  const addRecurring=f=>{haptic(15);persist({...data,recurring:[...(data.recurring||[]),{...f,id:uid(),amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active,lastRun:null}]});setModal(null)};
+  const updateRecurring=(id,f)=>{haptic(15);persist({...data,recurring:(data.recurring||[]).map(r=>r.id===id?{...r,...f,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active}:r)});setModal(null)};
+  const delRecurring=id=>{const r=(data.recurring||[]).find(x=>x.id===id);deleteWithUndo(r?.name,d=>({...d,recurring:(d.recurring||[]).filter(x=>x.id!==id)}))};
   const toggleRecurring=r=>persist({...data,recurring:data.recurring.map(x=>x.id===r.id?{...x,active:!x.active}:x)});
   const runRecurringNow=r=>{const cm=mk(td());const day=Math.min(r.dayOfMonth||1,28);const date=`${cm}-${String(day).padStart(2,"0")}`;const tx={id:uid(),type:r.type,category:r.category,amount:+r.amount,date,note:(r.name||"รายการประจำ")+" (manual)",recurringId:r.id};persist({...data,transactions:[...data.transactions,tx],recurring:data.recurring.map(x=>x.id===r.id?{...x,lastRun:cm}:x)})};
 
@@ -2662,7 +2683,7 @@ function WealthHub(){
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
     <BottomTabBar page={page} setPage={setPage} t={t} onMore={()=>setSbOpen(true)} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
     <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||sbOpen||showAuth||recovery}/>
-    <Toast toast={toast} onUndo={()=>toast?.undoId&&undoLastTxn(toast.undoId)} onClose={()=>setToast(null)} t={t}/>
+    <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>

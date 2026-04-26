@@ -6,6 +6,11 @@ import { SK, OSK, DF } from "./constants";
 /* Random unique ID (used for new entities) */
 export const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
+/* Haptic feedback — silent no-op on devices without Vibration API.
+ * Pass a number (ms) or array (alternating vibrate/pause pattern).
+ * Conventions: tap=5, save=15, delete=[10,40,10], success=[40,30,40]. */
+export const haptic=p=>{try{navigator.vibrate?.(p)}catch{}};
+
 /* Format Baht — `฿1,234` (no decimals) */
 export const fB=n=>`฿${Math.abs(n).toLocaleString("th-TH",{maximumFractionDigits:0})}`;
 
