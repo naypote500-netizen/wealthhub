@@ -83,7 +83,10 @@ export const NAV=[
   {k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},
   {k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},
   {k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},
+  {k:"fund",l:"กองทุนฉุกเฉิน",i:"🛡️",g:"วางแผน"},
   {k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},
+  {k:"taxded",l:"ลดหย่อนภาษี",i:"📋",g:"เครื่องมือ"},
+  {k:"takehome",l:"เงินเดือนหลังหัก",i:"💼",g:"เครื่องมือ"},
   {k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
   {k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},
   {k:"streak",l:"สตรีค & รางวัล",i:"🔥",g:"สังคม"},
@@ -156,4 +159,16 @@ export const DF={
   settings:{rate:35.5},
   streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:"",boxesClaimed:[]},
   insights:{weeklyDismissed:[]},
+  taxYear:{
+    year:new Date().getFullYear(),
+    salary:0, // monthly gross
+    bonus:0, // annual one-time
+    pvdPct:0, // % of salary contributed to PVD
+    deductions:{
+      spouse:false,children:0,parents:0,disabledDep:0,
+      lifeIns:0,healthIns:0,parentHealthIns:0,socSec:9000,
+      rmf:0,ssf:0,tesg:0,pvd:0,
+      homeLoan:0,donate:0,donateDouble:0,
+    },
+  },
 };

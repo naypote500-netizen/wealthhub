@@ -106,6 +106,8 @@ export function ld(){
       budgets:d.budgets||{},
       cashFlow:{monthly:{...(d.cashFlow?.monthly||{})},yearly:{...(d.cashFlow?.yearly||{})}},
       cfItems:d.cfItems||null,
+      taxYear:{...DF.taxYear,...(d.taxYear||{}),deductions:{...DF.taxYear.deductions,...(d.taxYear?.deductions||{})}},
+      insights:{...DF.insights,...(d.insights||{})},
     };
   }catch{return null}
 }
