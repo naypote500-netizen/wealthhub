@@ -1828,13 +1828,15 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
   const clearSel=()=>{setSelMode(false);setSelIds(new Set())};
   const allCats=useMemo(()=>[...IC.map(c=>({...c,kind:"income"})),...EC.map(c=>({...c,kind:"expense"}))],[]);
   const{from,to}=useMemo(()=>{
-    const tdy=new Date();const today=tdy.toISOString().slice(0,10);
+    // Use Bangkok-local date (matches td() utility) — UTC was hiding today's txns past 17:00 UTC
+    const today=td();const[yy,mm]=today.split("-").map(Number);
+    const fmtBkk=d=>d.toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
     if(dateRange==="all")return{from:null,to:null};
-    if(dateRange==="month"){const f=`${mk(today)}-01`;return{from:f,to:today}}
-    if(dateRange==="lastmonth"){const d=new Date(tdy.getFullYear(),tdy.getMonth()-1,1);const last=new Date(tdy.getFullYear(),tdy.getMonth(),0);return{from:d.toISOString().slice(0,10),to:last.toISOString().slice(0,10)}}
-    if(dateRange==="3m"){const d=new Date(tdy);d.setMonth(d.getMonth()-3);return{from:d.toISOString().slice(0,10),to:today}}
-    if(dateRange==="6m"){const d=new Date(tdy);d.setMonth(d.getMonth()-6);return{from:d.toISOString().slice(0,10),to:today}}
-    if(dateRange==="year"){return{from:`${tdy.getFullYear()}-01-01`,to:today}}
+    if(dateRange==="month"){return{from:`${today.slice(0,7)}-01`,to:today}}
+    if(dateRange==="lastmonth"){const d=new Date(yy,mm-2,1);const last=new Date(yy,mm-1,0);return{from:fmtBkk(d),to:fmtBkk(last)}}
+    if(dateRange==="3m"){const d=new Date(yy,mm-1,+today.slice(8,10));d.setMonth(d.getMonth()-3);return{from:fmtBkk(d),to:today}}
+    if(dateRange==="6m"){const d=new Date(yy,mm-1,+today.slice(8,10));d.setMonth(d.getMonth()-6);return{from:fmtBkk(d),to:today}}
+    if(dateRange==="year"){return{from:`${yy}-01-01`,to:today}}
     if(dateRange==="custom")return{from:customFrom||null,to:customTo||null};
     return{from:null,to:null};
   },[dateRange,customFrom,customTo]);
