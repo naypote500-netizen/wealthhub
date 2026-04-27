@@ -352,7 +352,8 @@ function PlanPage({data,stats,t}){
   const inc=stats.incomeThisMonth||0;const exp=stats.expenseThisMonth||0;
   const sr=inc>0?((inc-exp)/inc*100):0;
   const ef=exp*6;
-  const ce=data.goals.filter(g=>g.name.includes("ฉุกเฉิน")).reduce((s,g)=>s+g.saved,0);
+  // Emergency fund = liquid assets (cash + savings) — same as EmergencyFundPage
+  const ce=(data.balanceSheet?.cash||0)+(data.balanceSheet?.savings||0);
   const efMonths=exp>0?(ce/exp):0;
   const di=inc>0?(stats.debtRemaining/(inc*12)*100):0;
   // Score components (0-100)
@@ -4141,7 +4142,11 @@ function WealthHub(){
     const eM=data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).reduce((s,tx)=>s+tx.amount,0);
     const nM=iM-eM;const gs=data.goals.reduce((s,g)=>s+g.saved,0);const gt=data.goals.reduce((s,g)=>s+g.target,0);
     const td2=data.debts.reduce((s,d)=>s+d.total,0);const dp=data.debts.reduce((s,d)=>s+d.paid,0);const dr=td2-dp;
-    const nw=tp+gs-dr;
+    // Net Worth — must match BalancePage: portfolio + goals + balanceSheet assets − debts − balanceSheet liabs
+    const bs=data.balanceSheet||{};
+    const bsAssets=(bs.cash||0)+(bs.savings||0)+(bs.car||0)+(bs.house||0)+(bs.otherAssets||0);
+    const bsLiabs=(bs.creditCard||0)+(bs.carLoan||0)+(bs.homeLoan||0)+(bs.otherLiab||0);
+    const nw=tp+gs+bsAssets-dr-bsLiabs;
     const alloc=data.assets.map((a,i)=>{const v=toThb(a.units*a.currentPrice,a.currency||"THB");const c=toThb(a.units*a.avgCost,a.currency||"THB");return{...a,value:v,cost:c,pl:v-c,pct:tp>0?(v/tp)*100:0,color:PC[i%PC.length]}}).sort((a,b)=>b.value-a.value);
     const ms=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}
     const mt=ms.map(m=>({month:fm(m),income:data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0),expense:data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0)}));
