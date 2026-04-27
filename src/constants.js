@@ -72,6 +72,7 @@ export const NAV=[
   {k:"txn",l:"รายรับ-รายจ่าย",i:"⇄",g:"ภาพรวม"},
   {k:"calendar",l:"ปฏิทินการเงิน",i:"📅",g:"ภาพรวม"},
   {k:"recurring",l:"รายการประจำ",i:"↻",g:"ภาพรวม"},
+  {k:"subs",l:"Subscription",i:"💳",g:"ภาพรวม"},
   {k:"envelopes",l:"ซองเงิน",i:"💌",g:"ภาพรวม"},
   {k:"analytics",l:"วิเคราะห์รายจ่าย",i:"📊",g:"ภาพรวม"},
   {k:"balance",l:"งบดุลส่วนบุคคล",i:"☷",g:"การเงิน"},
@@ -90,15 +91,45 @@ export const NAV=[
   {k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"บัญชี"},
 ];
 
-/* Streak Badge definitions — unlocked when current_streak >= req */
+/* Achievement Badge definitions — multiple categories
+ * cat: streak | savings | goals | portfolio | txn
+ * req: numeric threshold; stat key inferred from cat */
 export const BADGES=[
-  {id:"starter",emoji:"🌱",name:"มือใหม่",desc:"บันทึก 3 วันติด",req:3,color:"#84CC16"},
-  {id:"week",emoji:"💪",name:"สัปดาห์แรก",desc:"บันทึก 7 วันติด",req:7,color:"#06B6D4"},
-  {id:"twoweeks",emoji:"⚡",name:"สองสัปดาห์",desc:"บันทึก 14 วันติด",req:14,color:"#8B5CF6"},
-  {id:"month",emoji:"🌟",name:"หนึ่งเดือน",desc:"บันทึก 30 วันติด",req:30,color:"#F59E0B"},
-  {id:"quarter",emoji:"🚀",name:"สามเดือน",desc:"บันทึก 90 วันติด",req:90,color:"#EC4899"},
-  {id:"halfyear",emoji:"🏆",name:"ครึ่งปี",desc:"บันทึก 180 วันติด",req:180,color:"#EF4444"},
-  {id:"year",emoji:"👑",name:"ครบปี",desc:"บันทึก 365 วันติด",req:365,color:"#FBBF24"},
+  // ═══ STREAK ═══
+  {id:"starter",cat:"streak",emoji:"🌱",name:"มือใหม่",desc:"บันทึก 3 วันติด",req:3,color:"#84CC16"},
+  {id:"week",cat:"streak",emoji:"💪",name:"สัปดาห์แรก",desc:"บันทึก 7 วันติด",req:7,color:"#06B6D4"},
+  {id:"twoweeks",cat:"streak",emoji:"⚡",name:"สองสัปดาห์",desc:"บันทึก 14 วันติด",req:14,color:"#8B5CF6"},
+  {id:"month",cat:"streak",emoji:"🌟",name:"หนึ่งเดือน",desc:"บันทึก 30 วันติด",req:30,color:"#F59E0B"},
+  {id:"quarter",cat:"streak",emoji:"🚀",name:"สามเดือน",desc:"บันทึก 90 วันติด",req:90,color:"#EC4899"},
+  {id:"halfyear",cat:"streak",emoji:"🏆",name:"ครึ่งปี",desc:"บันทึก 180 วันติด",req:180,color:"#EF4444"},
+  {id:"year",cat:"streak",emoji:"👑",name:"ครบปี",desc:"บันทึก 365 วันติด",req:365,color:"#FBBF24"},
+  // ═══ SAVINGS (รวมเงินออมในเป้าหมาย) ═══
+  {id:"save10k",cat:"savings",emoji:"💰",name:"หมื่นแรก",desc:"ออมในเป้าหมายครบ ฿10,000",req:10000,color:"#F59E0B"},
+  {id:"save50k",cat:"savings",emoji:"💎",name:"ห้าหมื่น",desc:"ออมครบ ฿50,000",req:50000,color:"#8B5CF6"},
+  {id:"save100k",cat:"savings",emoji:"🏦",name:"แสนแรก",desc:"ออมครบ ฿100,000",req:100000,color:"#10B981"},
+  {id:"save500k",cat:"savings",emoji:"💵",name:"ครึ่งล้าน",desc:"ออมครบ ฿500,000",req:500000,color:"#EC4899"},
+  {id:"save1m",cat:"savings",emoji:"💸",name:"เศรษฐี",desc:"ออมครบ ฿1,000,000",req:1000000,color:"#FBBF24"},
+  // ═══ GOALS ═══
+  {id:"goal1",cat:"goals",emoji:"🎯",name:"เป้าหมายแรก",desc:"ทำเป้าหมายสำเร็จ 1 อัน",req:1,color:"#3B82F6"},
+  {id:"goal3",cat:"goals",emoji:"🎖️",name:"นักล่าเป้า",desc:"ทำเป้าหมายสำเร็จ 3 อัน",req:3,color:"#0EA5E9"},
+  {id:"goal10",cat:"goals",emoji:"🏅",name:"แชมเปี้ยน",desc:"ทำเป้าหมายสำเร็จ 10 อัน",req:10,color:"#F59E0B"},
+  // ═══ PORTFOLIO ═══
+  {id:"firstAsset",cat:"portfolio",emoji:"📊",name:"นักลงทุน",desc:"เพิ่มสินทรัพย์ตัวแรก",req:1,color:"#14B8A6"},
+  {id:"port100k",cat:"portfolio",emoji:"📈",name:"พอร์ต 1 แสน",desc:"พอร์ตมูลค่าครบ ฿100,000",req:100000,color:"#0EA5E9"},
+  {id:"port1m",cat:"portfolio",emoji:"💹",name:"พอร์ต 1 ล้าน",desc:"พอร์ตมูลค่าครบ ฿1,000,000",req:1000000,color:"#8B5CF6"},
+  // ═══ TRANSACTIONS ═══
+  {id:"txn10",cat:"txn",emoji:"📝",name:"นักบันทึก",desc:"บันทึก 10 รายการ",req:10,color:"#84CC16"},
+  {id:"txn100",cat:"txn",emoji:"📔",name:"นักบันทึกตัวยง",desc:"บันทึก 100 รายการ",req:100,color:"#06B6D4"},
+  {id:"txn500",cat:"txn",emoji:"📚",name:"ผู้รอบรู้",desc:"บันทึก 500 รายการ",req:500,color:"#8B5CF6"},
+];
+
+/* Category metadata for display */
+export const BADGE_CATS=[
+  {k:"streak",l:"🔥 Streak",desc:"บันทึกต่อเนื่อง"},
+  {k:"savings",l:"💰 เงินออม",desc:"สะสมในเป้าหมาย"},
+  {k:"goals",l:"🎯 เป้าหมาย",desc:"ทำสำเร็จ"},
+  {k:"portfolio",l:"📊 พอร์ตลงทุน",desc:"นักลงทุน"},
+  {k:"txn",l:"📝 รายการ",desc:"บันทึกธุรกรรม"},
 ];
 
 /* Storage keys + default state shape */

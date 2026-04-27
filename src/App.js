@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
-import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES } from "./constants";
-import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned } from "./utils";
+import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS } from "./constants";
+import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -447,11 +447,47 @@ function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
   const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||"",goalId:initial.goalId||""}:{type:initialType||"expense",category:initialType==="income"?"salary":"food",amount:"",date:initialDate||td(),note:"",goalId:""});
   const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;
   const goals=(data?.goals||[]).filter(g=>(g.saved||0)<(g.target||0));
+  const ocrFileRef=useRef();
+  const[ocr,setOcr]=useState({status:"",progress:0,err:""});
+  const handleOCR=async(e)=>{
+    const file=e.target.files?.[0];if(!file)return;
+    e.target.value="";
+    setOcr({status:"กำลังเตรียม...",progress:0,err:""});
+    try{
+      const{scanReceipt}=await import("./utils");
+      const{amount,date}=await scanReceipt(file,m=>{
+        if(m.status==="recognizing text")setOcr({status:"กำลังอ่านใบเสร็จ...",progress:Math.round((m.progress||0)*100),err:""});
+        else if(m.status)setOcr(p=>({...p,status:m.status==="loading tesseract core"?"กำลังโหลดเครื่องมือ...":m.status==="loading language traineddata"?"กำลังโหลดภาษา...":p.status}));
+      });
+      const updates=[];
+      if(amount){set("amount",String(amount));updates.push(`฿${amount.toLocaleString()}`)}
+      if(date){set("date",date);updates.push(date)}
+      haptic(15);
+      setOcr({status:updates.length?`✓ ดึงได้: ${updates.join(" • ")}`:"⚠️ ไม่พบยอดเงิน — กรอกเอง",progress:100,err:""});
+      setTimeout(()=>setOcr({status:"",progress:0,err:""}),3500);
+    }catch(err){
+      console.error("[ocr]",err);
+      setOcr({status:"",progress:0,err:"สแกนไม่ได้: "+(err.message||"unknown")});
+    }
+  };
   // Smart Category: build keyword→category map from history (expenses only)
   const noteMap=useMemo(()=>{const m={};(data?.transactions||[]).filter(tx=>tx.type==="expense"&&tx.note).forEach(tx=>{tx.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2).forEach(w=>{if(!m[w])m[w]={};m[w][tx.category]=(m[w][tx.category]||0)+1})});return m},[data?.transactions]);
   const suggestion=useMemo(()=>{if(f.type!=="expense"||!f.note||f.note.length<2)return null;const words=f.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2);const scores={};words.forEach(w=>{if(noteMap[w])Object.entries(noteMap[w]).forEach(([c,n])=>{scores[c]=(scores[c]||0)+n})});const top=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];return(top&&top[0]!==f.category)?top[0]:null},[f.note,f.category,f.type,noteMap]);
   const sugCat=suggestion?EC.find(c=>c.v===suggestion):null;
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {/* OCR scan button (only for expense workflow; works on any file) */}
+    {!initial&&(<>
+      <button type="button" onClick={()=>{haptic(8);ocrFileRef.current?.click()}} disabled={!!ocr.status&&!ocr.status.startsWith("✓")&&!ocr.status.startsWith("⚠")} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",border:`1px dashed ${t.ac}`,borderRadius:10,background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,cursor:"pointer",color:t.ac,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent"}}>
+        <span style={{fontSize:18}}>📸</span>
+        <span style={{flex:1,textAlign:"left"}}>สแกนใบเสร็จ <span style={{fontWeight:400,color:t.tm}}>(ดึงยอด+วันที่อัตโนมัติ)</span></span>
+      </button>
+      <input ref={ocrFileRef} type="file" accept="image/*" capture="environment" onChange={handleOCR} style={{display:"none"}}/>
+      {ocr.status&&<div style={{fontSize:11,color:ocr.status.startsWith("✓")?t.g:ocr.status.startsWith("⚠")?t.am:t.ac,padding:"6px 10px",background:`${ocr.status.startsWith("✓")?t.g:ocr.status.startsWith("⚠")?t.am:t.ac}10`,borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{flex:1}}>{ocr.status}</span>
+        {ocr.progress>0&&ocr.progress<100&&<span style={{fontWeight:600}}>{ocr.progress}%</span>}
+      </div>}
+      {ocr.err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}10`,borderRadius:8}}>{ocr.err}</div>}
+    </>)}
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div>
     <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
     {sugCat&&<button type="button" onClick={()=>set("category",suggestion)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",border:`1px dashed ${t.ac}`,borderRadius:8,background:`${t.ac}10`,cursor:"pointer",color:t.ac,fontSize:11,textAlign:"left"}}>💡 น่าจะเป็นหมวด <b>{sugCat.i} {sugCat.l}</b> ใช่ไหม? <span style={{marginLeft:"auto",fontSize:10,color:t.tm}}>คลิกเพื่อเปลี่ยน →</span></button>}
@@ -576,6 +612,111 @@ function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,onCreateFromCa
         </div>)})}
       </div>
     )}
+  </div>);
+}
+
+/* ═══ SUBSCRIPTION TRACKER ═══
+ * Aggregates active recurring expenses (subscriptions/bills) with brand
+ * detection, monthly+yearly totals, and "next charge" countdown. */
+const SUB_BRANDS=[
+  {match:/netflix/i,emoji:"🎬",color:"#E50914"},
+  {match:/spotify/i,emoji:"🎵",color:"#1DB954"},
+  {match:/youtube/i,emoji:"📺",color:"#FF0000"},
+  {match:/disney|hotstar/i,emoji:"✨",color:"#0042AA"},
+  {match:/apple|icloud|app\s?store/i,emoji:"🍎",color:"#A2AAAD"},
+  {match:/google|drive|gmail/i,emoji:"🔍",color:"#4285F4"},
+  {match:/adobe|photoshop|lightroom/i,emoji:"🎨",color:"#FF0000"},
+  {match:/canva/i,emoji:"🎨",color:"#00C4CC"},
+  {match:/microsoft|office|onedrive/i,emoji:"💼",color:"#00A4EF"},
+  {match:/amazon|aws|prime/i,emoji:"📦",color:"#FF9900"},
+  {match:/facebook|meta/i,emoji:"👥",color:"#1877F2"},
+  {match:/twitter|^x$|x\s?premium/i,emoji:"🐦",color:"#1DA1F2"},
+  {match:/discord/i,emoji:"💬",color:"#5865F2"},
+  {match:/twitch/i,emoji:"🎮",color:"#9146FF"},
+  {match:/chatgpt|openai/i,emoji:"🤖",color:"#10A37F"},
+  {match:/claude|anthropic/i,emoji:"🤖",color:"#D97706"},
+  {match:/figma/i,emoji:"🎨",color:"#F24E1E"},
+  {match:/notion/i,emoji:"📝",color:"#000000"},
+  {match:/dropbox/i,emoji:"📦",color:"#0061FF"},
+  {match:/github/i,emoji:"🐙",color:"#181717"},
+  {match:/gym|ฟิตเนส|fitness/i,emoji:"💪",color:"#EF4444"},
+  {match:/internet|wifi|อินเทอร์เน็ต|true\s?online|3bb|ais/i,emoji:"🌐",color:"#06B6D4"},
+  {match:/electric|ค่าไฟ|ไฟฟ้า/i,emoji:"💡",color:"#F59E0B"},
+  {match:/water|ค่าน้ำ|น้ำประปา/i,emoji:"💧",color:"#3B82F6"},
+  {match:/mobile|เบอร์|ค่าโทรศัพท์|phone|true|dtac|ais/i,emoji:"📱",color:"#8B5CF6"},
+  {match:/rent|ค่าเช่า/i,emoji:"🏠",color:"#84CC16"},
+  {match:/insurance|ประกัน/i,emoji:"🛡️",color:"#0EA5E9"},
+];
+function detectBrand(name){
+  const s=(name||"").toLowerCase();
+  for(const b of SUB_BRANDS)if(b.match.test(s))return b;
+  return{emoji:"💳",color:"#64748B"};
+}
+function SubsPage({data,t,setPage}){
+  const list=(data.recurring||[]).filter(r=>r.active&&r.type==="expense");
+  const today=new Date();
+  const curDay=today.getDate();
+  const daysInMonth=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const enriched=list.map(r=>{
+    const brand=detectBrand(r.name);
+    const monthly=+r.amount||0;
+    const yearly=monthly*12;
+    const day=Math.min(+r.dayOfMonth||1,28);
+    let daysUntil;
+    if(day>=curDay)daysUntil=day-curDay;
+    else daysUntil=(daysInMonth-curDay)+day;
+    return{...r,brand,monthly,yearly,daysUntil,nextDay:day};
+  }).sort((a,b)=>b.monthly-a.monthly);
+  const totalMonthly=enriched.reduce((s,r)=>s+r.monthly,0);
+  const totalYearly=totalMonthly*12;
+  const upcoming=[...enriched].filter(r=>r.daysUntil<=7).sort((a,b)=>a.daysUntil-b.daysUntil);
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      <MC icon="💳" label="ทั้งหมด" value={`${enriched.length} รายการ`} t={t}/>
+      <MC icon="📅" label="ต่อเดือน" value={fB(totalMonthly)} t={t} color={t.r}/>
+      <MC icon="📊" label="ต่อปี" value={fB(totalYearly)} t={t} color={t.am}/>
+    </div>
+    {enriched.length===0?<Empty icon="💳" title="ยังไม่มี Subscription" sub="เพิ่มในหน้า 'รายการประจำ' (Netflix, Spotify, ค่าไฟ ฯลฯ)" action="↻ ไปรายการประจำ" onAction={()=>setPage("recurring")} t={t}/>:(<>
+      {/* Insight box */}
+      <div style={{background:`linear-gradient(135deg, ${t.am}18, ${t.am}05)`,border:`1px solid ${t.am}40`,borderRadius:12,padding:14,display:"flex",gap:12,alignItems:"center"}}>
+        <div style={{fontSize:30,lineHeight:1}}>💡</div>
+        <div style={{flex:1,fontSize:12,color:t.text,lineHeight:1.5}}>
+          คุณจ่าย Subscription รวม <b style={{color:t.r}}>{fB(totalMonthly)}/เดือน</b> หรือ <b style={{color:t.am}}>{fB(totalYearly)}/ปี</b>
+          {totalYearly>=10000&&<div style={{fontSize:11,color:t.tm,marginTop:3}}>เทียบเท่ากับ {Math.round(totalYearly/40000*10)/10} เดือนของรายได้เฉลี่ยคนไทย — ลองทบทวนสิ่งที่ไม่ได้ใช้</div>}
+        </div>
+      </div>
+      {/* Upcoming this week */}
+      {upcoming.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+        <div style={{fontSize:12,fontWeight:600,color:t.text,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>⏰ จะเรียกเก็บใน 7 วัน</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {upcoming.map(r=>(<div key={r.id} style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:28,height:28,borderRadius:8,background:`${r.brand.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{r.brand.emoji}</div>
+            <div style={{flex:1,fontSize:12,fontWeight:500}}>{r.name}</div>
+            <div style={{fontSize:11,color:t.tm}}>{r.daysUntil===0?"วันนี้":r.daysUntil===1?"พรุ่งนี้":`อีก ${r.daysUntil} วัน`}</div>
+            <div style={{fontSize:13,fontWeight:600,color:t.r}}>{fB(r.monthly)}</div>
+          </div>))}
+        </div>
+      </div>)}
+      {/* Full list sorted by amount */}
+      <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",fontSize:11,color:t.tm,fontWeight:600,borderBottom:`1px solid ${t.cb}`,background:t.thBg}}>เรียงตามค่าใช้จ่าย</div>
+        {enriched.map((r,i)=>{const pct=totalMonthly>0?(r.monthly/totalMonthly)*100:0;return(<div key={r.id} style={{padding:"12px 14px",borderBottom:i<enriched.length-1?`1px solid ${t.cb}`:"none"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+            <div style={{width:38,height:38,borderRadius:10,background:`${r.brand.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{r.brand.emoji}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div>
+              <div style={{fontSize:10,color:t.tm,marginTop:2}}>เก็บทุกวันที่ {r.nextDay} • ปีละ {fB(r.yearly)}</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:t.r}}>{fB(r.monthly)}</div>
+              <div style={{fontSize:9,color:t.tm}}>/เดือน</div>
+            </div>
+          </div>
+          <PB pct={pct} color={r.brand.color} height={3} t={t}/>
+        </div>)})}
+      </div>
+      <button onClick={()=>setPage("recurring")} style={{padding:"10px 16px",border:`1px dashed ${t.cb}`,borderRadius:10,background:"transparent",color:t.ts,cursor:"pointer",fontSize:12,fontWeight:500}}>+ เพิ่ม / แก้ไขที่หน้ารายการประจำ</button>
+    </>)}
   </div>);
 }
 
@@ -2443,7 +2584,7 @@ function Toast({toast,onClose,t}){
  */
 const NAV_COLORS={
   dashboard:"#0EA5E9",portfolio:"#8B5CF6",txn:"#10B981",calendar:"#3B82F6",
-  recurring:"#06B6D4",envelopes:"#EC4899",analytics:"#F59E0B",
+  recurring:"#06B6D4",subs:"#EC4899",envelopes:"#EC4899",analytics:"#F59E0B",
   balance:"#14B8A6",cashflow:"#22C55E",cfdetail:"#65A30D",
   goals:"#FBBF24",debts:"#EF4444",
   dca:"#6366F1",retire:"#F97316",plan:"#0D9488",tax:"#F472B6",
@@ -2464,6 +2605,7 @@ function NavIcon({name,size=26}){
     case"txn":return<svg {...s}><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>;
     case"calendar":return<svg {...s}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>;
     case"recurring":return<svg {...s}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>;
+    case"subs":return<svg {...s}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h2"/></svg>;
     case"envelopes":return<svg {...s}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>;
     case"analytics":return<svg {...s}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>;
     case"balance":return<svg {...s}><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>;
@@ -2529,6 +2671,13 @@ function MenuIllustration({navKey,size=30}){
       <path d="M20.5 12a8.5 8.5 0 0 1-14 6.5" fill="none" stroke="#0891B2" strokeWidth="2.4" strokeLinecap="round"/>
       <path d="M18 2v4h-4" fill="none" stroke="#06B6D4" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M6 22v-4h4" fill="none" stroke="#0891B2" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+    case"subs":return<svg {...s}>
+      <rect x="2" y="6" width="20" height="14" rx="2" fill="#EC4899"/>
+      <rect x="2" y="9" width="20" height="2" fill="#831843"/>
+      <rect x="5" y="14" width="3" height="1.5" rx="0.3" fill="#FCE7F3"/>
+      <rect x="9" y="14" width="5" height="1.5" rx="0.3" fill="#FBCFE8"/>
+      <text x="17" y="17.5" fontSize="3.5" fontWeight="800" fill="#FFFFFF">$</text>
     </svg>;
     case"envelopes":return<svg {...s}>
       <rect x="2" y="6" width="20" height="14" rx="1.5" fill="#FBCFE8"/>
@@ -3065,8 +3214,10 @@ function StreakPage({data,streak,persist,t}){
   // Group into weeks of 7
   const weeks=[];
   for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
-  const earned=badgesEarned(streak.current,streak.longest,BADGES);
-  const nextBadge=BADGES.find(b=>!earned.includes(b.id));
+  const stats=calcAchievementStats(data,streak);
+  const earned=badgesEarned(stats,BADGES);
+  // Find next streak badge specifically (for Hero progress bar)
+  const nextBadge=BADGES.filter(b=>b.cat==="streak").find(b=>!earned.includes(b.id));
   const progress=nextBadge?Math.min(100,(streak.current/nextBadge.req)*100):100;
 
   // Save badges + freeze tokens to data on mount if changed
@@ -3129,19 +3280,33 @@ function StreakPage({data,streak,persist,t}){
       </div>
     </div>
 
-    {/* Badges */}
+    {/* Achievements — grouped by category */}
     <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
-      <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:t.text}}>🏅 รางวัล ({earned.length}/{BADGES.length})</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(90px, 1fr))",gap:10}}>
-        {BADGES.map(b=>{
-          const got=earned.includes(b.id);
-          return(<div key={b.id} style={{textAlign:"center",padding:"10px 6px",borderRadius:10,background:got?`${b.color}15`:t.bg,border:`1px solid ${got?b.color+"50":t.cb}`,opacity:got?1:0.4,filter:got?"none":"grayscale(0.7)"}}>
-            <div style={{fontSize:28,lineHeight:1}}>{b.emoji}</div>
-            <div style={{fontSize:11,fontWeight:600,marginTop:5,color:got?b.color:t.ts}}>{b.name}</div>
-            <div style={{fontSize:9,color:t.tm,marginTop:2}}>{b.desc}</div>
-          </div>);
-        })}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14}}>
+        <div style={{fontSize:14,fontWeight:700,color:t.text}}>🏅 Achievements</div>
+        <div style={{fontSize:11,color:t.tm,fontWeight:600}}>{earned.length}/{BADGES.length} ปลดล็อก</div>
       </div>
+      {BADGE_CATS.map(cat=>{
+        const catBadges=BADGES.filter(b=>b.cat===cat.k);
+        const catEarned=catBadges.filter(b=>earned.includes(b.id)).length;
+        return(<div key={cat.k} style={{marginBottom:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8,paddingBottom:6,borderBottom:`1px dashed ${t.cb}`}}>
+            <div style={{fontSize:12,fontWeight:600,color:t.text}}>{cat.l}</div>
+            <div style={{fontSize:10,color:t.tm}}>{catEarned}/{catBadges.length}</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(86px, 1fr))",gap:8}}>
+            {catBadges.map(b=>{
+              const got=earned.includes(b.id);
+              return(<div key={b.id} title={b.desc} style={{textAlign:"center",padding:"10px 4px",borderRadius:10,background:got?`${b.color}15`:t.bg,border:`1px solid ${got?b.color+"50":t.cb}`,opacity:got?1:0.45,filter:got?"none":"grayscale(0.7)",position:"relative"}}>
+                {got&&<div style={{position:"absolute",top:3,right:3,width:14,height:14,borderRadius:"50%",background:b.color,color:"#fff",fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>✓</div>}
+                <div style={{fontSize:26,lineHeight:1}}>{b.emoji}</div>
+                <div style={{fontSize:10,fontWeight:600,marginTop:4,color:got?b.color:t.ts,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.name}</div>
+                <div style={{fontSize:8,color:t.tm,marginTop:2,lineHeight:1.3,minHeight:18}}>{b.desc}</div>
+              </div>);
+            })}
+          </div>
+        </div>);
+      })}
     </div>
   </div>);
 }
@@ -3450,7 +3615,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile","subs","streak"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>)}
 
@@ -3514,6 +3679,7 @@ function WealthHub(){
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} onBulkDel={bulkDelTxn} t={t}/>}
       {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} onCreateFromCandidate={createRecurringFromCandidate} t={t}/>}
+      {page==="subs"&&<SubsPage data={data} t={t} setPage={setPage}/>}
       {page==="calendar"&&<CalendarPage data={data} t={t} onAddTxn={dt=>setModal({type:"addTxn",date:dt})} setPage={setPage}/>}
       {page==="envelopes"&&<EnvelopesPage data={data} persist={persist} t={t}/>}
       {page==="analytics"&&<AnalyticsPage data={data} stats={stats} t={t}/>}

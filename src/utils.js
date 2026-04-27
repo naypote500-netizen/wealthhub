@@ -56,10 +56,33 @@ export function calcStreak(transactions){
   return{current,longest,hasToday,lastLogDate:dates[0]||null,datesSet};
 }
 
-/* Return list of badge IDs that should be unlocked given streak.current and longest */
-export function badgesEarned(current,longest,BADGES){
-  const max=Math.max(current||0,longest||0);
-  return BADGES.filter(b=>max>=b.req).map(b=>b.id);
+/* Compute stats used for achievement evaluation
+ * Returns object keyed by badge category */
+export function calcAchievementStats(data,streak,fxRate=35.5){
+  const goals=data?.goals||[];
+  const assets=data?.assets||[];
+  const txns=data?.transactions||[];
+  const portValue=assets.reduce((s,a)=>{const u=+a.units||0;const p=+a.currentPrice||0;const v=u*p;return s+(a.currency==="USD"?v*fxRate:v)},0);
+  return{
+    streak:Math.max(streak?.current||0,streak?.longest||0),
+    savings:goals.reduce((s,g)=>s+(+g.saved||0),0),
+    goals:goals.filter(g=>(+g.saved||0)>=(+g.target||0)&&(+g.target||0)>0).length,
+    portfolio:portValue,
+    portfolioCount:assets.length,
+    txn:txns.length,
+  };
+}
+
+/* Return list of badge IDs unlocked given full stats object */
+export function badgesEarned(stats,BADGES){
+  return BADGES.filter(b=>{
+    if(b.cat==="streak")return stats.streak>=b.req;
+    if(b.cat==="savings")return stats.savings>=b.req;
+    if(b.cat==="goals")return stats.goals>=b.req;
+    if(b.cat==="portfolio")return b.id==="firstAsset"?stats.portfolioCount>=b.req:stats.portfolio>=b.req;
+    if(b.cat==="txn")return stats.txn>=b.req;
+    return false;
+  }).map(b=>b.id);
 }
 
 /* Year-month key from date string — `2025-04-26` → `2025-04` */
@@ -120,4 +143,60 @@ export function processRecurring(data){
   });
   if(!newTxns.length)return data;
   return{...data,transactions:[...data.transactions,...newTxns],recurring:updated};
+}
+
+/* ═══ OCR HELPERS ═══
+ * Parse extracted receipt text → best-guess amount + date.
+ * extractAmount: prioritises lines containing total/รวม keywords, then
+ *   falls back to the largest reasonable number on the receipt.
+ * extractDate: handles dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd; converts
+ *   Buddhist year (>2500) to Gregorian. Returns YYYY-MM-DD or null. */
+export function extractAmount(text){
+  if(!text)return null;
+  const lines=text.split(/\n/);
+  const candidates=[];
+  for(const line of lines){
+    // Numbers like 1,234.56 / 1234 / 1234.50 / 99.00
+    const matches=line.match(/(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g);
+    if(!matches)continue;
+    const lower=line.toLowerCase();
+    const isTotal=/total|รวม|ทั้งหมด|amount|net|grand|sum|จ่าย|ยอดสุทธิ/.test(lower);
+    const hasCurrency=/฿|baht|บาท|thb/.test(lower);
+    matches.forEach(m=>{
+      const n=parseFloat(m.replace(/,/g,""));
+      if(n>=10&&n<5000000)candidates.push({value:n,score:(isTotal?100:0)+(hasCurrency?20:0)+Math.log10(n)});
+    });
+  }
+  if(!candidates.length)return null;
+  candidates.sort((a,b)=>b.score-a.score);
+  return candidates[0].value;
+}
+
+export function extractDate(text){
+  if(!text)return null;
+  // yyyy-mm-dd or yyyy/mm/dd
+  let m=text.match(/(20\d{2}|25\d{2})[/\-.](\d{1,2})[/\-.](\d{1,2})/);
+  if(m){
+    let yr=+m[1];if(yr>2500)yr-=543;
+    return`${yr}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  }
+  // dd/mm/yyyy or dd-mm-yyyy
+  m=text.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](20\d{2}|25\d{2}|\d{2})/);
+  if(m){
+    let yr=+m[3];if(yr<100)yr+=yr>50?1900:2000;if(yr>2500)yr-=543;
+    return`${yr}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  }
+  return null;
+}
+
+/* Run OCR on an image file/blob. Lazy-loads tesseract.js to keep main
+ * bundle small. Returns {text, amount, date}.
+ * onProgress: optional cb({status, progress}) for UI feedback. */
+export async function scanReceipt(file,onProgress){
+  const{recognize}=await import("tesseract.js");
+  const{data}=await recognize(file,"eng+tha",{
+    logger:m=>{if(onProgress)onProgress(m)},
+  });
+  const text=data?.text||"";
+  return{text,amount:extractAmount(text),date:extractDate(text)};
 }
