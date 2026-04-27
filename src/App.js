@@ -4231,21 +4231,10 @@ function WealthHub(){
             <div><ResponsiveContainer width={140} height={140}><PieChart><Pie data={stats.allocation} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>{stats.allocation.map((d,i)=><Cell key={i} fill={d.color}/>)}</Pie></PieChart></ResponsiveContainer></div>
           </div>
         </div>)}
-        {/* Currency + alerts */}
-        <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <span style={{fontSize:12,fontWeight:600}}>💱 แปลงสกุลเงิน</span>
-              <button onClick={()=>refreshPrices({fxOnly:true})} disabled={priceRefresh.loading} style={{fontSize:10,color:t.ac,background:"none",border:"none",cursor:"pointer",padding:0}}>{priceRefresh.loading?"⏳":"🔄 อัปเดต"}</button>
-            </div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:11,color:t.tm}}>1 USD =</span><input value={rate} onChange={e=>setRate(+e.target.value)} type="number" step="0.1" style={{width:60,padding:"4px 6px",borderRadius:6,border:`1px solid ${t.ibr}`,fontSize:11,background:t.ib,color:t.text,textAlign:"center"}}/><span style={{fontSize:11,color:t.tm}}>บาท</span></div>
-            {priceRefresh.msg&&<div style={{fontSize:10,color:t.g,marginTop:6}}>{priceRefresh.msg}</div>}
-            {priceRefresh.err&&<div style={{fontSize:10,color:t.r,marginTop:6}}>{priceRefresh.err}</div>}
-          </div>
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
-            <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>🔔 แจ้งเตือน</div>
-            {(()=>{const al=[];data.debts.forEach(d=>{if(d.total-d.paid>0&&d.rate>=10)al.push({c:t.r,t:`⚠️ ${d.name} ดอกเบี้ยสูง`})});if(!al.length)al.push({c:t.g,t:"✅ ปกติ"});return al.map((a,i)=>(<div key={i} style={{padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:2,background:`${a.c}12`,color:a.c}}>{a.t}</div>))})()}
-          </div>
+        {/* Alerts */}
+        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>🔔 แจ้งเตือน</div>
+          {(()=>{const al=[];data.debts.forEach(d=>{if(d.total-d.paid>0&&d.rate>=10)al.push({c:t.r,t:`⚠️ ${d.name} ดอกเบี้ยสูง`})});if(!al.length)al.push({c:t.g,t:"✅ ปกติ"});return al.map((a,i)=>(<div key={i} style={{padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:2,background:`${a.c}12`,color:a.c}}>{a.t}</div>))})()}
         </div>
         <NetWorthHistoryChart session={session} t={t}/>
         {stats.monthlyTrend.some(m=>m.income||m.expense)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>รายรับ vs รายจ่าย (6 เดือน)</div><ResponsiveContainer width="100%" height={180}><BarChart data={stats.monthlyTrend} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={t.cb}/><XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/><YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1e3?`${(v/1e3).toFixed(0)}K`:v}/><Tooltip formatter={v=>fB(v)} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:8}}/><Bar dataKey="income" name="รายรับ" fill={t.g} radius={[4,4,0,0]}/><Bar dataKey="expense" name="รายจ่าย" fill={t.r} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>)}
