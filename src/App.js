@@ -2864,6 +2864,95 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
   </div>);
 }
 
+/* ═══ CONFETTI ═══
+ * Lightweight CSS-emoji confetti — no canvas, no deps. Renders 40 falling
+ * emoji elements that auto-cleanup via onDone after ~3s. */
+function Confetti({onDone}){
+  useEffect(()=>{const id=setTimeout(onDone,3200);return()=>clearTimeout(id)},[onDone]);
+  const items=useMemo(()=>Array.from({length:40},(_,i)=>({
+    emoji:["🎉","🎊","✨","🌟","💫","🎈","💰","⭐"][i%8],
+    left:Math.random()*100,
+    delay:Math.random()*0.4,
+    duration:2+Math.random()*1.5,
+    rotate:Math.random()*360,
+    size:18+Math.random()*14,
+  })),[]);
+  return(<div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999,overflow:"hidden"}}>
+    {items.map((it,i)=>(<div key={i} style={{position:"absolute",top:-40,left:`${it.left}%`,fontSize:it.size,animation:`confettiFall ${it.duration}s linear ${it.delay}s forwards`}}>{it.emoji}</div>))}
+    <style>{`@keyframes confettiFall{from{transform:translateY(0) rotate(0deg);opacity:1}to{transform:translateY(110vh) rotate(720deg);opacity:0}}`}</style>
+  </div>);
+}
+
+/* ═══ PWA INSTALL BANNER ═══
+ * Shows once when app is installable. Android/desktop: triggers native
+ * prompt via beforeinstallprompt. iOS Safari: shows manual instructions
+ * (iOS doesn't support the prompt event). Dismissed for 14 days. */
+function PWAInstallBanner({t}){
+  const[deferred,setDeferred]=useState(null);
+  const[dismissed,setDismissed]=useState(true);
+  const[isIOS,setIsIOS]=useState(false);
+  const[standalone,setStandalone]=useState(false);
+  useEffect(()=>{
+    const ua=(navigator.userAgent||"").toLowerCase();
+    const ios=/iphone|ipad|ipod/.test(ua)&&!/crios|fxios/.test(ua); // Safari iOS only
+    setIsIOS(ios);
+    const sa=window.matchMedia?.("(display-mode: standalone)").matches||window.navigator.standalone===true;
+    setStandalone(sa);
+    const dt=+(localStorage.getItem("wh-pwa-dismiss")||0);
+    setDismissed(Date.now()-dt<14*86400000);
+    const handler=e=>{e.preventDefault();setDeferred(e)};
+    window.addEventListener("beforeinstallprompt",handler);
+    return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
+  if(standalone||dismissed)return null;
+  if(!deferred&&!isIOS)return null;
+  const dismiss=()=>{localStorage.setItem("wh-pwa-dismiss",String(Date.now()));setDismissed(true)};
+  const install=async()=>{
+    haptic(10);
+    if(!deferred)return;
+    deferred.prompt();
+    try{const{outcome}=await deferred.userChoice;if(outcome==="accepted")setDeferred(null);}catch{}
+  };
+  return(<div style={{position:"fixed",left:12,right:12,bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:96,background:t.card,border:`1px solid ${t.ac}40`,borderRadius:14,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,boxShadow:`0 6px 20px ${t.ac}30`,animation:"pwaIn .35s ease"}}>
+    <div style={{fontSize:26,lineHeight:1}}>📲</div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:12,fontWeight:600,color:t.text,lineHeight:1.3}}>ติดตั้ง WealthHub</div>
+      <div style={{fontSize:10,color:t.tm,marginTop:2,lineHeight:1.4}}>{isIOS?'กดไอคอนแชร์ ⎘ → "เพิ่มลงในหน้าจอหลัก"':"เปิดเร็วขึ้น ใช้งานออฟไลน์ได้"}</div>
+    </div>
+    {!isIOS&&<button onClick={install} style={{padding:"7px 14px",borderRadius:8,border:"none",background:t.ac,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>ติดตั้ง</button>}
+    <button onClick={dismiss} aria-label="ปิด" style={{padding:4,border:"none",background:"transparent",color:t.tm,cursor:"pointer",fontSize:14,lineHeight:1}}>✕</button>
+    <style>{`@keyframes pwaIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
+  </div>);
+}
+
+/* ═══ ONBOARDING OVERLAY ═══
+ * 3-slide first-run intro. Sets localStorage flag on completion/skip so it
+ * won't show again. Mobile-friendly: full-screen, single CTA per slide. */
+function OnboardingOverlay({t}){
+  const[shown,setShown]=useState(()=>!localStorage.getItem("wh-onboarded"));
+  const[step,setStep]=useState(0);
+  const slides=[
+    {emoji:"💰",title:"ยินดีต้อนรับสู่ WealthHub",desc:"แอปการเงินส่วนบุคคลครบในที่เดียว — รายรับ-รายจ่าย พอร์ตการลงทุน เป้าหมาย และอีกมากมาย"},
+    {emoji:"⊕",title:"บันทึกง่าย กดเดียวจบ",desc:"กดปุ่มกลางที่แถบล่างเพื่อบันทึกรายรับ-รายจ่ายทันที — มีหมวดหมู่อัตโนมัติให้เลือก"},
+    {emoji:"🎯",title:"ตั้งเป้า ออมได้จริง",desc:"ตั้งเป้าหมาย เช่น 'ซื้อรถ ฿500K' ผูกกับรายรับ — ระบบจะคำนวณเงินออมให้คุณอัตโนมัติ พร้อม streak ทุกวัน 🔥"},
+  ];
+  const finish=()=>{haptic(15);localStorage.setItem("wh-onboarded","1");setShown(false)};
+  const next=()=>{haptic(8);if(step<slides.length-1)setStep(step+1);else finish()};
+  if(!shown)return null;
+  const slide=slides[step];
+  return(<div style={{position:"fixed",inset:0,zIndex:2000,background:`linear-gradient(180deg, ${t.bg}, ${t.acL})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,paddingTop:"calc(40px + env(safe-area-inset-top))",paddingBottom:"calc(40px + env(safe-area-inset-bottom))"}}>
+    <button onClick={finish} style={{position:"absolute",top:"calc(16px + env(safe-area-inset-top))",right:16,background:"transparent",border:"none",color:t.tm,fontSize:13,cursor:"pointer",padding:"8px 12px",fontWeight:500}}>ข้าม</button>
+    <div key={step} style={{fontSize:88,marginBottom:24,animation:"obIn .45s ease"}}>{slide.emoji}</div>
+    <div style={{fontSize:22,fontWeight:700,marginBottom:12,textAlign:"center",color:t.text,letterSpacing:-0.3,maxWidth:320}}>{slide.title}</div>
+    <div style={{fontSize:14,color:t.ts,textAlign:"center",lineHeight:1.7,maxWidth:340,marginBottom:32}}>{slide.desc}</div>
+    <div style={{display:"flex",gap:6,marginBottom:24}}>
+      {slides.map((_,i)=>(<div key={i} style={{width:i===step?22:8,height:8,borderRadius:4,background:i===step?t.ac:t.cb,transition:"width .25s"}}/>))}
+    </div>
+    <button onClick={next} style={{padding:"13px 44px",background:t.ac,color:"#fff",border:"none",borderRadius:26,fontSize:14,fontWeight:600,cursor:"pointer",boxShadow:`0 6px 16px ${t.ac}50`,WebkitTapHighlightColor:"transparent",minWidth:200}}>{step<slides.length-1?"ถัดไป →":"🚀 เริ่มใช้งานเลย"}</button>
+    <style>{`@keyframes obIn{from{opacity:0;transform:scale(0.5) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+  </div>);
+}
+
 /* ═══ QUICK ACTION BUTTON ═══ Big tap target with icon + label */
 function QuickAction({icon,label,color,onClick}){
   return(<button onClick={()=>{haptic(5);onClick()}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 4px",border:`1px solid ${color}30`,borderRadius:12,background:`linear-gradient(135deg, ${color}12, ${color}05)`,cursor:"pointer",WebkitTapHighlightColor:"transparent",minHeight:72}}>
@@ -3094,7 +3183,7 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:L),m:isMobile}),[theme,isMobile]);
 
@@ -3222,12 +3311,24 @@ function WealthHub(){
     if(!delta)return goals;
     return goals.map(g=>g.id===delta.id?{...g,saved:Math.max(0,(+g.saved||0)+delta.delta)}:g);
   };
+  // Detect any goal that crossed from incomplete → complete after a state transition
+  const checkGoalCompleted=(prevGoals,nextGoals)=>{
+    for(const ng of nextGoals||[]){
+      const pg=(prevGoals||[]).find(g=>g.id===ng.id);if(!pg)continue;
+      const prevDone=(+pg.saved||0)>=(+pg.target||0);
+      const nextDone=(+ng.saved||0)>=(+ng.target||0)&&(+ng.target||0)>0;
+      if(!prevDone&&nextDone){haptic([20,40,20,40,20]);setShowConfetti(true);setToast({msg:`🎉 สำเร็จ! เป้าหมาย "${ng.name}" ครบแล้ว`});return true;}
+    }
+    return false;
+  };
   const addTxn=f=>{
     haptic(15);
     const txn={...f,id:uid(),amount:+f.amount,goalId:f.goalId||undefined};
     const d2={...data,transactions:[...data.transactions,txn]};
     const dl=goalDelta(f,1);
-    persist({...d2,goals:applyGoalDelta(d2.goals,dl)});
+    const nextGoals=applyGoalDelta(d2.goals,dl);
+    checkGoalCompleted(data.goals,nextGoals);
+    persist({...d2,goals:nextGoals});
     setModal(null);
   };
   const updateTxn=(id,f)=>{
@@ -3236,6 +3337,7 @@ function WealthHub(){
     let goals=data.goals;
     if(old)goals=applyGoalDelta(goals,goalDelta({...old},-1));
     goals=applyGoalDelta(goals,goalDelta(f,1));
+    checkGoalCompleted(data.goals,goals);
     persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount,goalId:f.goalId||undefined}:tx),goals});
     setModal(null);
   };
@@ -3264,8 +3366,8 @@ function WealthHub(){
     persist({...data,transactions:[...data.transactions,newTxn]});
     setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}`,onUndo:()=>persist(snap)});
   };
-  const addGoal=f=>{haptic(15);persist({...data,goals:[...data.goals,{...f,id:uid(),target:+f.target,saved:+f.saved}]});setModal(null)};
-  const updateGoal=(id,f)=>{haptic(15);persist({...data,goals:data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g)});setModal(null)};
+  const addGoal=f=>{haptic(15);const ng={...f,id:uid(),target:+f.target,saved:+f.saved};const next=[...data.goals,ng];checkGoalCompleted([],next);persist({...data,goals:next});setModal(null)};
+  const updateGoal=(id,f)=>{haptic(15);const next=data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g);checkGoalCompleted(data.goals,next);persist({...data,goals:next});setModal(null)};
   const delGoal=id=>{const g=data.goals.find(x=>x.id===id);deleteWithUndo(g?.name,d=>({...d,goals:d.goals.filter(x=>x.id!==id)}))};
   const addDebt=f=>{haptic(15);persist({...data,debts:[...data.debts,{...f,id:uid(),total:+f.total,paid:+f.paid,rate:+f.rate}]});setModal(null)};
   const updateDebt=(id,f)=>{haptic(15);persist({...data,debts:data.debts.map(d=>d.id===id?{...d,...f,total:+f.total,paid:+f.paid,rate:+f.rate}:d)});setModal(null)};
@@ -3477,6 +3579,9 @@ function WealthHub(){
     <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setModal({type:"addTxn"})}/>
     <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={true /* replaced by BottomTabBar center + button */}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
+    {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
+    {isMobile&&!modal&&!showAuth&&!recovery&&<PWAInstallBanner t={t}/>}
+    {!loading&&!showAuth&&!recovery&&<OnboardingOverlay t={t}/>}
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>
