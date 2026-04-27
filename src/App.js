@@ -1958,7 +1958,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
         {filtered.map((tx,i)=>{
         const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
         const checked=selIds.has(tx.id);
-        return(<div key={tx.id} onClick={selMode?()=>toggleSel(tx.id):undefined} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none",cursor:selMode?"pointer":"default",background:selMode&&checked?`${t.ac}10`:"transparent"}}>
+        const row=(<div onClick={selMode?()=>toggleSel(tx.id):undefined} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none",cursor:selMode?"pointer":"default",background:selMode&&checked?`${t.ac}10`:"transparent"}}>
           {selMode&&<input type="checkbox" checked={checked} onChange={()=>toggleSel(tx.id)} onClick={e=>e.stopPropagation()} style={{width:16,height:16,accentColor:t.ac,cursor:"pointer",flexShrink:0}}/>}
           <div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`,flexShrink:0}}>{cat.i}</div>
           <div style={{flex:1,minWidth:0}}>
@@ -1966,9 +1966,10 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
             <div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})} · {cat.l}</div>
           </div>
           <span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span>
-          {!selMode&&onEdit&&<button onClick={()=>onEdit(tx)} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.ts}} title="แก้ไข">✏</button>}
-          {!selMode&&<button onClick={()=>{if(window.confirm("ลบรายการนี้?"))onDel(tx.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}} title="ลบ">✕</button>}
+          {!selMode&&onEdit&&<button onClick={e=>{e.stopPropagation();onEdit(tx)}} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.ts}} title="แก้ไข">✏</button>}
+          {!selMode&&<button onClick={e=>{e.stopPropagation();if(window.confirm("ลบรายการนี้?"))onDel(tx.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}} title="ลบ">✕</button>}
         </div>);
+        return(<SwipeRow key={tx.id} t={t} disabled={selMode} onEdit={onEdit?()=>onEdit(tx):null} onDelete={()=>onDel(tx.id)}>{row}</SwipeRow>);
       })}</div>)}
     {selMode&&selIds.size>0&&(<div style={{position:"sticky",bottom:12,zIndex:10,background:t.card,border:`1px solid ${t.r}40`,boxShadow:`0 6px 20px ${t.r}30`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,marginTop:4}}>
       <span style={{fontSize:13,fontWeight:600,color:t.text}}>เลือก {selIds.size} รายการ</span>
@@ -2855,6 +2856,178 @@ function MemberPortfolio({member,isMe,onUpdate,onEditProfile,t,toThb,rate}){
       <OtherItemForm initial={modal?.other} onSave={f=>modal?.type==="editOther"?updateOther(modal.other.id,f):addOther(f)} onCancel={()=>setModal(null)} t={t}/>
     </Modal>
   </div>);
+}
+
+/* ═══ PULL TO REFRESH ═══
+ * Wraps a section. On touch-pull from scrollTop=0, shows progress indicator.
+ * Past threshold + release → calls onRefresh (async). Native-feel.
+ * Skips on desktop (no touch). */
+function PullToRefresh({onRefresh,t,children,disabled}){
+  const[pull,setPull]=useState(0); // 0..max
+  const[refreshing,setRefreshing]=useState(false);
+  const startY=useRef(null);
+  const moved=useRef(false);
+  const threshold=70;
+  const max=110;
+  const onTouchStart=e=>{
+    if(disabled||refreshing)return;
+    if(window.scrollY>5){startY.current=null;return}
+    startY.current=e.touches[0].clientY;
+    moved.current=false;
+  };
+  const onTouchMove=e=>{
+    if(disabled||refreshing||startY.current==null)return;
+    const dy=e.touches[0].clientY-startY.current;
+    if(dy<=0){startY.current=null;setPull(0);return}
+    if(!moved.current){if(dy>5)moved.current=true;else return}
+    // Resistance
+    const adj=Math.min(max,dy*0.5);
+    setPull(adj);
+  };
+  const onTouchEnd=async()=>{
+    if(disabled||refreshing||startY.current==null)return;
+    if(pull>=threshold&&onRefresh){
+      haptic(15);
+      setRefreshing(true);
+      setPull(threshold);
+      try{await onRefresh()}catch(e){console.error("refresh:",e)}
+      setRefreshing(false);
+    }
+    setPull(0);
+    startY.current=null;moved.current=false;
+  };
+  const ready=pull>=threshold;
+  return(<div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+    <div style={{height:refreshing?40:pull,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",transition:pull===0&&!refreshing?"height .25s":"none",color:t.ac,fontSize:12,fontWeight:600,gap:6}}>
+      {refreshing
+        ?<><span style={{display:"inline-block",animation:"spin 1s linear infinite",fontSize:16}}>🔄</span><span>กำลังอัปเดต...</span></>
+        :pull>0&&<><span style={{transform:`rotate(${ready?180:0}deg)`,transition:"transform .15s",fontSize:14}}>⬇</span><span>{ready?"ปล่อยเพื่ออัปเดต":"ดึงลงเพื่ออัปเดต"}</span></>
+      }
+    </div>
+    <div style={{transform:`translateY(${pull*0.3}px)`,transition:pull===0&&!refreshing?"transform .25s":"none"}}>
+      {children}
+    </div>
+    <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+  </div>);
+}
+
+/* ═══ SWIPE ROW ═══
+ * Touch-only swipe wrapper. Swipe left → onDelete, swipe right → onEdit.
+ * Snaps back if drag < threshold. Uses transform — efficient even with many rows.
+ * Falls through to plain div on desktop (no touch). */
+function SwipeRow({onEdit,onDelete,children,t,disabled}){
+  const[dx,setDx]=useState(0);
+  const[snapped,setSnapped]=useState(0); // -1 = revealed delete, 1 = revealed edit, 0 = closed
+  const startX=useRef(null);
+  const startY=useRef(null);
+  const moved=useRef(false);
+  const threshold=80;
+  const onTouchStart=e=>{
+    if(disabled)return;
+    startX.current=e.touches[0].clientX;
+    startY.current=e.touches[0].clientY;
+    moved.current=false;
+  };
+  const onTouchMove=e=>{
+    if(disabled||startX.current==null)return;
+    const dxNow=e.touches[0].clientX-startX.current;
+    const dyNow=e.touches[0].clientY-startY.current;
+    // Lock to vertical scroll if user moved more vertically
+    if(!moved.current){
+      if(Math.abs(dyNow)>Math.abs(dxNow)+3){startX.current=null;return}
+      if(Math.abs(dxNow)>5)moved.current=true;
+    }
+    if(moved.current){
+      e.preventDefault?.();
+      // Add resistance if outside threshold
+      const adj=Math.abs(dxNow)>threshold*1.5?Math.sign(dxNow)*(threshold*1.5+(Math.abs(dxNow)-threshold*1.5)*0.3):dxNow;
+      setDx(adj);
+    }
+  };
+  const onTouchEnd=()=>{
+    if(disabled||startX.current==null){startX.current=null;return}
+    if(moved.current){
+      if(dx<=-threshold&&onDelete){haptic(15);onDelete();setDx(0);setSnapped(0)}
+      else if(dx>=threshold&&onEdit){haptic(10);onEdit();setDx(0);setSnapped(0)}
+      else{setDx(0);setSnapped(0)}
+    }
+    startX.current=null;moved.current=false;
+  };
+  const showLeft=dx<-10; // delete revealed (swiped left)
+  const showRight=dx>10; // edit revealed (swiped right)
+  return(<div style={{position:"relative",overflow:"hidden",WebkitTapHighlightColor:"transparent"}}>
+    {/* Action layer behind */}
+    {showLeft&&onDelete&&<div style={{position:"absolute",inset:0,background:t.r,display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:18,color:"#fff",fontSize:13,fontWeight:700,gap:6}}>🗑 ลบ</div>}
+    {showRight&&onEdit&&<div style={{position:"absolute",inset:0,background:t.ac,display:"flex",alignItems:"center",justifyContent:"flex-start",paddingLeft:18,color:"#fff",fontSize:13,fontWeight:700,gap:6}}>✏ แก้ไข</div>}
+    <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd} style={{transform:`translateX(${dx}px)`,transition:dx===0?"transform .25s cubic-bezier(.2,.8,.2,1)":"none",background:t.card,position:"relative",zIndex:1,touchAction:"pan-y"}}>
+      {children}
+    </div>
+  </div>);
+}
+
+/* ═══ QUICK ADD SHEET ═══
+ * Bottom sheet shown when tab-bar [+] is tapped. Auto-derives smart chips
+ * from recent expense history (top 6 by frequency, last 60 days).
+ * Tap a chip = 1-tap log with toast+undo. Or fall through to full form/OCR. */
+function QuickAddSheet({open,onClose,data,t,onQuickAdd,onOpenFull}){
+  const templates=useMemo(()=>{
+    if(!data)return[];
+    const now=Date.now();const days60=60*86400000;
+    const recent=(data.transactions||[]).filter(tx=>tx.type==="expense"&&(now-new Date(tx.date).getTime())<=days60);
+    const groups={};
+    recent.forEach(tx=>{
+      const bucket=Math.round(tx.amount/10)*10||10;
+      const key=`${tx.category}-${bucket}-${(tx.note||"").trim().slice(0,30)}`;
+      if(!groups[key])groups[key]={count:0,category:tx.category,amount:bucket,note:(tx.note||"").trim()};
+      groups[key].count++;
+    });
+    const sorted=Object.values(groups).sort((a,b)=>b.count-a.count).slice(0,6);
+    if(sorted.length<4){
+      const defaults=[
+        {category:"food",amount:60,note:"กาแฟ"},
+        {category:"food",amount:80,note:"ข้าวเที่ยง"},
+        {category:"transport",amount:50,note:"เดินทาง"},
+        {category:"shopping",amount:100,note:"7-11"},
+      ];
+      defaults.forEach(d=>{if(sorted.length<6&&!sorted.some(s=>s.category===d.category&&s.amount===d.amount&&s.note===d.note))sorted.push(d)});
+    }
+    return sorted;
+  },[data]);
+  if(!open)return null;
+  const cats=EC.reduce((a,c)=>{a[c.v]=c;return a},{});
+  return(<>
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:998,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(2px)",animation:"qaFade .2s ease"}}/>
+    <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:999,background:t.card,borderRadius:"20px 20px 0 0",padding:"10px 16px calc(20px + env(safe-area-inset-bottom))",boxShadow:"0 -8px 30px rgba(0,0,0,0.18)",animation:"qaSlide .25s cubic-bezier(.2,.8,.2,1)"}}>
+      <div style={{width:42,height:5,borderRadius:3,background:t.cb,margin:"0 auto 12px"}}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:t.text}}>⚡ บันทึกด่วน</div>
+        <button onClick={onClose} aria-label="ปิด" style={{background:"transparent",border:"none",color:t.tm,cursor:"pointer",fontSize:18,padding:4,lineHeight:1}}>✕</button>
+      </div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:8,fontWeight:500}}>กดที่ไอเทมเพื่อบันทึกทันที</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        {templates.map((tpl,i)=>{const c=cats[tpl.category]||cats.other;return(
+          <button key={i} onClick={()=>{haptic([10,20,10]);onQuickAdd(tpl);onClose()}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 12px",border:`1px solid ${t.cb}`,borderRadius:12,background:t.bg,cursor:"pointer",WebkitTapHighlightColor:"transparent",textAlign:"left",minHeight:60}}>
+            <div style={{width:36,height:36,borderRadius:9,background:`${t.r}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{c.i}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tpl.note||c.l}</div>
+              <div style={{fontSize:14,fontWeight:700,color:t.r,lineHeight:1.2}}>−฿{tpl.amount.toLocaleString()}</div>
+            </div>
+          </button>
+        )})}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,paddingTop:10,borderTop:`1px dashed ${t.cb}`}}>
+        <button onClick={()=>{haptic(8);onOpenFull();onClose()}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",border:`1px solid ${t.ac}40`,borderRadius:10,background:`${t.ac}08`,cursor:"pointer",WebkitTapHighlightColor:"transparent",textAlign:"left"}}>
+          <span style={{fontSize:18}}>📝</span>
+          <span style={{flex:1,fontSize:13,fontWeight:600,color:t.text}}>กรอกเอง <span style={{fontSize:10,color:t.tm,fontWeight:400}}>(เลือกหมวดหมู่ + วันที่)</span></span>
+          <span style={{color:t.ac,fontSize:14}}>→</span>
+        </button>
+      </div>
+      <style>{`
+        @keyframes qaFade{from{opacity:0}to{opacity:1}}
+        @keyframes qaSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}
+      `}</style>
+    </div>
+  </>);
 }
 
 /* ═══ QUICK ADD FAB ═══ */
@@ -3897,7 +4070,7 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);const[quickSheet,setQuickSheet]=useState(false);const[dashExpanded,setDashExpanded]=useState(()=>{try{return localStorage.getItem("wh-dash-expanded")==="1"}catch{return false}});const toggleDash=()=>{const next=!dashExpanded;setDashExpanded(next);try{localStorage.setItem("wh-dash-expanded",next?"1":"0")}catch{}};
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:L),m:isMobile}),[theme,isMobile]);
 
@@ -4204,42 +4377,52 @@ function WealthHub(){
       </div>)}
 
       {/* DASHBOARD */}
-      {page==="dashboard"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
-        {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
-        <WeeklyReviewCard data={data} persist={persist} t={t}/>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="$" label="มูลค่าสุทธิ" value={fB(stats.netWorth)} t={t} color={t.ac}/><MC icon="📈" label="กำไร/ขาดทุน" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="💵" label="รายรับเดือนนี้" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/></div>
-        <EOMProjectionCard data={data} t={t}/>
-        <SpendingComparisonCard data={data} t={t}/>
-        {/* Quick Actions */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:8}}>
-          <QuickAction icon="−" label="รายจ่าย" color={t.r} onClick={()=>setModal({type:"addTxn",txnType:"expense"})}/>
-          <QuickAction icon="+" label="รายรับ" color={t.g} onClick={()=>setModal({type:"addTxn",txnType:"income"})}/>
-          <QuickAction icon="🎯" label="เป้าหมาย" color={t.ac} onClick={()=>setPage("goals")}/>
-          <QuickAction icon="📊" label="พอร์ต" color={t.pp} onClick={()=>setPage("portfolio")}/>
-        </div>
-        {/* Today + Recent */}
-        <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
-          <TodayCard data={data} t={t} onAdd={()=>setModal({type:"addTxn"})}/>
-          <RecentTxns data={data} t={t} onMore={()=>setPage("txn")} onEdit={tx=>setModal({type:"editTxn",txn:tx})}/>
-        </div>
-        {/* Portfolio on dashboard */}
-        {data.assets.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:600}}>📊 พอร์ตลงทุน</span><button onClick={()=>setPage("portfolio")} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>ดูทั้งหมด →</button></div>
-          <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,auto)",gap:16}}>
-            <div>{stats.allocation.slice(0,4).map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;return(<div key={a.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12}}>{tp2.i}</span><span style={{fontSize:12,fontWeight:500}}>{a.name}</span><Badge color={a.currency==="USD"?t.ac:t.tl}>{a.currency||"THB"}</Badge></div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12,fontWeight:500}}>{fB(a.value)}</span><Badge color={a.pl>=0?t.g:t.r}>{fP(pp2)}</Badge></div></div><PB pct={a.pct} color={a.color} height={3} t={t}/></div>)})}</div>
-            <div><ResponsiveContainer width={140} height={140}><PieChart><Pie data={stats.allocation} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>{stats.allocation.map((d,i)=><Cell key={i} fill={d.color}/>)}</Pie></PieChart></ResponsiveContainer></div>
+      {page==="dashboard"&&(<PullToRefresh t={t} disabled={!isMobile} onRefresh={async()=>{await refreshPrices().catch(()=>{});if(session?.user?.id){try{const{data:row}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();if(row?.data)setData(row.data)}catch{}}}}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Always shown */}
+          <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
+          {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
+          <WeeklyReviewCard data={data} persist={persist} t={t}/>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="$" label="มูลค่าสุทธิ" value={fB(stats.netWorth)} t={t} color={t.ac}/><MC icon="📈" label="กำไร/ขาดทุน" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="💵" label="รายรับเดือนนี้" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/></div>
+          {/* Quick Actions */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:8}}>
+            <QuickAction icon="−" label="รายจ่าย" color={t.r} onClick={()=>setModal({type:"addTxn",txnType:"expense"})}/>
+            <QuickAction icon="+" label="รายรับ" color={t.g} onClick={()=>setModal({type:"addTxn",txnType:"income"})}/>
+            <QuickAction icon="🎯" label="เป้าหมาย" color={t.ac} onClick={()=>setPage("goals")}/>
+            <QuickAction icon="📊" label="พอร์ต" color={t.pp} onClick={()=>setPage("portfolio")}/>
           </div>
-        </div>)}
-        {/* Alerts */}
-        <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
-          <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>🔔 แจ้งเตือน</div>
-          {(()=>{const al=[];data.debts.forEach(d=>{if(d.total-d.paid>0&&d.rate>=10)al.push({c:t.r,t:`⚠️ ${d.name} ดอกเบี้ยสูง`})});if(!al.length)al.push({c:t.g,t:"✅ ปกติ"});return al.map((a,i)=>(<div key={i} style={{padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:2,background:`${a.c}12`,color:a.c}}>{a.t}</div>))})()}
+          {/* Today + Recent */}
+          <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
+            <TodayCard data={data} t={t} onAdd={()=>setModal({type:"addTxn"})}/>
+            <RecentTxns data={data} t={t} onMore={()=>setPage("txn")} onEdit={tx=>setModal({type:"editTxn",txn:tx})}/>
+          </div>
+          {/* Toggle: show more / less */}
+          <button onClick={toggleDash} style={{padding:"10px 16px",border:`1px dashed ${t.cb}`,borderRadius:10,background:"transparent",color:t.ts,cursor:"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6,WebkitTapHighlightColor:"transparent"}}>
+            {dashExpanded?"▲ ซ่อนรายละเอียด":"▼ ดูภาพรวมเพิ่ม"}
+          </button>
+          {/* Expanded section — collapsed by default */}
+          {dashExpanded&&(<>
+            <EOMProjectionCard data={data} t={t}/>
+            <SpendingComparisonCard data={data} t={t}/>
+            {/* Portfolio on dashboard */}
+            {data.assets.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:600}}>📊 พอร์ตลงทุน</span><button onClick={()=>setPage("portfolio")} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>ดูทั้งหมด →</button></div>
+              <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,auto)",gap:16}}>
+                <div>{stats.allocation.slice(0,4).map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const pp2=a.cost>0?(a.pl/a.cost)*100:0;return(<div key={a.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12}}>{tp2.i}</span><span style={{fontSize:12,fontWeight:500}}>{a.name}</span><Badge color={a.currency==="USD"?t.ac:t.tl}>{a.currency||"THB"}</Badge></div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12,fontWeight:500}}>{fB(a.value)}</span><Badge color={a.pl>=0?t.g:t.r}>{fP(pp2)}</Badge></div></div><PB pct={a.pct} color={a.color} height={3} t={t}/></div>)})}</div>
+                <div><ResponsiveContainer width={140} height={140}><PieChart><Pie data={stats.allocation} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>{stats.allocation.map((d,i)=><Cell key={i} fill={d.color}/>)}</Pie></PieChart></ResponsiveContainer></div>
+              </div>
+            </div>)}
+            {/* Alerts */}
+            <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+              <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>🔔 แจ้งเตือน</div>
+              {(()=>{const al=[];data.debts.forEach(d=>{if(d.total-d.paid>0&&d.rate>=10)al.push({c:t.r,t:`⚠️ ${d.name} ดอกเบี้ยสูง`})});if(!al.length)al.push({c:t.g,t:"✅ ปกติ"});return al.map((a,i)=>(<div key={i} style={{padding:"6px 10px",borderRadius:6,fontSize:11,marginBottom:2,background:`${a.c}12`,color:a.c}}>{a.t}</div>))})()}
+            </div>
+            <NetWorthHistoryChart session={session} t={t}/>
+            {stats.monthlyTrend.some(m=>m.income||m.expense)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>รายรับ vs รายจ่าย (6 เดือน)</div><ResponsiveContainer width="100%" height={180}><BarChart data={stats.monthlyTrend} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={t.cb}/><XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/><YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1e3?`${(v/1e3).toFixed(0)}K`:v}/><Tooltip formatter={v=>fB(v)} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:8}}/><Bar dataKey="income" name="รายรับ" fill={t.g} radius={[4,4,0,0]}/><Bar dataKey="expense" name="รายจ่าย" fill={t.r} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>)}
+            {data.goals.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🎯 เป้าหมาย</div>{data.goals.map(g=>{const p=g.target>0?(g.saved/g.target)*100:0;return(<div key={g.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}><span style={{fontWeight:500}}>{g.icon} {g.name}</span><span style={{color:t.ts}}>{fB(g.saved)}/{fB(g.target)} ({Math.round(p)}%)</span></div><PB pct={p} color={p>=100?t.g:t.ac} height={5} t={t}/></div>)})}</div>)}
+          </>)}
         </div>
-        <NetWorthHistoryChart session={session} t={t}/>
-        {stats.monthlyTrend.some(m=>m.income||m.expense)&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>รายรับ vs รายจ่าย (6 เดือน)</div><ResponsiveContainer width="100%" height={180}><BarChart data={stats.monthlyTrend} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={t.cb}/><XAxis dataKey="month" tick={{fontSize:10,fill:t.tm}}/><YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1e3?`${(v/1e3).toFixed(0)}K`:v}/><Tooltip formatter={v=>fB(v)} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:8}}/><Bar dataKey="income" name="รายรับ" fill={t.g} radius={[4,4,0,0]}/><Bar dataKey="expense" name="รายจ่าย" fill={t.r} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>)}
-        {data.goals.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🎯 เป้าหมาย</div>{data.goals.map(g=>{const p=g.target>0?(g.saved/g.target)*100:0;return(<div key={g.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}><span style={{fontWeight:500}}>{g.icon} {g.name}</span><span style={{color:t.ts}}>{fB(g.saved)}/{fB(g.target)} ({Math.round(p)}%)</span></div><PB pct={p} color={p>=100?t.g:t.ac} height={5} t={t}/></div>)})}</div>)}
-      </div>)}
+      </PullToRefresh>)}
 
       {page==="portfolio"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="💰" label="มูลค่ารวม" value={fB(stats.totalPortfolio)} t={t}/><MC icon="📈" label="P&L" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="🏷️" label="ต้นทุน" value={fB(stats.totalCost)} t={t}/></div>
@@ -4321,7 +4504,8 @@ function WealthHub(){
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
-    <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setModal({type:"addTxn"})}/>
+    <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setQuickSheet(true)}/>
+    <QuickAddSheet open={quickSheet&&!modal&&!showAuth} onClose={()=>setQuickSheet(false)} data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})}/>
     <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={true /* replaced by BottomTabBar center + button */}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
