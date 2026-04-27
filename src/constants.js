@@ -85,7 +85,19 @@ export const NAV=[
   {k:"tax",l:"คำนวณภาษี",i:"✦",g:"เครื่องมือ"},
   {k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
   {k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},
+  {k:"streak",l:"สตรีค & รางวัล",i:"🔥",g:"สังคม"},
   {k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
+];
+
+/* Streak Badge definitions — unlocked when current_streak >= req */
+export const BADGES=[
+  {id:"starter",emoji:"🌱",name:"มือใหม่",desc:"บันทึก 3 วันติด",req:3,color:"#84CC16"},
+  {id:"week",emoji:"💪",name:"สัปดาห์แรก",desc:"บันทึก 7 วันติด",req:7,color:"#06B6D4"},
+  {id:"twoweeks",emoji:"⚡",name:"สองสัปดาห์",desc:"บันทึก 14 วันติด",req:14,color:"#8B5CF6"},
+  {id:"month",emoji:"🌟",name:"หนึ่งเดือน",desc:"บันทึก 30 วันติด",req:30,color:"#F59E0B"},
+  {id:"quarter",emoji:"🚀",name:"สามเดือน",desc:"บันทึก 90 วันติด",req:90,color:"#EC4899"},
+  {id:"halfyear",emoji:"🏆",name:"ครึ่งปี",desc:"บันทึก 180 วันติด",req:180,color:"#EF4444"},
+  {id:"year",emoji:"👑",name:"ครบปี",desc:"บันทึก 365 วันติด",req:365,color:"#FBBF24"},
 ];
 
 /* Storage keys + default state shape */
@@ -98,4 +110,5 @@ export const DF={
   cfItems:null,
   balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},
   settings:{rate:35.5},
+  streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:""},
 };

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
-import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF } from "./constants";
-import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic } from "./utils";
+import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES } from "./constants";
+import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -2902,6 +2902,131 @@ function ChatPage({session,t}){
   </div>);
 }
 
+/* ═══ STREAK CHIP ═══ Compact pill on Dashboard showing current streak */
+function StreakChip({streak,t,onClick}){
+  const{current,hasToday}=streak;
+  if(current===0)return null;
+  const flame=hasToday?"🔥":"💤";
+  return(<button onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:20,border:`1px solid ${t.am}40`,background:`linear-gradient(135deg, ${t.am}18, ${t.am}08)`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",lineHeight:1}}>
+    <span style={{fontSize:14}}>{flame}</span>
+    <span>{current} วัน{!hasToday&&<span style={{color:t.am,marginLeft:4,fontSize:10}}>·เสี่ยงหาย</span>}</span>
+  </button>);
+}
+
+/* ═══ REMINDER BANNER ═══ Shows when user hasn't logged a transaction today */
+function ReminderBanner({streak,data,persist,t,onAddTxn}){
+  const today=td();
+  const dismissed=data.streak?.reminderDismissed===today;
+  if(streak.hasToday||dismissed)return null;
+  const msg=streak.current>0
+    ?`อย่าให้ streak ${streak.current} วันหายนะ! บันทึกรายการวันนี้`
+    :`เริ่มต้น streak วันนี้ — บันทึกรายการแรกเลย!`;
+  const dismiss=()=>{persist({...data,streak:{...(data.streak||DF.streak),reminderDismissed:today}})};
+  return(<div style={{background:`linear-gradient(135deg, ${t.am}18, ${t.am}08)`,border:`1px solid ${t.am}50`,borderRadius:12,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+    <div style={{fontSize:22,lineHeight:1}}>{streak.current>0?"🔥":"✨"}</div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:12,fontWeight:600,color:t.text,lineHeight:1.3}}>{msg}</div>
+      {streak.longest>0&&<div style={{fontSize:10,color:t.tm,marginTop:2}}>สถิติดีสุด: {streak.longest} วัน</div>}
+    </div>
+    <button onClick={()=>{haptic(10);onAddTxn()}} style={{padding:"6px 12px",borderRadius:8,border:"none",background:t.am,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",WebkitTapHighlightColor:"transparent"}}>+ บันทึก</button>
+    <button onClick={dismiss} aria-label="ปิด" style={{padding:4,borderRadius:6,border:"none",background:"transparent",color:t.tm,cursor:"pointer",fontSize:14,lineHeight:1,WebkitTapHighlightColor:"transparent"}}>✕</button>
+  </div>);
+}
+
+/* ═══ STREAK PAGE ═══ Full streak overview with heatmap, badges, longest history */
+function StreakPage({data,streak,persist,t}){
+  const today=td();
+  // Build heatmap: last 12 weeks (84 days) × 7
+  const days=84;
+  const cells=[];
+  for(let i=days-1;i>=0;i--){
+    const dt=addDays(today,-i);
+    cells.push({date:dt,has:streak.datesSet.has(dt),count:data.transactions.filter(t=>t.date===dt).length});
+  }
+  // Group into weeks of 7
+  const weeks=[];
+  for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
+  const earned=badgesEarned(streak.current,streak.longest,BADGES);
+  const nextBadge=BADGES.find(b=>!earned.includes(b.id));
+  const progress=nextBadge?Math.min(100,(streak.current/nextBadge.req)*100):100;
+
+  // Save badges + freeze tokens to data on mount if changed
+  useEffect(()=>{
+    const cur=data.streak?.badges||[];
+    if(earned.length!==cur.length||earned.some(b=>!cur.includes(b))){
+      persist({...data,streak:{...(data.streak||DF.streak),badges:earned}});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[earned.join(",")]);
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Hero card: current streak */}
+    <div style={{background:`linear-gradient(135deg, ${t.am}, ${t.am}cc)`,borderRadius:16,padding:"22px 18px",color:"#fff",textAlign:"center",boxShadow:`0 8px 24px ${t.am}40`}}>
+      <div style={{fontSize:48,lineHeight:1,marginBottom:6}}>{streak.hasToday?"🔥":"💤"}</div>
+      <div style={{fontSize:42,fontWeight:800,lineHeight:1}}>{streak.current}</div>
+      <div style={{fontSize:13,opacity:0.9,marginTop:4}}>วันติดต่อกัน</div>
+      {!streak.hasToday&&streak.current>0&&<div style={{fontSize:11,marginTop:8,padding:"4px 10px",background:"rgba(0,0,0,0.18)",borderRadius:12,display:"inline-block"}}>⚠️ ยังไม่ได้บันทึกวันนี้ — streak จะหายตอน 24:00</div>}
+    </div>
+
+    {/* Stats row */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:600,marginBottom:4}}>สถิติดีสุด</div>
+        <div style={{fontSize:24,fontWeight:700,color:t.text}}>{streak.longest} <span style={{fontSize:12,fontWeight:500,color:t.ts}}>วัน</span></div>
+      </div>
+      <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:600,marginBottom:4}}>Freeze tokens</div>
+        <div style={{fontSize:24,fontWeight:700,color:t.text}}>{"❄️".repeat(data.streak?.freezeTokens??2)||"—"}</div>
+      </div>
+    </div>
+
+    {/* Progress to next badge */}
+    {nextBadge&&<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{fontSize:12,color:t.tm}}>ถัดไป: <b style={{color:t.text}}>{nextBadge.emoji} {nextBadge.name}</b></div>
+        <div style={{fontSize:11,color:t.tm}}>{streak.current}/{nextBadge.req}</div>
+      </div>
+      <div style={{width:"100%",height:8,background:t.bg,borderRadius:4,overflow:"hidden"}}>
+        <div style={{width:`${progress}%`,height:"100%",background:`linear-gradient(90deg, ${nextBadge.color}, ${nextBadge.color}aa)`,transition:"width .3s"}}/>
+      </div>
+    </div>}
+
+    {/* Heatmap */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:t.text}}>📅 12 สัปดาห์ที่ผ่านมา</div>
+      <div style={{display:"flex",gap:3,overflowX:"auto",paddingBottom:4}}>
+        {weeks.map((w,wi)=>(<div key={wi} style={{display:"flex",flexDirection:"column",gap:3,flexShrink:0}}>
+          {w.map(c=>{
+            const intensity=c.count===0?0:c.count===1?0.4:c.count<=3?0.7:1;
+            const bg=c.has?`rgba(245,158,11,${intensity})`:t.bg;
+            return<div key={c.date} title={`${c.date} • ${c.count} รายการ`} style={{width:14,height:14,borderRadius:3,background:bg,border:`1px solid ${c.has?"transparent":t.cb}`}}/>;
+          })}
+        </div>))}
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:6,alignItems:"center",marginTop:8,fontSize:9,color:t.tm}}>
+        <span>น้อย</span>
+        {[0.2,0.4,0.7,1].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(245,158,11,${o})`}}/>)}
+        <span>มาก</span>
+      </div>
+    </div>
+
+    {/* Badges */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:t.text}}>🏅 รางวัล ({earned.length}/{BADGES.length})</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(90px, 1fr))",gap:10}}>
+        {BADGES.map(b=>{
+          const got=earned.includes(b.id);
+          return(<div key={b.id} style={{textAlign:"center",padding:"10px 6px",borderRadius:10,background:got?`${b.color}15`:t.bg,border:`1px solid ${got?b.color+"50":t.cb}`,opacity:got?1:0.4,filter:got?"none":"grayscale(0.7)"}}>
+            <div style={{fontSize:28,lineHeight:1}}>{b.emoji}</div>
+            <div style={{fontSize:11,fontWeight:600,marginTop:5,color:got?b.color:t.ts}}>{b.name}</div>
+            <div style={{fontSize:9,color:t.tm,marginTop:2}}>{b.desc}</div>
+          </div>);
+        })}
+      </div>
+    </div>
+  </div>);
+}
+
 function BottomTabBar({page,setPage,t,disabled}){
   if(disabled)return null;
   const tabs=[
@@ -3068,6 +3193,8 @@ function WealthHub(){
   const exportData=()=>{const payload={version:SK,exportedAt:new Date().toISOString(),data};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`wealthhub-backup-${td()}.json`;a.click();URL.revokeObjectURL(url)};
   const importData=e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const parsed=JSON.parse(ev.target.result);const payload=parsed.data||parsed;if(!payload||typeof payload!=="object"||!Array.isArray(payload.assets))throw new Error("รูปแบบไฟล์ไม่ถูกต้อง");if(!window.confirm("นำเข้าข้อมูลจะเขียนทับข้อมูลปัจจุบันทั้งหมด ดำเนินการต่อ?"))return;const merged={...DF,...payload,balanceSheet:{...DF.balanceSheet,...(payload.balanceSheet||{})},settings:{...DF.settings,...(payload.settings||{})},recurring:payload.recurring||[],budgets:payload.budgets||{}};persist(merged);window.alert("นำเข้าข้อมูลสำเร็จ ✅")}catch(err){window.alert("นำเข้าไม่สำเร็จ: "+err.message)}};reader.readAsText(file);e.target.value=""};
 
+  const streak=useMemo(()=>data?calcStreak(data.transactions):{current:0,longest:0,hasToday:false,datesSet:new Set()},[data]);
+
   const stats=useMemo(()=>{
     if(!data)return{};
     const tp=data.assets.reduce((s,a)=>s+toThb(a.units*a.currentPrice,a.currency||"THB"),0);
@@ -3111,7 +3238,7 @@ function WealthHub(){
   const mobileFullPages=["menu","chat","profile"];
   const hideMobileHeader=isMobile&&mobileFullPages.includes(page);
   // Custom mobile titles for new tab pages
-  const mobileTitle=page==="menu"?"เมนู":page==="chat"?"แชทสนทนา":page==="profile"?"โปรไฟล์":pl;
+  const mobileTitle=page==="menu"?"เมนู":page==="chat"?"แชทสนทนา":page==="profile"?"โปรไฟล์":page==="streak"?"สตรีค & รางวัล":pl;
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)",boxSizing:"border-box"}}>
     {!isMobile&&<Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>}
@@ -3136,6 +3263,8 @@ function WealthHub(){
 
       {/* DASHBOARD */}
       {page==="dashboard"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
+        {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="$" label="มูลค่าสุทธิ" value={fB(stats.netWorth)} t={t} color={t.ac}/><MC icon="📈" label="กำไร/ขาดทุน" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="💵" label="รายรับเดือนนี้" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/></div>
         {/* Portfolio on dashboard */}
         {data.assets.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
@@ -3197,6 +3326,7 @@ function WealthHub(){
         {data.debts.length===0?<Empty icon="🏦" title="ไม่มีหนี้" sub="บันทึกหนี้สิน" action="+ เพิ่ม" onAction={()=>setModal({type:"addDebt"})} t={t}/>:(data.debts.map(d=>{const p=d.total>0?(d.paid/d.total)*100:0;const r=d.total-d.paid;const mi=r*(d.rate/100/12);return(<div key={d.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16,borderLeft:`4px solid ${t.am}`}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:600}}>{d.icon} {d.name}</span><span style={{fontSize:11,color:t.ts}}>{d.rate}%/ปี</span></div><PB pct={p} color={p>=100?t.g:t.am} height={8} t={t}/><div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:t.ts}}><span>จ่าย {fB(d.paid)} ({Math.round(p)}%)</span><span>เหลือ {fB(r)}</span></div>{mi>0&&<div style={{fontSize:10,color:t.r,marginTop:3}}>ดอกเบี้ย/เดือน ~{fB(Math.round(mi))}</div>}<div style={{display:"flex",gap:3,marginTop:8}}><Btn small t={t} onClick={()=>setModal({type:"editDebt",debt:d})}>แก้ไข</Btn><Btn small t={t} onClick={()=>{const pay=window.prompt("จ่าย?");if(pay&&+pay>0)updateDebt(d.id,{...d,paid:Math.min(d.total,d.paid+ +pay)})}}>+จ่าย</Btn><Btn small danger t={t} onClick={()=>{if(window.confirm("ลบ?"))delDebt(d.id)}}>ลบ</Btn></div></div>)}))}
       </div>)}
 
+      {page==="streak"&&<StreakPage data={data} streak={streak} persist={persist} t={t}/>}
       {page==="dca"&&<DCAPage t={t}/>}
       {page==="retire"&&<RetirePage t={t}/>}
       {page==="plan"&&<PlanPage data={data} stats={stats} t={t}/>}
