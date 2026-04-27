@@ -3061,10 +3061,10 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
   if(disabled)return null;
   const tabs=[
     {k:"dashboard",l:"หน้าแรก"},
-    {k:"txn",l:"รายการ"},
+    {k:"menu",l:"เมนู"},
     {k:"__add",l:"บันทึก"}, // center elevated button
     {k:"streak",l:"สตรีค"},
-    {k:"menu",l:"เมนู"},
+    {k:"profile",l:"โปรไฟล์"},
   ];
   return(<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:97,background:t.card,borderTop:`1px solid ${t.cb}`,boxShadow:"0 -2px 10px rgba(0,0,0,0.06)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)"}}>
     <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:60,position:"relative"}}>
