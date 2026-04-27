@@ -443,9 +443,10 @@ function PlanPage({data,stats,t}){
 /* ═══ FORMS ═══ */
 function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||{name:"",type:"stock_th",units:"",avgCost:"",currentPrice:"",currency:"THB",note:""});const ok=f.name&&+f.units>0&&+f.avgCost>0&&+f.currentPrice>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><Inp label="ชื่อ/Symbol" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="KBANK, AAPL"/><div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}><Sel label="ประเภท" t={t} value={f.type} onChange={e=>set("type",e.target.value)}>{AT.map(a=><option key={a.v} value={a.v}>{a.i} {a.l}</option>)}</Sel><Sel label="สกุลเงิน" t={t} value={f.currency} onChange={e=>set("currency",e.target.value)}><option value="THB">🇹🇭 THB</option><option value="USD">🇺🇸 USD</option></Sel></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวน" t={t} type="number" step="any" value={f.units} onChange={e=>set("units",e.target.value)}/><Inp label={`ต้นทุน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.avgCost} onChange={e=>set("avgCost",e.target.value)}/></div><Inp label={`ราคาปัจจุบัน/หน่วย (${f.currency})`} t={t} type="number" step="any" value={f.currentPrice} onChange={e=>set("currentPrice",e.target.value)}/>{f.currency==="USD"&&+f.currentPrice>0&&<div style={{fontSize:10,color:t.ac}}>≈ {fB(+f.currentPrice*rate)}/unit</div>}<Inp label="โน้ต" t={t} value={f.note||""} onChange={e=>set("note",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
-function TxnForm({onSave,onCancel,t,initialDate,initial,data}){
-  const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||""}:{type:"expense",category:"food",amount:"",date:initialDate||td(),note:""});
+function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
+  const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||"",goalId:initial.goalId||""}:{type:initialType||"expense",category:initialType==="income"?"salary":"food",amount:"",date:initialDate||td(),note:"",goalId:""});
   const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;
+  const goals=(data?.goals||[]).filter(g=>(g.saved||0)<(g.target||0));
   // Smart Category: build keyword→category map from history (expenses only)
   const noteMap=useMemo(()=>{const m={};(data?.transactions||[]).filter(tx=>tx.type==="expense"&&tx.note).forEach(tx=>{tx.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2).forEach(w=>{if(!m[w])m[w]={};m[w][tx.category]=(m[w][tx.category]||0)+1})});return m},[data?.transactions]);
   const suggestion=useMemo(()=>{if(f.type!=="expense"||!f.note||f.note.length<2)return null;const words=f.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2);const scores={};words.forEach(w=>{if(noteMap[w])Object.entries(noteMap[w]).forEach(([c,n])=>{scores[c]=(scores[c]||0)+n})});const top=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];return(top&&top[0]!==f.category)?top[0]:null},[f.note,f.category,f.type,noteMap]);
@@ -463,6 +464,10 @@ function TxnForm({onSave,onCancel,t,initialDate,initial,data}){
       {+f.amount>0&&<button type="button" onClick={()=>{haptic(5);set("amount","")}} aria-label="ล้างจำนวน" title="ล้าง" style={{padding:"7px 11px",border:`1px solid ${t.cb}`,borderRadius:99,background:"transparent",color:t.tm,fontSize:12,cursor:"pointer",minHeight:34,marginLeft:"auto"}}>✕</button>}
     </div>
     <Inp label="โน้ต" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="เช่น เซเว่น, กาแฟสตาร์บัค, ค่าน้ำมัน"/>
+    {goals.length>0&&(<Sel label={`🎯 ผูกกับเป้าหมาย ${f.type==="expense"?"(หักจากเงินออม)":"(เพิ่มเงินออม)"} — ไม่บังคับ`} t={t} value={f.goalId} onChange={e=>set("goalId",e.target.value)}>
+      <option value="">— ไม่ผูก —</option>
+      {goals.map(g=>{const left=(g.target||0)-(g.saved||0);return(<option key={g.id} value={g.id}>{g.icon} {g.name} (เหลือ {fB(left)})</option>)})}
+    </Sel>)}
     <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>{haptic(15);onSave(f)}} style={{flex:1}}>{initial?"💾 บันทึก":"✓ บันทึก"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div>
   </div>);
 }
@@ -489,16 +494,65 @@ function RecurringForm({initial,onSave,onCancel,t}){
   </div>);
 }
 
-function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,t}){
+function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,onCreateFromCandidate,t}){
   const list=data.recurring||[];
   const monthlyIn=list.filter(r=>r.active&&r.type==="income").reduce((s,r)=>s+(+r.amount||0),0);
   const monthlyOut=list.filter(r=>r.active&&r.type==="expense").reduce((s,r)=>s+(+r.amount||0),0);
+  const[dismissed,setDismissed]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("wh-recur-dismiss")||"[]"))}catch{return new Set()}});
+  const dismiss=key=>{const n=new Set(dismissed);n.add(key);setDismissed(n);try{localStorage.setItem("wh-recur-dismiss",JSON.stringify([...n]))}catch{}};
+  // Auto-detect candidates: group txns by type+category+rounded amount.
+  // A candidate needs ≥2 occurrences across different YYYY-MM, none already auto-generated (no recurringId).
+  const candidates=useMemo(()=>{
+    const buckets={};
+    (data.transactions||[]).forEach(tx=>{
+      if(tx.recurringId)return; // already from a rule
+      const amt=+tx.amount||0;
+      if(amt<50)return; // ignore noise
+      // Key: type|category|rounded(amt to nearest 10)
+      const round=Math.round(amt/10)*10;
+      const key=`${tx.type}|${tx.category}|${round}`;
+      if(!buckets[key])buckets[key]={type:tx.type,category:tx.category,amt:round,txns:[],months:new Set(),days:[],notes:{}};
+      const b=buckets[key];
+      b.txns.push(tx);
+      b.months.add(mk(tx.date));
+      b.days.push(+tx.date.slice(8,10));
+      const n=(tx.note||"").trim();
+      if(n)b.notes[n]=(b.notes[n]||0)+1;
+    });
+    return Object.entries(buckets)
+      .map(([key,b])=>{
+        const monthsArr=[...b.months].sort();
+        const dayMode=(()=>{const c={};b.days.forEach(d=>c[d]=(c[d]||0)+1);return +Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]})();
+        const topNote=Object.entries(b.notes).sort((a,b)=>b[1]-a[1])[0]?.[0]||"";
+        return{key,...b,monthsArr,dayMode,topNote,count:b.txns.length};
+      })
+      .filter(c=>c.months.size>=2) // appeared in 2+ different months
+      .filter(c=>!list.some(r=>r.type===c.type&&r.category===c.category&&Math.abs((+r.amount||0)-c.amt)<=Math.max(20,c.amt*0.1))) // not already a rule
+      .filter(c=>!dismissed.has(c.key))
+      .sort((a,b)=>b.count-a.count)
+      .slice(0,5);
+  },[data.transactions,list,dismissed]);
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="💵" label="รายรับประจำ/เดือน" value={fB(monthlyIn)} t={t} color={t.g}/>
       <MC icon="💸" label="รายจ่ายประจำ/เดือน" value={fB(monthlyOut)} t={t} color={t.r}/>
       <MC icon="💰" label="สุทธิประจำเดือน" value={`${monthlyIn-monthlyOut>=0?"+":"-"}${fB(monthlyIn-monthlyOut)}`} t={t} color={monthlyIn-monthlyOut>=0?t.g:t.r}/>
     </div>
+    {candidates.length>0&&(<div style={{background:`linear-gradient(135deg, ${t.ac}10, ${t.ac}03)`,border:`1px solid ${t.ac}40`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:13,fontWeight:600,color:t.ac,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>✨ พบรายการที่อาจเป็นรายการประจำ</div>
+      <div style={{fontSize:10,color:t.tm,marginBottom:10}}>เราตรวจพบรายการเหล่านี้เกิดซ้ำหลายเดือน — เพิ่มเป็นรายการประจำเพื่อให้ระบบบันทึกอัตโนมัติ</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {candidates.map(c=>{const cats=c.type==="income"?IC:EC;const cat=cats.find(x=>x.v===c.category)||cats[cats.length-1];const isI=c.type==="income";return(<div key={c.key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:10}}>
+          <div style={{width:34,height:34,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,background:isI?`${t.g}18`:`${t.r}18`,flexShrink:0}}>{cat.i}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.topNote||cat.l}</div>
+            <div style={{fontSize:10,color:t.tm,marginTop:2}}>{cat.l} · {fB(c.amt)} · พบ {c.count} ครั้งใน {c.months.size} เดือน · มักวันที่ {c.dayMode}</div>
+          </div>
+          <button onClick={()=>{haptic(15);onCreateFromCandidate&&onCreateFromCandidate({name:c.topNote||cat.l,type:c.type,category:c.category,amount:c.amt,dayOfMonth:c.dayMode})}} style={{padding:"6px 12px",fontSize:11,border:"none",borderRadius:7,background:t.ac,color:"#fff",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>+ สร้าง</button>
+          <button onClick={()=>dismiss(c.key)} aria-label="ปิด" style={{padding:4,border:"none",borderRadius:6,background:"transparent",color:t.tm,cursor:"pointer",fontSize:13,lineHeight:1}}>✕</button>
+        </div>)})}
+      </div>
+    </div>)}
     {list.length===0?<Empty icon="↻" title="ยังไม่มีรายการประจำ" sub="เพิ่มเงินเดือน ค่าเช่า subscription ที่เกิดทุกเดือน" action="+ เพิ่มรายการประจำ" onAction={onAdd} t={t}/>:(
       <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
         {list.map((r,i)=>{const cats=r.type==="income"?IC:EC;const cat=cats.find(c=>c.v===r.category)||cats[cats.length-1];const isI=r.type==="income";return(<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<list.length-1?`1px solid ${t.cb}`:"none",opacity:r.active?1:0.5}}>
@@ -1280,7 +1334,7 @@ function CashFlowDetailPage({data,persist,t}){
 }
 
 /* ═══ TXN PAGE ═══ */
-function TxnPage({data,stats,onAdd,onEdit,onDel,t}){
+function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
   const[filter,setFilter]=useState("all");
   const[search,setSearch]=useState("");
   const[catFilter,setCatFilter]=useState("all");
@@ -1290,6 +1344,10 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,t}){
   const[minAmt,setMinAmt]=useState("");
   const[maxAmt,setMaxAmt]=useState("");
   const[showAdv,setShowAdv]=useState(false);
+  const[selMode,setSelMode]=useState(false);
+  const[selIds,setSelIds]=useState(()=>new Set());
+  const toggleSel=id=>{setSelIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n})};
+  const clearSel=()=>{setSelMode(false);setSelIds(new Set())};
   const allCats=useMemo(()=>[...IC.map(c=>({...c,kind:"income"})),...EC.map(c=>({...c,kind:"expense"}))],[]);
   const{from,to}=useMemo(()=>{
     const tdy=new Date();const today=tdy.toISOString().slice(0,10);
@@ -1360,6 +1418,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,t}){
         </div>
         <button onClick={()=>setShowAdv(s=>!s)} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${showAdv?t.ac:t.cb}`,borderRadius:8,cursor:"pointer",background:showAdv?`${t.ac}15`:"transparent",color:showAdv?t.ac:t.text,fontWeight:500,whiteSpace:"nowrap"}}>{showAdv?"⚙ ปิดตัวกรอง":"⚙ ตัวกรอง"}</button>
         <button onClick={exportCSV} disabled={!filtered.length} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${t.g}40`,borderRadius:8,cursor:filtered.length?"pointer":"not-allowed",background:filtered.length?`${t.g}15`:"transparent",color:t.g,fontWeight:500,whiteSpace:"nowrap",opacity:filtered.length?1:0.4}} title="ส่งออกเป็น CSV (รายการที่กรองไว้)">📤 Export</button>
+        <button onClick={()=>{haptic(5);if(selMode)clearSel();else setSelMode(true)}} disabled={!filtered.length&&!selMode} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${selMode?t.r:t.cb}`,borderRadius:8,cursor:"pointer",background:selMode?`${t.r}15`:"transparent",color:selMode?t.r:t.text,fontWeight:500,whiteSpace:"nowrap",opacity:(filtered.length||selMode)?1:0.4}} title="เลือกหลายรายการ">{selMode?"✕ ออก":"☑ เลือก"}</button>
       </div>
 
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1413,19 +1472,38 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,t}){
     </div>
 
     {filtered.length===0?<Empty icon="🔍" title={hasFilter?"ไม่พบรายการที่ตรงกับตัวกรอง":"ไม่มีรายการ"} sub={hasFilter?"ลองเปลี่ยนเงื่อนไขดู":"เพิ่มรายรับหรือรายจ่าย"} action={hasFilter?"✕ ล้างตัวกรอง":"+ บันทึก"} onAction={hasFilter?clearAll:onAdd} t={t}/>:
-      (<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>{filtered.map((tx,i)=>{
+      (<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+        {selMode&&(<div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:`1px solid ${t.cb}`,background:t.thBg}}>
+          <input type="checkbox" checked={filtered.length>0&&filtered.every(tx=>selIds.has(tx.id))} onChange={e=>{if(e.target.checked)setSelIds(new Set(filtered.map(tx=>tx.id)));else setSelIds(new Set())}} style={{width:16,height:16,accentColor:t.ac,cursor:"pointer"}}/>
+          <span style={{fontSize:11,color:t.ts}}>เลือกทั้งหมด ({filtered.length} รายการ)</span>
+        </div>)}
+        {filtered.map((tx,i)=>{
         const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
-        return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none"}}>
-          <div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`}}>{cat.i}</div>
+        const checked=selIds.has(tx.id);
+        return(<div key={tx.id} onClick={selMode?()=>toggleSel(tx.id):undefined} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none",cursor:selMode?"pointer":"default",background:selMode&&checked?`${t.ac}10`:"transparent"}}>
+          {selMode&&<input type="checkbox" checked={checked} onChange={()=>toggleSel(tx.id)} onClick={e=>e.stopPropagation()} style={{width:16,height:16,accentColor:t.ac,cursor:"pointer",flexShrink:0}}/>}
+          <div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}18`:`${t.r}18`,flexShrink:0}}>{cat.i}</div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}</div>
+            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.note||cat.l}{tx.goalId&&<span style={{fontSize:9,color:t.ac,marginLeft:6}}>🎯</span>}</div>
             <div style={{fontSize:10,color:t.tm}}>{new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})} · {cat.l}</div>
           </div>
           <span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r}}>{isI?"+":"-"}{fB(tx.amount)}</span>
-          {onEdit&&<button onClick={()=>onEdit(tx)} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.ts}} title="แก้ไข">✏</button>}
-          <button onClick={()=>{if(window.confirm("ลบรายการนี้?"))onDel(tx.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}} title="ลบ">✕</button>
+          {!selMode&&onEdit&&<button onClick={()=>onEdit(tx)} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.ts}} title="แก้ไข">✏</button>}
+          {!selMode&&<button onClick={()=>{if(window.confirm("ลบรายการนี้?"))onDel(tx.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,background:"transparent",cursor:"pointer",color:t.tm}} title="ลบ">✕</button>}
         </div>);
       })}</div>)}
+    {selMode&&selIds.size>0&&(<div style={{position:"sticky",bottom:12,zIndex:10,background:t.card,border:`1px solid ${t.r}40`,boxShadow:`0 6px 20px ${t.r}30`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,marginTop:4}}>
+      <span style={{fontSize:13,fontWeight:600,color:t.text}}>เลือก {selIds.size} รายการ</span>
+      <div style={{flex:1}}/>
+      <button onClick={clearSel} style={{padding:"7px 14px",fontSize:11,border:`1px solid ${t.cb}`,borderRadius:7,background:"transparent",color:t.ts,cursor:"pointer",fontWeight:500}}>ยกเลิก</button>
+      <button onClick={()=>{
+        if(!window.confirm(`ลบ ${selIds.size} รายการ?`))return;
+        haptic([10,40,10]);
+        if(onBulkDel)onBulkDel([...selIds]);
+        else[...selIds].forEach(id=>onDel(id));
+        clearSel();
+      }} style={{padding:"7px 14px",fontSize:11,border:"none",borderRadius:7,background:t.r,color:"#fff",cursor:"pointer",fontWeight:600}}>🗑 ลบ {selIds.size} รายการ</button>
+    </div>)}
   </div>);
 }
 
@@ -2370,6 +2448,7 @@ const NAV_COLORS={
   goals:"#FBBF24",debts:"#EF4444",
   dca:"#6366F1",retire:"#F97316",plan:"#0D9488",tax:"#F472B6",
   reports:"#0891B2",challenges:"#FACC15",about:"#94A3B8",
+  streak:"#F59E0B",profile:"#8B5CF6",
 };
 
 /* ═══ NAV ICONS (Lucide-style SVG) ═══
@@ -2400,8 +2479,9 @@ function NavIcon({name,size=26}){
     case"challenges":return<svg {...s}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>;
     case"about":return<svg {...s}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
     case"menu":return<svg {...s}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
-    case"chat":return<svg {...s}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>;
     case"profile":return<svg {...s}><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>;
+    case"streak":return<svg {...s}><path d="M8.5 14.5A2.5 2.5 0 0 0 10 19c1.86 0 4.16-1.85 4-7 4 4 5 8 5 10a8 8 0 1 1-16 0c0-2.5 1.4-5.5 4.5-8.5"/></svg>;
+    case"add":return<svg {...s} strokeWidth={2.6}><path d="M12 5v14"/><path d="M5 12h14"/></svg>;
     default:return null;
   }
 }
@@ -2560,6 +2640,16 @@ function MenuIllustration({navKey,size=30}){
       <circle cx="12" cy="12" r="10" fill="#3B82F6"/>
       <circle cx="12" cy="7.5" r="1.4" fill="#FFFFFF"/>
       <rect x="10.7" y="10.5" width="2.6" height="7.5" rx="1" fill="#FFFFFF"/>
+    </svg>;
+    case"streak":return<svg {...s}>
+      <path d="M12 2c1 3 4 5 4 9a4 4 0 0 1-8 0c0-2 1-3 1-5 1 1 2 2 3 1 0-2-1-3 0-5Z" fill="#F59E0B"/>
+      <path d="M12 8c.5 1.5 2 2.5 2 4.5a2 2 0 0 1-4 0c0-1 .5-1.5 1-2.5.5.5 1 1 1.5 0 0-1-.5-1.5-.5-2Z" fill="#FCD34D"/>
+      <path d="M9 17c1 1 2 1.5 3 1.5s2-.5 3-1.5" fill="none" stroke="#D97706" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>;
+    case"profile":return<svg {...s}>
+      <circle cx="12" cy="12" r="10" fill="#A78BFA"/>
+      <circle cx="12" cy="9.5" r="3.5" fill="#FFFFFF"/>
+      <path d="M5 20a7 7 0 0 1 14 0v2H5v-2Z" fill="#FFFFFF"/>
     </svg>;
     default:return null;
   }
@@ -2774,130 +2864,70 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
   </div>);
 }
 
-/* ═══ CHAT PAGE ═══
- * Global chatroom — every signed-in user sees the same stream.
- * Tables: chat_messages (with realtime), user_profiles (for display_name/avatar).
- */
-function ChatPage({session,t}){
-  const[msgs,setMsgs]=useState([]);
-  const[profiles,setProfiles]=useState({});
-  const[input,setInput]=useState("");
-  const[loading,setLoading]=useState(true);
-  const[sending,setSending]=useState(false);
-  const[err,setErr]=useState("");
-  const[setupNeeded,setSetupNeeded]=useState(false);
-  const scrollRef=useRef();
-  const isSetupErr=msg=>{const s=(msg||"").toLowerCase();return s.includes("does not exist")||s.includes("not found")||s.includes("404")||s.includes("schema cache")||s.includes("could not find")};
+/* ═══ QUICK ACTION BUTTON ═══ Big tap target with icon + label */
+function QuickAction({icon,label,color,onClick}){
+  return(<button onClick={()=>{haptic(5);onClick()}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 4px",border:`1px solid ${color}30`,borderRadius:12,background:`linear-gradient(135deg, ${color}12, ${color}05)`,cursor:"pointer",WebkitTapHighlightColor:"transparent",minHeight:72}}>
+    <div style={{width:36,height:36,borderRadius:"50%",background:color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:600,boxShadow:`0 4px 10px ${color}40`}}>{icon}</div>
+    <span style={{fontSize:11,fontWeight:600,color:color}}>{label}</span>
+  </button>);
+}
 
-  // Load history + subscribe
-  useEffect(()=>{
-    if(!session)return;
-    let mounted=true;
-    supabase.from("chat_messages").select("*").order("created_at",{ascending:false}).limit(100)
-      .then(({data,error})=>{
-        if(!mounted)return;
-        if(error){
-          console.error("[chat load]",error);
-          if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง chat_messages ยังไม่ถูกสร้าง — กรุณารัน SQL ก่อน")}
-          else setErr(error.message);
-          setLoading(false);return;
-        }
-        setMsgs((data||[]).reverse());setLoading(false);
-      });
-    supabase.from("user_profiles").select("user_id,display_name,avatar_url")
-      .then(({data})=>{if(!mounted)return;const m={};(data||[]).forEach(p=>m[p.user_id]=p);setProfiles(m)});
-    const ch=supabase.channel("chat-room").on("postgres_changes",{event:"INSERT",schema:"public",table:"chat_messages"},payload=>{
-      setMsgs(prev=>prev.some(m=>m.id===payload.new.id)?prev:[...prev,payload.new]);
-      // Lazy-load profile if unknown
-      const uid=payload.new.user_id;
-      setProfiles(prev=>{
-        if(prev[uid])return prev;
-        supabase.from("user_profiles").select("*").eq("user_id",uid).maybeSingle().then(({data})=>{
-          if(data)setProfiles(p=>({...p,[uid]:data}));
-        });
-        return prev;
-      });
-    }).subscribe();
-    return()=>{mounted=false;supabase.removeChannel(ch)};
-  },[session]);
-
-  // Auto-scroll on new message
-  useEffect(()=>{
-    const el=scrollRef.current;if(!el)return;
-    el.scrollTop=el.scrollHeight;
-  },[msgs]);
-
-  const send=async()=>{
-    const m=input.trim();if(!m||!session||sending)return;
-    setSending(true);haptic(10);setErr("");
-    setInput("");
-    // Optimistic insert (gives instant feedback even before realtime echoes back)
-    const tempId="tmp-"+Date.now();
-    const tempMsg={id:tempId,user_id:session.user.id,message:m,created_at:new Date().toISOString(),_pending:true};
-    setMsgs(prev=>[...prev,tempMsg]);
-    const{data,error}=await supabase.from("chat_messages").insert({user_id:session.user.id,message:m}).select().single();
-    if(error){
-      console.error("[chat send]",error);
-      setMsgs(prev=>prev.filter(x=>x.id!==tempId));
-      setInput(m);
-      if(isSetupErr(error.message)){setSetupNeeded(true);setErr("ตาราง chat_messages ยังไม่ถูกสร้าง — กรุณารัน SUPABASE-SETUP-CHAT-PROFILE.sql ก่อน")}
-      else setErr("ส่งไม่ได้: "+error.message);
-    }else if(data){
-      // Replace temp with real row (realtime listener may also add it; dedup by id)
-      setMsgs(prev=>{const w=prev.filter(x=>x.id!==tempId);return w.some(x=>x.id===data.id)?w:[...w,data]});
-    }
-    setSending(false);
-  };
-
-  if(!session)return(<div style={{padding:"30px 16px",textAlign:"center",color:t.ts}}>
-    <div style={{fontSize:48,marginBottom:12,opacity:0.5}}>💬</div>
-    <div>กรุณาเข้าสู่ระบบเพื่อแชท</div>
-  </div>);
-
-  const fmtTime=ts=>{
-    const d=new Date(ts);const now=new Date();
-    if(d.toDateString()===now.toDateString())return d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
-    return d.toLocaleDateString("th-TH",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
-  };
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {setupNeeded&&<div style={{background:`${t.am}15`,border:`1px solid ${t.am}55`,borderRadius:12,padding:12,fontSize:12,color:t.text,lineHeight:1.5}}>
-      <div style={{fontWeight:700,marginBottom:6,color:t.am,display:"flex",alignItems:"center",gap:6}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-        ต้องตั้งค่า Supabase ก่อนใช้แชท
-      </div>
-      เปิด <span style={{fontFamily:"monospace",background:t.bg,padding:"1px 6px",borderRadius:4,border:`1px solid ${t.cb}`}}>SUPABASE-SETUP-CHAT-PROFILE.sql</span> แล้ววางใน <b>Supabase Dashboard → SQL Editor → New query → Run</b> ครับ จากนั้นรีเฟรชหน้านี้
+/* ═══ TODAY CARD ═══ Today's spending vs average */
+function TodayCard({data,t,onAdd}){
+  const today=td();
+  const todayTxns=data.transactions.filter(tx=>tx.date===today);
+  const todayExp=todayTxns.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);
+  const todayInc=todayTxns.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);
+  // Calculate avg daily expense over last 30 days (excluding today)
+  const last30=[];
+  for(let i=1;i<=30;i++)last30.push(addDays(today,-i));
+  const last30Exp=data.transactions.filter(tx=>tx.type==="expense"&&last30.includes(tx.date)).reduce((s,tx)=>s+tx.amount,0);
+  const avg=last30Exp/30;
+  const ratio=avg>0?(todayExp/avg)*100:0;
+  const status=ratio===0?{c:t.tm,t:"ยังไม่ใช้เงินเลย"}:ratio<=80?{c:t.g,t:"ใช้น้อยกว่าค่าเฉลี่ย"}:ratio<=120?{c:t.am,t:"ใกล้เคียงค่าเฉลี่ย"}:{c:t.r,t:"เกินค่าเฉลี่ย"};
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14,display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+      <span style={{fontSize:11,color:t.tm,fontWeight:600}}>📅 วันนี้ ({todayTxns.length} รายการ)</span>
+      {avg>0&&<span style={{fontSize:9,color:t.tm}}>เฉลี่ย ฿{Math.round(avg).toLocaleString()}/วัน</span>}
+    </div>
+    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{fontSize:22,fontWeight:700,color:t.r}}>-{fB(todayExp)}</span>
+      {todayInc>0&&<span style={{fontSize:12,color:t.g,fontWeight:600}}>+{fB(todayInc)}</span>}
+    </div>
+    {avg>0&&<div style={{width:"100%",height:5,background:t.bg,borderRadius:3,overflow:"hidden"}}>
+      <div style={{width:`${Math.min(100,ratio)}%`,height:"100%",background:status.c,transition:"width .3s"}}/>
     </div>}
-    {err&&!setupNeeded&&<div style={{background:`${t.r}10`,border:`1px solid ${t.r}40`,borderRadius:10,padding:10,fontSize:12,color:t.r,fontWeight:500}}>{err}</div>}
-    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 230px)",minHeight:380,background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
-    <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"14px 12px",WebkitOverflowScrolling:"touch"}}>
-      {loading&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:20}}>กำลังโหลด...</div>}
-      {!loading&&msgs.length===0&&<div style={{textAlign:"center",color:t.tm,fontSize:12,padding:30}}>ยังไม่มีข้อความ — เริ่มทักทายเลย!</div>}
-      {msgs.map((m,i)=>{
-        const isMe=m.user_id===session.user.id;
-        const p=profiles[m.user_id]||{};
-        const prev=msgs[i-1];
-        const showAvatar=!prev||prev.user_id!==m.user_id;
-        const name=p.display_name||"ผู้ใช้";
-        const initial=name[0]?.toUpperCase()||"U";
-        return(<div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:showAvatar?10:2,opacity:m._pending?0.6:1}}>
-          <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,visibility:showAvatar?"visible":"hidden",overflow:"hidden",background:`linear-gradient(135deg, ${isMe?t.ac:t.pp}, ${isMe?t.ac:t.pp}99)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>
-            {p.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initial}
+    <div style={{fontSize:10,color:status.c,fontWeight:500}}>{status.t}{ratio>0&&` (${Math.round(ratio)}%)`}</div>
+  </div>);
+}
+
+/* ═══ RECENT TRANSACTIONS ═══ Last 5 transactions on dashboard */
+function RecentTxns({data,t,onMore,onEdit}){
+  const recent=[...data.transactions].sort((a,b)=>{
+    const c=b.date.localeCompare(a.date);if(c!==0)return c;
+    return (b.id||"").localeCompare(a.id||"");
+  }).slice(0,5);
+  if(recent.length===0)return null;
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      <span style={{fontSize:13,fontWeight:600}}>🕐 รายการล่าสุด</span>
+      <button onClick={onMore} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>ดูทั้งหมด →</button>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:1}}>
+      {recent.map(tx=>{
+        const cats=tx.type==="income"?IC:EC;
+        const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
+        const isToday=tx.date===td();
+        const isI=tx.type==="income";
+        return(<button key={tx.id} onClick={()=>onEdit(tx)} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 4px",border:"none",background:"transparent",cursor:"pointer",borderRadius:6,WebkitTapHighlightColor:"transparent",textAlign:"left"}}>
+          <div style={{width:30,height:30,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:isI?`${t.g}15`:`${t.r}15`,flexShrink:0}}>{cat.i}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:500,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tx.note||cat.l}</div>
+            <div style={{fontSize:10,color:t.tm}}>{isToday?"วันนี้":new Date(tx.date).toLocaleDateString("th-TH",{day:"numeric",month:"short"})} · {cat.l}</div>
           </div>
-          <div style={{maxWidth:"72%",display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start"}}>
-            {showAvatar&&!isMe&&<div style={{fontSize:10,color:t.tm,marginBottom:3,padding:"0 8px"}}>{name}</div>}
-            <div style={{padding:"8px 12px",borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",background:isMe?t.ac:t.bg,color:isMe?"#fff":t.text,fontSize:13,lineHeight:1.4,wordBreak:"break-word",whiteSpace:"pre-wrap",border:isMe?"none":`1px solid ${t.cb}`}}>{m.message}</div>
-            <div style={{fontSize:9,color:t.tm,marginTop:2,padding:"0 4px"}}>{fmtTime(m.created_at)}</div>
-          </div>
-        </div>);
+          <span style={{fontSize:13,fontWeight:600,color:isI?t.g:t.r,flexShrink:0}}>{isI?"+":"-"}{fB(tx.amount)}</span>
+        </button>);
       })}
-    </div>
-    <div style={{borderTop:`1px solid ${t.cb}`,padding:10,display:"flex",gap:8,background:t.card}}>
-      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="พิมพ์ข้อความ..." maxLength={500} style={{flex:1,padding:"10px 14px",border:`1px solid ${t.ibr}`,borderRadius:20,background:t.ib,color:t.text,fontSize:13,minWidth:0,outline:"none"}}/>
-      <button onClick={send} disabled={!input.trim()||sending} aria-label="ส่ง" style={{width:40,height:40,borderRadius:"50%",border:"none",background:input.trim()?t.ac:t.cb,color:"#fff",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s",WebkitTapHighlightColor:"transparent"}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
-      </button>
-    </div>
     </div>
   </div>);
 }
@@ -3027,24 +3057,37 @@ function StreakPage({data,streak,persist,t}){
   </div>);
 }
 
-function BottomTabBar({page,setPage,t,disabled}){
+function BottomTabBar({page,setPage,t,disabled,onAdd}){
   if(disabled)return null;
   const tabs=[
     {k:"dashboard",l:"หน้าแรก"},
+    {k:"txn",l:"รายการ"},
+    {k:"__add",l:"บันทึก"}, // center elevated button
+    {k:"streak",l:"สตรีค"},
     {k:"menu",l:"เมนู"},
-    {k:"challenges",l:"ชาเลนจ์"},
-    {k:"chat",l:"แชท"},
-    {k:"profile",l:"โปรไฟล์"},
   ];
   return(<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:97,background:t.card,borderTop:`1px solid ${t.cb}`,boxShadow:"0 -2px 10px rgba(0,0,0,0.06)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)"}}>
-    <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:60}}>
-      {tabs.map(tab=>{const active=page===tab.k;const col=active?t.ac:t.tm;return(<button key={tab.k} onClick={()=>{haptic(5);setPage(tab.k)}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s",WebkitTapHighlightColor:"transparent"}}>
-        {active&&<div style={{position:"absolute",top:0,left:"30%",right:"30%",height:3,background:t.ac,borderRadius:"0 0 3px 3px"}}/>}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
-          <NavIcon name={tab.k} size={22}/>
-        </div>
-        <span style={{fontSize:10,fontWeight:active?600:500,letterSpacing:0.2}}>{tab.l}</span>
-      </button>)})}
+    <div style={{display:"flex",justifyContent:"space-around",alignItems:"stretch",height:60,position:"relative"}}>
+      {tabs.map(tab=>{
+        if(tab.k==="__add"){
+          return(<button key="__add" onClick={()=>{haptic(10);onAdd&&onAdd()}} aria-label="บันทึกรายรับ-รายจ่าย" style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",gap:2,background:"transparent",border:"none",cursor:"pointer",padding:0,position:"relative",WebkitTapHighlightColor:"transparent"}}>
+            <div style={{width:54,height:54,borderRadius:"50%",background:`linear-gradient(135deg, ${t.ac}, ${t.pp})`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 6px 16px ${t.ac}55, 0 2px 4px rgba(0,0,0,0.15)`,marginTop:-22,border:`3px solid ${t.card}`,transition:"transform .15s"}}
+              onTouchStart={e=>{e.currentTarget.style.transform="scale(0.92)"}}
+              onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
+              onTouchCancel={e=>{e.currentTarget.style.transform="scale(1)"}}
+            ><NavIcon name="add" size={28}/></div>
+            <span style={{fontSize:10,fontWeight:600,color:t.ac,letterSpacing:0.2,marginTop:2}}>{tab.l}</span>
+          </button>);
+        }
+        const active=page===tab.k;const col=active?t.ac:t.tm;
+        return(<button key={tab.k} onClick={()=>{haptic(5);setPage(tab.k)}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"transparent",border:"none",cursor:"pointer",color:col,padding:"6px 4px",position:"relative",transition:"color .15s",WebkitTapHighlightColor:"transparent"}}>
+          {active&&<div style={{position:"absolute",top:0,left:"30%",right:"30%",height:3,background:t.ac,borderRadius:"0 0 3px 3px"}}/>}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+            <NavIcon name={tab.k} size={22}/>
+          </div>
+          <span style={{fontSize:10,fontWeight:active?600:500,letterSpacing:0.2}}>{tab.l}</span>
+        </button>);
+      })}
     </div>
   </div>);
 }
@@ -3168,9 +3211,52 @@ function WealthHub(){
   const addAsset=f=>{haptic(15);persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
   const updateAsset=(id,f)=>{haptic(15);persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
   const delAsset=id=>{const a=data.assets.find(x=>x.id===id);deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id)}))};
-  const addTxn=f=>{haptic(15);persist({...data,transactions:[...data.transactions,{...f,id:uid(),amount:+f.amount}]});setModal(null)};
-  const updateTxn=(id,f)=>{haptic(15);persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount}:tx)});setModal(null)};
-  const delTxn=id=>{const tx=data.transactions.find(x=>x.id===id);const lab=tx?.note||(EC.find(c=>c.v===tx?.category)?.l)||"";deleteWithUndo(lab,d=>({...d,transactions:d.transactions.filter(x=>x.id!==id)}))};
+  // Goal auto-link: income with goalId → adds to saved; expense with goalId → subtracts from saved
+  const goalDelta=(f,sign=1)=>{
+    if(!f.goalId)return null;
+    const amt=+f.amount||0;
+    const sgn=f.type==="income"?1:-1;
+    return{id:f.goalId,delta:sign*sgn*amt};
+  };
+  const applyGoalDelta=(goals,delta)=>{
+    if(!delta)return goals;
+    return goals.map(g=>g.id===delta.id?{...g,saved:Math.max(0,(+g.saved||0)+delta.delta)}:g);
+  };
+  const addTxn=f=>{
+    haptic(15);
+    const txn={...f,id:uid(),amount:+f.amount,goalId:f.goalId||undefined};
+    const d2={...data,transactions:[...data.transactions,txn]};
+    const dl=goalDelta(f,1);
+    persist({...d2,goals:applyGoalDelta(d2.goals,dl)});
+    setModal(null);
+  };
+  const updateTxn=(id,f)=>{
+    haptic(15);
+    const old=data.transactions.find(x=>x.id===id);
+    let goals=data.goals;
+    if(old)goals=applyGoalDelta(goals,goalDelta({...old},-1));
+    goals=applyGoalDelta(goals,goalDelta(f,1));
+    persist({...data,transactions:data.transactions.map(tx=>tx.id===id?{...tx,...f,amount:+f.amount,goalId:f.goalId||undefined}:tx),goals});
+    setModal(null);
+  };
+  const delTxn=id=>{
+    const tx=data.transactions.find(x=>x.id===id);
+    const lab=tx?.note||(EC.find(c=>c.v===tx?.category)?.l)||"";
+    deleteWithUndo(lab,d=>{
+      const goals=tx?applyGoalDelta(d.goals,goalDelta(tx,-1)):d.goals;
+      return{...d,transactions:d.transactions.filter(x=>x.id!==id),goals};
+    });
+  };
+  const bulkDelTxn=ids=>{
+    const set=new Set(ids);
+    const txns=data.transactions.filter(x=>set.has(x.id));
+    if(!txns.length)return;
+    deleteWithUndo(`${txns.length} รายการ`,d=>{
+      let goals=d.goals;
+      txns.forEach(tx=>{goals=applyGoalDelta(goals,goalDelta(tx,-1))});
+      return{...d,transactions:d.transactions.filter(x=>!set.has(x.id)),goals};
+    });
+  };
   const quickAddTxn=tpl=>{
     const snap=data;
     haptic(15);
@@ -3185,6 +3271,11 @@ function WealthHub(){
   const updateDebt=(id,f)=>{haptic(15);persist({...data,debts:data.debts.map(d=>d.id===id?{...d,...f,total:+f.total,paid:+f.paid,rate:+f.rate}:d)});setModal(null)};
   const delDebt=id=>{const d2=data.debts.find(x=>x.id===id);deleteWithUndo(d2?.name,d=>({...d,debts:d.debts.filter(x=>x.id!==id)}))};
   const addRecurring=f=>{haptic(15);persist({...data,recurring:[...(data.recurring||[]),{...f,id:uid(),amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active,lastRun:null}]});setModal(null)};
+  const createRecurringFromCandidate=f=>{
+    haptic(15);
+    persist({...data,recurring:[...(data.recurring||[]),{name:f.name,type:f.type,category:f.category,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:true,id:uid(),lastRun:mk(td())}]});
+    setToast({msg:`✓ สร้างรายการประจำ "${f.name}" แล้ว`});
+  };
   const updateRecurring=(id,f)=>{haptic(15);persist({...data,recurring:(data.recurring||[]).map(r=>r.id===id?{...r,...f,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active}:r)});setModal(null)};
   const delRecurring=id=>{const r=(data.recurring||[]).find(x=>x.id===id);deleteWithUndo(r?.name,d=>({...d,recurring:(d.recurring||[]).filter(x=>x.id!==id)}))};
   const toggleRecurring=r=>persist({...data,recurring:data.recurring.map(x=>x.id===r.id?{...x,active:!x.active}:x)});
@@ -3235,15 +3326,15 @@ function WealthHub(){
   const pl=NAV.find(n=>n.k===page)?.l||"Dashboard";
 
   // Pages that should hide the top header on mobile (full-bleed look)
-  const mobileFullPages=["menu","chat","profile"];
+  const mobileFullPages=["menu","profile"];
   const hideMobileHeader=isMobile&&mobileFullPages.includes(page);
   // Custom mobile titles for new tab pages
-  const mobileTitle=page==="menu"?"เมนู":page==="chat"?"แชทสนทนา":page==="profile"?"โปรไฟล์":page==="streak"?"สตรีค & รางวัล":pl;
+  const mobileTitle=page==="menu"?"เมนู":page==="profile"?"โปรไฟล์":page==="streak"?"สตรีค & รางวัล":pl;
 
   return(<div style={{display:"flex",minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Segoe UI','Noto Sans Thai',system-ui,sans-serif",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",paddingLeft:"env(safe-area-inset-left)",paddingRight:"env(safe-area-inset-right)",boxSizing:"border-box"}}>
     {!isMobile&&<Sidebar page={page} setPage={setPage} theme={theme} setTheme={setTheme} t={t} isMobile={isMobile} open={sbOpen} onClose={()=>setSbOpen(false)} onLogout={logout} userEmail={session?.user?.email}/>}
     <div style={{marginLeft:isMobile?0:220,flex:1,padding:isMobile?"14px 14px 90px":"20px 28px",minWidth:0}}>
-      {/* Mobile minimal header for menu/chat/profile pages */}
+      {/* Mobile minimal header for menu/profile pages */}
       {hideMobileHeader&&(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,gap:10}}>
         <h1 style={{margin:0,fontSize:20,fontWeight:700,letterSpacing:-0.3}}>{mobileTitle}</h1>
         <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
@@ -3257,7 +3348,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","chat","profile"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>)}
 
@@ -3266,6 +3357,18 @@ function WealthHub(){
         <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
         {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="$" label="มูลค่าสุทธิ" value={fB(stats.netWorth)} t={t} color={t.ac}/><MC icon="📈" label="กำไร/ขาดทุน" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="💵" label="รายรับเดือนนี้" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/></div>
+        {/* Quick Actions */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:8}}>
+          <QuickAction icon="−" label="รายจ่าย" color={t.r} onClick={()=>setModal({type:"addTxn",txnType:"expense"})}/>
+          <QuickAction icon="+" label="รายรับ" color={t.g} onClick={()=>setModal({type:"addTxn",txnType:"income"})}/>
+          <QuickAction icon="🎯" label="เป้าหมาย" color={t.ac} onClick={()=>setPage("goals")}/>
+          <QuickAction icon="📊" label="พอร์ต" color={t.pp} onClick={()=>setPage("portfolio")}/>
+        </div>
+        {/* Today + Recent */}
+        <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
+          <TodayCard data={data} t={t} onAdd={()=>setModal({type:"addTxn"})}/>
+          <RecentTxns data={data} t={t} onMore={()=>setPage("txn")} onEdit={tx=>setModal({type:"editTxn",txn:tx})}/>
+        </div>
         {/* Portfolio on dashboard */}
         {data.assets.length>0&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:600}}>📊 พอร์ตลงทุน</span><button onClick={()=>setPage("portfolio")} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>ดูทั้งหมด →</button></div>
@@ -3307,8 +3410,8 @@ function WealthHub(){
           <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
       </div>)}
 
-      {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} t={t}/>}
-      {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} t={t}/>}
+      {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} onBulkDel={bulkDelTxn} t={t}/>}
+      {page==="recurring"&&<RecurringPage data={data} onAdd={()=>setModal({type:"addRecurring"})} onEdit={r=>setModal({type:"editRecurring",recurring:r})} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runRecurringNow} onCreateFromCandidate={createRecurringFromCandidate} t={t}/>}
       {page==="calendar"&&<CalendarPage data={data} t={t} onAddTxn={dt=>setModal({type:"addTxn",date:dt})} setPage={setPage}/>}
       {page==="envelopes"&&<EnvelopesPage data={data} persist={persist} t={t}/>}
       {page==="analytics"&&<AnalyticsPage data={data} stats={stats} t={t}/>}
@@ -3340,7 +3443,6 @@ function WealthHub(){
 
       {page==="challenges"&&(session?<ChallengesPage t={t} session={session} rate={rate} toThb={toThb} detailId={challengeDetailId} setDetailId={setChallengeDetailId}/>:<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}><div style={{fontSize:42,marginBottom:10}}>🏆</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>ชาเลนจ์การลงทุน</div><div style={{fontSize:12,color:t.ts,marginBottom:14,lineHeight:1.7}}>เข้าร่วมชาเลนจ์ลงทุนกับเพื่อน เปรียบเทียบพอร์ตหุ้น + เงินสด<br/>ดูกระดานคะแนนแบบเรียลไทม์</div><div style={{fontSize:11,color:t.tm,marginBottom:14}}>กรุณาเข้าสู่ระบบเพื่อใช้งานฟีเจอร์นี้</div><Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 เข้าสู่ระบบ</Btn></div>)}
       {page==="menu"&&<MobileMenuPage page={page} setPage={setPage} t={t}/>}
-      {page==="chat"&&<ChatPage session={session} t={t}/>}
       {page==="profile"&&<ProfilePage session={session} t={t} theme={theme} setTheme={setTheme} onLogout={logout}/>}
 
       {page==="about"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}>
@@ -3366,14 +3468,14 @@ function WealthHub(){
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
-    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date} data={data}/></Modal>
+    <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date} initialType={modal?.txnType} data={data}/></Modal>
     <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn} data={data}/>}</Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
-    <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery}/>
-    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={!isMobile||!!modal||showAuth||recovery||["menu","chat","profile"].includes(page)}/>
+    <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setModal({type:"addTxn"})}/>
+    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={true /* replaced by BottomTabBar center + button */}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>

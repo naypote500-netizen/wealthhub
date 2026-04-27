@@ -86,7 +86,8 @@ export const NAV=[
   {k:"reports",l:"รายงาน & PDF",i:"▥",g:"รายงาน"},
   {k:"challenges",l:"ชาเลนจ์",i:"🏆",g:"สังคม"},
   {k:"streak",l:"สตรีค & รางวัล",i:"🔥",g:"สังคม"},
-  {k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"อื่นๆ"},
+  {k:"profile",l:"โปรไฟล์",i:"👤",g:"บัญชี"},
+  {k:"about",l:"เกี่ยวกับเรา",i:"♥",g:"บัญชี"},
 ];
 
 /* Streak Badge definitions — unlocked when current_streak >= req */
