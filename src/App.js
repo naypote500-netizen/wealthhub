@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
-import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS } from "./constants";
+import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
 import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
@@ -3102,6 +3102,69 @@ function OnboardingOverlay({t}){
   </div>);
 }
 
+/* ═══ MYSTERY BOX MODAL ═══
+ * Awarded when streak hits 5/10/15/20/25/30. Spins through 5 outcomes
+ * (3 losses, 2 wins) and locks one in. Claim creates a small +/- txn
+ * (skip if amount is 0). Cannot be dismissed without claiming. */
+function MysteryBoxModal({milestone,onClaim,t}){
+  const[stage,setStage]=useState("closed"); // closed | spinning | revealed
+  const[idx,setIdx]=useState(0);
+  const[result,setResult]=useState(null);
+  const open=()=>{
+    haptic([20,40,20]);
+    setStage("spinning");
+    let count=0;
+    const total=24+Math.floor(Math.random()*8); // 24-31 cycles
+    let speed=60;
+    const tick=()=>{
+      setIdx(i=>(i+1)%STREAK_BOXES.length);
+      count++;
+      if(count>=total){
+        const chosen=STREAK_BOXES[Math.floor(Math.random()*STREAK_BOXES.length)];
+        setResult(chosen);
+        setIdx(STREAK_BOXES.indexOf(chosen));
+        setStage("revealed");
+        haptic(chosen.kind==="win"?[40,30,40,30,40]:[10,30,10,30,80]);
+      }else{
+        // ease out — slow down near the end
+        if(count>total*0.6)speed=Math.min(speed+15,260);
+        setTimeout(tick,speed);
+      }
+    };
+    setTimeout(tick,speed);
+  };
+  const claim=()=>{
+    haptic(15);
+    onClaim(result);
+  };
+  const item=STREAK_BOXES[idx];
+  return(<div style={{position:"fixed",inset:0,zIndex:2100,background:"rgba(0,0,0,0.78)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(4px)"}}>
+    <div style={{fontSize:11,color:"#fbbf24",fontWeight:700,marginBottom:6,letterSpacing:0.5}}>🎉 STREAK {milestone} วัน — ปลดล็อกกล่องสุ่ม!</div>
+    <div style={{fontSize:13,color:"#f1f5f9",marginBottom:18,opacity:0.8}}>กดเพื่อเปิดกล่องของขวัญจาก "ท่านพจน์"</div>
+    {/* Box */}
+    {stage==="closed"&&(<button onClick={open} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,WebkitTapHighlightColor:"transparent"}}>
+      <div style={{fontSize:120,lineHeight:1,animation:"boxWobble 1.4s ease-in-out infinite",filter:"drop-shadow(0 8px 20px rgba(251,191,36,0.5))"}}>🎁</div>
+      <div style={{marginTop:18,padding:"12px 36px",borderRadius:99,background:"linear-gradient(135deg, #FBBF24, #F59E0B)",color:"#fff",fontWeight:700,fontSize:15,boxShadow:"0 8px 24px rgba(245,158,11,0.5)",display:"inline-block"}}>👆 แตะเพื่อเปิด</div>
+    </button>)}
+    {stage==="spinning"&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <div style={{fontSize:90,lineHeight:1,animation:"shake .15s linear infinite"}}>{item.emoji}</div>
+      <div style={{marginTop:18,padding:"14px 24px",borderRadius:14,background:"#1e293b",color:"#f1f5f9",fontSize:14,fontWeight:600,minWidth:280,textAlign:"center",border:`2px solid ${item.color}`,transition:"border-color .15s"}}>{item.title}</div>
+    </div>)}
+    {stage==="revealed"&&result&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",animation:"reveal .5s ease"}}>
+      <div style={{fontSize:120,lineHeight:1,marginBottom:10}}>{result.emoji}</div>
+      <div style={{fontSize:11,color:result.kind==="win"?"#34d399":"#f87171",fontWeight:700,letterSpacing:0.5,marginBottom:6}}>{result.kind==="win"?"🎊 รางวัล!":"💸 จงพ่ายแพ้!"}</div>
+      <div style={{fontSize:18,fontWeight:700,color:"#fff",textAlign:"center",lineHeight:1.4,maxWidth:320,padding:"0 8px"}}>{result.title}</div>
+      <div style={{fontSize:13,color:"#cbd5e1",marginTop:6,textAlign:"center",fontStyle:"italic",maxWidth:320}}>"{result.sub}"</div>
+      <button onClick={claim} style={{marginTop:24,padding:"14px 44px",borderRadius:99,border:"none",background:result.kind==="win"?"linear-gradient(135deg, #34D399, #10B981)":"linear-gradient(135deg, #F87171, #EF4444)",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 8px 24px rgba(0,0,0,0.4)",WebkitTapHighlightColor:"transparent",minWidth:220}}>{result.amount===0?"✓ รับทราบ":result.kind==="win"?`✓ รับ +฿${result.amount}`:`✓ จ่าย -฿${result.amount}`}</button>
+    </div>)}
+    <style>{`
+      @keyframes boxWobble{0%,100%{transform:rotate(-6deg) scale(1)}50%{transform:rotate(6deg) scale(1.05)}}
+      @keyframes shake{0%,100%{transform:translate(0)}25%{transform:translate(-2px,1px)}75%{transform:translate(2px,-1px)}}
+      @keyframes reveal{from{opacity:0;transform:scale(0.6)}to{opacity:1;transform:scale(1)}}
+    `}</style>
+  </div>);
+}
+
 /* ═══ QUICK ACTION BUTTON ═══ Big tap target with icon + label */
 function QuickAction({icon,label,color,onClick}){
   return(<button onClick={()=>{haptic(5);onClick()}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 4px",border:`1px solid ${color}30`,borderRadius:12,background:`linear-gradient(135deg, ${color}12, ${color}05)`,cursor:"pointer",WebkitTapHighlightColor:"transparent",minHeight:72}}>
@@ -3250,6 +3313,17 @@ function StreakPage({data,streak,persist,t}){
       </div>
     </div>
 
+    {/* Mystery Box card — show next milestone */}
+    {(()=>{const claimed=new Set(data.streak?.boxesClaimed||[]);const next=BOX_MILESTONES.find(m=>!claimed.has(m));const earned=BOX_MILESTONES.filter(m=>claimed.has(m)).length;return(<div style={{background:`linear-gradient(135deg, ${t.am}18, ${t.pp}10)`,border:`1px solid ${t.am}50`,borderRadius:12,padding:14,display:"flex",alignItems:"center",gap:12}}>
+      <div style={{fontSize:36,lineHeight:1}}>🎁</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12,fontWeight:600,color:t.text}}>กล่องสุ่ม "ท่านพจน์"</div>
+        {next?<div style={{fontSize:11,color:t.tm,marginTop:3,lineHeight:1.4}}>อีก <b style={{color:t.am}}>{Math.max(0,next-streak.current)} วัน</b> ถึงปลดล็อกกล่องที่ {next} วัน {earned>0&&<span style={{color:t.tm}}>• เปิดแล้ว {earned}/{BOX_MILESTONES.length}</span>}</div>
+        :<div style={{fontSize:11,color:t.g,marginTop:3,fontWeight:600}}>✓ เปิดครบทุกกล่องแล้ว ({earned}/{BOX_MILESTONES.length})</div>}
+      </div>
+      {next&&<div style={{fontSize:9,color:t.tm,fontWeight:600,whiteSpace:"nowrap"}}>{streak.current>=next?"⚡ พร้อม!":""}</div>}
+    </div>)})()}
+
     {/* Progress to next badge */}
     {nextBadge&&<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -3348,7 +3422,7 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:L),m:isMobile}),[theme,isMobile]);
 
@@ -3553,6 +3627,37 @@ function WealthHub(){
 
   const streak=useMemo(()=>data?calcStreak(data.transactions):{current:0,longest:0,hasToday:false,datesSet:new Set()},[data]);
 
+  // Mystery Box detection: trigger modal when streak hits a milestone (5/10/15/20/25/30)
+  // that hasn't been claimed yet. Uses pending state to avoid re-trigger on every render.
+  useEffect(()=>{
+    if(!data||boxMilestone)return;
+    const claimed=new Set(data.streak?.boxesClaimed||[]);
+    const due=BOX_MILESTONES.find(m=>streak.current>=m&&!claimed.has(m));
+    if(due)setBoxMilestone(due);
+  },[streak.current,data,boxMilestone]);
+
+  const claimMysteryBox=(reward)=>{
+    if(!data||!boxMilestone||!reward)return;
+    const newClaimed=[...(data.streak?.boxesClaimed||[]),boxMilestone];
+    let nextData={...data,streak:{...(data.streak||DF.streak),boxesClaimed:newClaimed}};
+    // Create txn for non-zero rewards. Mark with reward flag for filtering later.
+    if(reward.amount>0){
+      const txn={
+        id:uid(),
+        type:reward.kind==="win"?"income":"expense",
+        category:"other",
+        amount:reward.amount,
+        date:td(),
+        note:`🎁 ${reward.title} (กล่องสุ่ม streak ${boxMilestone} วัน)`,
+        rewardBoxId:reward.id,
+      };
+      nextData={...nextData,transactions:[...nextData.transactions,txn]};
+    }
+    persist(nextData);
+    setBoxMilestone(null);
+    if(reward.kind==="win"&&reward.amount>0){setShowConfetti(true)}
+  };
+
   const stats=useMemo(()=>{
     if(!data)return{};
     const tp=data.assets.reduce((s,a)=>s+toThb(a.units*a.currentPrice,a.currency||"THB"),0);
@@ -3746,6 +3851,7 @@ function WealthHub(){
     <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={true /* replaced by BottomTabBar center + button */}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
+    {boxMilestone&&<MysteryBoxModal milestone={boxMilestone} onClaim={claimMysteryBox} t={t}/>}
     {isMobile&&!modal&&!showAuth&&!recovery&&<PWAInstallBanner t={t}/>}
     {!loading&&!showAuth&&!recovery&&<OnboardingOverlay t={t}/>}
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>

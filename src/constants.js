@@ -132,6 +132,18 @@ export const BADGE_CATS=[
   {k:"txn",l:"📝 รายการ",desc:"บันทึกธุรกรรม"},
 ];
 
+/* Mystery Box rewards — unlocked at streak milestones (5,10,15,20,25,30 days)
+ * 5 outcomes randomly drawn. Bad outcomes create expense txn, good create income.
+ * Amount 0 means no real txn (just for fun). */
+export const STREAK_BOXES=[
+  {id:1,kind:"loss",amount:2,title:"คุณเสียตังให้ท่านพจน์ 2 บาท",sub:"โชคไม่ดีเลยวะน้อนๆ",emoji:"😭",color:"#F87171"},
+  {id:2,kind:"loss",amount:5,title:"โอนตังให้ท่านพจน์ 5 บาท",sub:"โคตรซวยเลยวะพริ๊ๆ",emoji:"💀",color:"#DC2626"},
+  {id:3,kind:"loss",amount:10,title:"มอบตังให้นายท่านพจน์ซ้ะ 10 บาท",sub:"เป็นเกียรติแก่วงศ์ตระกูล",emoji:"🙏",color:"#7C2D12"},
+  {id:4,kind:"win",amount:0,title:"ได้ตังจากพี่พจน์ 0 บาท",sub:"ดวงต้องดีขนาดไหนเนี่ย",emoji:"😅",color:"#94A3B8"},
+  {id:5,kind:"win",amount:10,title:"รับพรจากนายพจน์ 10 บาท",sub:"โชคโคตรดีร้อยปีมีครั้งเลยงะ",emoji:"🎰",color:"#10B981"},
+];
+export const BOX_MILESTONES=[5,10,15,20,25,30];
+
 /* Storage keys + default state shape */
 export const SK="wealthhub-v6";
 export const OSK="wealthhub-v5";
@@ -142,5 +154,5 @@ export const DF={
   cfItems:null,
   balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},
   settings:{rate:35.5},
-  streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:""},
+  streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:"",boxesClaimed:[]},
 };
