@@ -608,7 +608,7 @@ function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,onCreateFromCa
             <Btn small t={t} onClick={()=>onToggle(r)}>{r.active?"⏸":"▶"}</Btn>
             <Btn small t={t} onClick={()=>onRunNow(r)} disabled={r.lastRun===mk(td())}>รันเดี๋ยวนี้</Btn>
             <Btn small t={t} onClick={()=>onEdit(r)}>แก้ไข</Btn>
-            <Btn small danger t={t} onClick={()=>{if(window.confirm(`ลบ ${r.name}?`))onDel(r.id)}}>ลบ</Btn>
+            <Btn small danger t={t} onClick={()=>{const linked=(data.transactions||[]).filter(tx=>tx.recurringId===r.id).length;if(window.confirm(`ลบ "${r.name}"?${linked>0?`\n\nรายการที่ถูกสร้างไว้แล้ว ${linked} รายการ จะถูกลบด้วย\n(กด ↶ ใน toast เพื่อย้อนกลับได้)`:""}`))onDel(r.id)}}>ลบ</Btn>
           </div>
         </div>)})}
       </div>
@@ -4266,7 +4266,17 @@ function WealthHub(){
     setToast({msg:`✓ สร้างรายการประจำ "${f.name}" แล้ว`});
   };
   const updateRecurring=(id,f)=>{haptic(15);persist({...data,recurring:(data.recurring||[]).map(r=>r.id===id?{...r,...f,amount:+f.amount,dayOfMonth:+f.dayOfMonth,active:!!f.active}:r)});setModal(null)};
-  const delRecurring=id=>{const r=(data.recurring||[]).find(x=>x.id===id);deleteWithUndo(r?.name,d=>({...d,recurring:(d.recurring||[]).filter(x=>x.id!==id)}))};
+  const delRecurring=id=>{
+    const r=(data.recurring||[]).find(x=>x.id===id);
+    if(!r)return;
+    const linked=(data.transactions||[]).filter(tx=>tx.recurringId===id);
+    const lab=r.name+(linked.length>0?` + ${linked.length} รายการที่สร้างไว้`:"");
+    deleteWithUndo(lab,d=>({
+      ...d,
+      recurring:(d.recurring||[]).filter(x=>x.id!==id),
+      transactions:(d.transactions||[]).filter(tx=>tx.recurringId!==id),
+    }));
+  };
   const toggleRecurring=r=>persist({...data,recurring:data.recurring.map(x=>x.id===r.id?{...x,active:!x.active}:x)});
   const runRecurringNow=r=>{const cm=mk(td());const day=Math.min(r.dayOfMonth||1,28);const date=`${cm}-${String(day).padStart(2,"0")}`;const tx={id:uid(),type:r.type,category:r.category,amount:+r.amount,date,note:(r.name||"รายการประจำ")+" (manual)",recurringId:r.id};persist({...data,transactions:[...data.transactions,tx],recurring:data.recurring.map(x=>x.id===r.id?{...x,lastRun:cm}:x)})};
 
