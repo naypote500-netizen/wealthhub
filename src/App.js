@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats } from "./utils";
+import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -670,6 +670,13 @@ function SubsPage({data,t,setPage}){
   const totalMonthly=enriched.reduce((s,r)=>s+r.monthly,0);
   const totalYearly=totalMonthly*12;
   const upcoming=[...enriched].filter(r=>r.daysUntil<=7).sort((a,b)=>a.daysUntil-b.daysUntil);
+  // What-if simulator state
+  const[whatIf,setWhatIf]=useState(()=>new Set());
+  const toggleCut=id=>setWhatIf(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n});
+  const cutMonthly=enriched.filter(r=>whatIf.has(r.id)).reduce((s,r)=>s+r.monthly,0);
+  const cutYearly=cutMonthly*12;
+  // Compound 5% × 5 years (annual contributions invested at year-end)
+  const invest5y=Math.round(cutYearly*((Math.pow(1.05,5)-1)/0.05));
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="💳" label="ทั้งหมด" value={`${enriched.length} รายการ`} t={t}/>
@@ -697,18 +704,37 @@ function SubsPage({data,t,setPage}){
           </div>))}
         </div>
       </div>)}
+      {/* What-if simulator panel */}
+      {cutMonthly>0&&(<div style={{background:`linear-gradient(135deg, ${t.g}18, ${t.g}05)`,border:`1px solid ${t.g}50`,borderRadius:12,padding:14,position:"sticky",top:8,zIndex:5,boxShadow:`0 4px 12px ${t.g}20`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <span style={{fontSize:18}}>💡</span>
+          <span style={{fontSize:11,fontWeight:700,color:t.g,letterSpacing:0.4}}>ถ้าตัด {whatIf.size} รายการ...</span>
+          <button onClick={()=>setWhatIf(new Set())} style={{marginLeft:"auto",fontSize:10,padding:"3px 10px",border:`1px solid ${t.g}40`,borderRadius:6,background:"transparent",color:t.g,cursor:"pointer"}}>ล้าง</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
+          <div><div style={{fontSize:10,color:t.tm,marginBottom:2}}>ประหยัด/เดือน</div><div style={{fontSize:18,fontWeight:700,color:t.g}}>{fB(cutMonthly)}</div></div>
+          <div style={{textAlign:"right"}}><div style={{fontSize:10,color:t.tm,marginBottom:2}}>ประหยัด/ปี</div><div style={{fontSize:18,fontWeight:700,color:t.g}}>{fB(cutYearly)}</div></div>
+        </div>
+        <div style={{padding:"8px 10px",background:t.card,borderRadius:8,fontSize:11,color:t.text,lineHeight:1.5}}>
+          🚀 ลงทุนผลตอบแทน 5%/ปี เป็นเวลา 5 ปี → ได้ <b style={{color:t.g}}>{fB(invest5y)}</b>
+        </div>
+      </div>)}
       {/* Full list sorted by amount */}
       <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
-        <div style={{padding:"10px 14px",fontSize:11,color:t.tm,fontWeight:600,borderBottom:`1px solid ${t.cb}`,background:t.thBg}}>เรียงตามค่าใช้จ่าย</div>
-        {enriched.map((r,i)=>{const pct=totalMonthly>0?(r.monthly/totalMonthly)*100:0;return(<div key={r.id} style={{padding:"12px 14px",borderBottom:i<enriched.length-1?`1px solid ${t.cb}`:"none"}}>
+        <div style={{padding:"10px 14px",fontSize:11,color:t.tm,fontWeight:600,borderBottom:`1px solid ${t.cb}`,background:t.thBg,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>เรียงตามค่าใช้จ่าย</span>
+          <span style={{fontSize:9,fontWeight:500,color:t.tm,fontStyle:"italic"}}>☐ ทดลองตัดเพื่อดูเงินที่ประหยัด</span>
+        </div>
+        {enriched.map((r,i)=>{const pct=totalMonthly>0?(r.monthly/totalMonthly)*100:0;const cut=whatIf.has(r.id);return(<div key={r.id} onClick={()=>{haptic(5);toggleCut(r.id)}} style={{padding:"12px 14px",borderBottom:i<enriched.length-1?`1px solid ${t.cb}`:"none",cursor:"pointer",background:cut?`${t.g}08`:"transparent",WebkitTapHighlightColor:"transparent",transition:"background .15s"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <div style={{width:38,height:38,borderRadius:10,background:`${r.brand.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{r.brand.emoji}</div>
+            <input type="checkbox" checked={cut} onChange={()=>{}} onClick={e=>e.stopPropagation()} style={{width:16,height:16,accentColor:t.g,cursor:"pointer",flexShrink:0}}/>
+            <div style={{width:38,height:38,borderRadius:10,background:`${r.brand.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,opacity:cut?0.4:1,filter:cut?"grayscale(0.6)":"none"}}>{r.brand.emoji}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div>
+              <div style={{fontSize:13,fontWeight:600,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:cut?"line-through":"none",opacity:cut?0.6:1}}>{r.name}</div>
               <div style={{fontSize:10,color:t.tm,marginTop:2}}>เก็บทุกวันที่ {r.nextDay} • ปีละ {fB(r.yearly)}</div>
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{fontSize:14,fontWeight:700,color:t.r}}>{fB(r.monthly)}</div>
+              <div style={{fontSize:14,fontWeight:700,color:cut?t.g:t.r,textDecoration:cut?"line-through":"none"}}>{fB(r.monthly)}</div>
               <div style={{fontSize:9,color:t.tm}}>/เดือน</div>
             </div>
           </div>
@@ -3165,6 +3191,117 @@ function MysteryBoxModal({milestone,onClaim,t}){
   </div>);
 }
 
+/* ═══ WEEKLY AUTO-REVIEW ═══
+ * Shows Mon-Wed for the prior week. Compares to week before that.
+ * Dismissible — tracked via data.insights.weeklyDismissed (array of week keys). */
+function WeeklyReviewCard({data,persist,t}){
+  const today=td();
+  const dow=new Date(today+"T00:00:00").getDay(); // 0=Sun..6=Sat
+  // Show Mon (1) / Tue (2) / Wed (3) only
+  if(dow<1||dow>3)return null;
+  const lastWeekDay=addDays(today,-(dow===0?7:dow));
+  const wkLastKey=isoWeekKey(lastWeekDay);
+  const dismissed=new Set(data?.insights?.weeklyDismissed||[]);
+  if(dismissed.has(wkLastKey))return null;
+  const{from:lwFrom,to:lwTo}=weekRange(lastWeekDay);
+  const wkPriorDay=addDays(lwFrom,-1);
+  const{from:pwFrom,to:pwTo}=weekRange(wkPriorDay);
+  const cur=summarizeRange(data.transactions,lwFrom,lwTo);
+  const prev=summarizeRange(data.transactions,pwFrom,pwTo);
+  if(cur.count===0)return null;
+  const deltaPct=prev.totalExp>0?Math.round(((cur.totalExp-prev.totalExp)/prev.totalExp)*100):0;
+  const better=deltaPct<0;
+  const cat=cur.topCat?[...IC,...EC].find(c=>c.v===cur.topCat[0]):null;
+  const dismiss=()=>{
+    persist({...data,insights:{...(data.insights||{}),weeklyDismissed:[...(data.insights?.weeklyDismissed||[]),wkLastKey]}});
+  };
+  return(<div style={{background:`linear-gradient(135deg, ${t.ac}15, ${t.pp}08)`,border:`1px solid ${t.ac}40`,borderRadius:12,padding:14,position:"relative"}}>
+    <button onClick={dismiss} aria-label="ปิด" style={{position:"absolute",top:8,right:8,background:"transparent",border:"none",color:t.tm,cursor:"pointer",fontSize:14,padding:4}}>✕</button>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+      <span style={{fontSize:18}}>📊</span>
+      <span style={{fontSize:11,fontWeight:700,color:t.ac,letterSpacing:0.4}}>สรุปสัปดาห์ที่แล้ว</span>
+    </div>
+    <div style={{fontSize:13,color:t.text,lineHeight:1.6}}>
+      ใช้ไป <b style={{color:t.r}}>{fB(cur.totalExp)}</b> {prev.totalExp>0&&<span style={{fontSize:11,color:better?t.g:t.am,fontWeight:600}}>({better?"↓":"↑"} {Math.abs(deltaPct)}% {better?"ลด":"เพิ่ม"}จากก่อนหน้า)</span>}
+      {cur.totalInc>0&&<><br/>รับ <b style={{color:t.g}}>{fB(cur.totalInc)}</b> • คงเหลือ <b style={{color:cur.net>=0?t.g:t.r}}>{fB(cur.net)}</b></>}
+      {cat&&<><br/><span style={{fontSize:11,color:t.tm}}>หมวดยอดฮิต: <b style={{color:t.text}}>{cat.i} {cat.l}</b> ({fB(cur.topCat[1])})</span></>}
+    </div>
+  </div>);
+}
+
+/* ═══ EOM PROJECTION ═══
+ * Predicts end-of-month expense based on current month-to-date run-rate.
+ * Hides for first 2 days of month (insufficient data). */
+function EOMProjectionCard({data,t}){
+  const today=td();
+  const proj=useMemo(()=>projectEOM(data.transactions,today),[data.transactions,today]);
+  if(!proj)return null;
+  const surplus=proj.projectedNet>=0;
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+      <span style={{fontSize:12,fontWeight:600,color:t.text}}>🔮 คาดการณ์สิ้นเดือน</span>
+      <span style={{fontSize:10,color:t.tm}}>เหลือ {proj.daysLeft} วัน</span>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div>
+        <div style={{fontSize:10,color:t.tm,marginBottom:2}}>คาดว่าจะใช้</div>
+        <div style={{fontSize:18,fontWeight:700,color:t.r}}>{fB(proj.projectedSpent)}</div>
+        <div style={{fontSize:10,color:t.tm,marginTop:2}}>~{fB(proj.avgDaily)}/วัน</div>
+      </div>
+      <div style={{textAlign:"right"}}>
+        <div style={{fontSize:10,color:t.tm,marginBottom:2}}>คงเหลือสุทธิ</div>
+        <div style={{fontSize:18,fontWeight:700,color:surplus?t.g:t.r}}>{surplus?"+":""}{fB(proj.projectedNet)}</div>
+        <div style={{fontSize:10,color:t.tm,marginTop:2}}>{surplus?"เกินดุล 👍":"ขาดดุล ⚠️"}</div>
+      </div>
+    </div>
+    {/* Progress bar showing % of projected spent */}
+    <div style={{marginTop:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:t.tm,marginBottom:3}}>
+        <span>ใช้แล้ว {fB(proj.monthSpent)}</span>
+        <span>{Math.round((proj.monthSpent/Math.max(proj.projectedSpent,1))*100)}%</span>
+      </div>
+      <div style={{width:"100%",height:6,background:t.bg,borderRadius:3,overflow:"hidden"}}>
+        <div style={{width:`${Math.min(100,(proj.monthSpent/Math.max(proj.projectedSpent,1))*100)}%`,height:"100%",background:`linear-gradient(90deg, ${t.r}, ${t.am})`,transition:"width .3s"}}/>
+      </div>
+    </div>
+  </div>);
+}
+
+/* ═══ SPENDING COMPARISON ═══
+ * Stacked bars: this month vs 6-month avg per category. */
+function SpendingComparisonCard({data,t}){
+  const cmp=useMemo(()=>compareCategorySpend(data.transactions,td(),6).slice(0,6),[data.transactions]);
+  if(!cmp.length)return null;
+  const max=Math.max(...cmp.map(c=>Math.max(c.current,c.avg)));
+  const cats=Object.fromEntries(EC.map(c=>[c.v,c]));
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+    <div style={{fontSize:12,fontWeight:600,color:t.text,marginBottom:10}}>📈 เทียบกับเฉลี่ย 6 เดือน</div>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {cmp.map(c=>{const cat=cats[c.cat]||{i:"📦",l:c.cat};const big=Math.abs(c.deltaPct)>=25;return(<div key={c.cat}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+          <span style={{color:t.text,fontWeight:500}}>{cat.i} {cat.l}</span>
+          <span style={{color:c.dir==="up"?(big?t.r:t.am):c.dir==="down"?t.g:t.tm,fontWeight:600,fontSize:10}}>{c.dir==="up"?"↑":c.dir==="down"?"↓":"="} {Math.abs(c.deltaPct)}%</span>
+        </div>
+        {/* Two-row mini bars */}
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9,color:t.tm,marginBottom:2}}>
+          <span style={{width:30}}>เดือนนี้</span>
+          <div style={{flex:1,height:6,background:t.bg,borderRadius:3,overflow:"hidden"}}>
+            <div style={{width:`${(c.current/max)*100}%`,height:"100%",background:c.dir==="up"&&big?t.r:t.ac}}/>
+          </div>
+          <span style={{width:48,textAlign:"right",color:t.text,fontWeight:600,fontSize:10}}>{fB(c.current)}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:9,color:t.tm}}>
+          <span style={{width:30}}>เฉลี่ย</span>
+          <div style={{flex:1,height:6,background:t.bg,borderRadius:3,overflow:"hidden"}}>
+            <div style={{width:`${(c.avg/max)*100}%`,height:"100%",background:t.tm,opacity:0.5}}/>
+          </div>
+          <span style={{width:48,textAlign:"right",fontSize:10}}>{fB(c.avg)}</span>
+        </div>
+      </div>)})}
+    </div>
+  </div>);
+}
+
 /* ═══ QUICK ACTION BUTTON ═══ Big tap target with icon + label */
 function QuickAction({icon,label,color,onClick}){
   return(<button onClick={()=>{haptic(5);onClick()}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 4px",border:`1px solid ${color}30`,borderRadius:12,background:`linear-gradient(135deg, ${color}12, ${color}05)`,cursor:"pointer",WebkitTapHighlightColor:"transparent",minHeight:72}}>
@@ -3728,7 +3865,10 @@ function WealthHub(){
       {page==="dashboard"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
         {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
+        <WeeklyReviewCard data={data} persist={persist} t={t}/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><MC icon="$" label="มูลค่าสุทธิ" value={fB(stats.netWorth)} t={t} color={t.ac}/><MC icon="📈" label="กำไร/ขาดทุน" value={fB(stats.portfolioPL)} sub={fP(stats.portfolioPct)} t={t} color={stats.portfolioPL>=0?t.g:t.r}/><MC icon="💵" label="รายรับเดือนนี้" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/><MC icon="💸" label="รายจ่ายเดือนนี้" value={fB(stats.expenseThisMonth)} t={t} color={t.r}/></div>
+        <EOMProjectionCard data={data} t={t}/>
+        <SpendingComparisonCard data={data} t={t}/>
         {/* Quick Actions */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:8}}>
           <QuickAction icon="−" label="รายจ่าย" color={t.r} onClick={()=>setModal({type:"addTxn",txnType:"expense"})}/>

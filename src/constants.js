@@ -155,4 +155,5 @@ export const DF={
   balanceSheet:{cash:0,savings:0,car:0,house:0,otherAssets:0,creditCard:0,carLoan:0,homeLoan:0,otherLiab:0},
   settings:{rate:35.5},
   streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:"",boxesClaimed:[]},
+  insights:{weeklyDismissed:[]},
 };

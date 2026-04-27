@@ -200,3 +200,91 @@ export async function scanReceipt(file,onProgress){
   const text=data?.text||"";
   return{text,amount:extractAmount(text),date:extractDate(text)};
 }
+
+/* ═══ INSIGHTS HELPERS ═══
+ * Pure analytics — no side effects. Used by Smart Insights cards. */
+
+/* ISO week key — "2026-W17" — used as dedupe key for weekly review */
+export function isoWeekKey(dateStr){
+  const d=new Date(dateStr+"T12:00:00");
+  const day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day); // Thursday of this week
+  const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNum=Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return`${d.getUTCFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
+
+/* Get start (Mon) and end (Sun) dates for the week containing dateStr */
+export function weekRange(dateStr){
+  const d=new Date(dateStr+"T00:00:00");
+  const day=d.getDay()||7; // Mon=1..Sun=7
+  const monday=addDays(dateStr,-(day-1));
+  const sunday=addDays(monday,6);
+  return{from:monday,to:sunday};
+}
+
+/* Summarize transactions in [from, to] inclusive — returns totals & top */
+export function summarizeRange(txns,from,to){
+  const inRange=(txns||[]).filter(t=>t.date>=from&&t.date<=to);
+  const expenses=inRange.filter(t=>t.type==="expense");
+  const income=inRange.filter(t=>t.type==="income");
+  const totalExp=expenses.reduce((s,t)=>s+t.amount,0);
+  const totalInc=income.reduce((s,t)=>s+t.amount,0);
+  const byCat={};
+  expenses.forEach(t=>{byCat[t.category]=(byCat[t.category]||0)+t.amount});
+  const topCat=Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0]||null;
+  const topTxn=expenses.sort((a,b)=>b.amount-a.amount)[0]||null;
+  return{count:inRange.length,totalExp,totalInc,net:totalInc-totalExp,byCat,topCat,topTxn};
+}
+
+/* Project end-of-month total expense based on current run-rate */
+export function projectEOM(txns,today){
+  const tm=today.slice(0,7);
+  const day=+today.slice(8,10);
+  const lastDay=new Date(+today.slice(0,4),+today.slice(5,7),0).getDate();
+  const monthTxns=(txns||[]).filter(t=>t.type==="expense"&&t.date.startsWith(tm));
+  const monthIncome=(txns||[]).filter(t=>t.type==="income"&&t.date.startsWith(tm)).reduce((s,t)=>s+t.amount,0);
+  const monthSpent=monthTxns.reduce((s,t)=>s+t.amount,0);
+  if(day<3)return null; // not enough data
+  const avgDaily=monthSpent/day;
+  const projectedSpent=Math.round(monthSpent+avgDaily*(lastDay-day));
+  return{
+    daysIn:day,
+    daysLeft:lastDay-day,
+    monthSpent,
+    monthIncome,
+    avgDaily:Math.round(avgDaily),
+    projectedSpent,
+    projectedNet:monthIncome-projectedSpent,
+  };
+}
+
+/* Compare expense-by-category for this month vs avg of N prior months
+ * Returns sorted array of {cat, current, avg, deltaPct, dir} */
+export function compareCategorySpend(txns,today,priorMonths=6){
+  const tm=today.slice(0,7);
+  const cur={};
+  const past={}; // sum across months
+  const monthsSeen=new Set();
+  (txns||[]).forEach(t=>{
+    if(t.type!=="expense")return;
+    const m=t.date.slice(0,7);
+    if(m===tm){cur[t.category]=(cur[t.category]||0)+t.amount;return}
+    // Check if within priorMonths window
+    const [yy,mm]=t.date.slice(0,7).split("-").map(Number);
+    const [cyy,cmm]=tm.split("-").map(Number);
+    const monthsDiff=(cyy-yy)*12+(cmm-mm);
+    if(monthsDiff>0&&monthsDiff<=priorMonths){
+      monthsSeen.add(m);
+      past[t.category]=(past[t.category]||0)+t.amount;
+    }
+  });
+  const monthCount=monthsSeen.size||1;
+  const allCats=new Set([...Object.keys(cur),...Object.keys(past)]);
+  return[...allCats].map(c=>{
+    const current=cur[c]||0;
+    const avg=(past[c]||0)/monthCount;
+    const deltaPct=avg>0?((current-avg)/avg)*100:(current>0?100:0);
+    return{cat:c,current,avg:Math.round(avg),deltaPct:Math.round(deltaPct),dir:deltaPct>0?"up":deltaPct<0?"down":"flat"};
+  }).filter(x=>x.current>0||x.avg>0).sort((a,b)=>b.current-a.current);
+}
