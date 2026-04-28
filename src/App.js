@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
-import { L, Dk, Paper, Cream, PC } from "./theme";
+import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
 import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend } from "./utils";
 
@@ -10,7 +10,7 @@ function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,u
   const groups=[...new Set(NAV.map(n=>n.g))];
   const visible=!isMobile||open;
   const go=k=>{setPage(k);if(isMobile)onClose&&onClose()};
-  const themes=[{k:"light",i:"☀️",l:"Light"},{k:"paper",i:"📄",l:"Paper"},{k:"cream",i:"🍵",l:"Cream"},{k:"dark",i:"🌙",l:"Dark"}];
+  const themes=[{k:"light",i:"☀️",l:"Light"},{k:"paper",i:"📄",l:"Paper"},{k:"cream",i:"🍵",l:"Cream"},{k:"linen",i:"🪵",l:"Linen"},{k:"dark",i:"🌙",l:"Dark"}];
   return(<>
     {isMobile&&open&&<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:99}}/>}
     <div style={{width:220,height:"100vh",background:t.sidebar,display:"flex",flexDirection:"column",position:"fixed",left:isMobile?(visible?0:-240):0,top:0,zIndex:100,borderRight:`1px solid ${t.sideBorder}`,overflowY:"auto",transition:"left .25s ease",boxShadow:isMobile&&visible?"4px 0 16px rgba(0,0,0,0.2)":"none",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)",boxSizing:"border-box"}}>
@@ -3491,9 +3491,11 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
     if(k==="light")return<svg {...sv}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
     if(k==="dark")return<svg {...sv}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
     if(k==="paper")return<svg {...sv}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>;
+    if(k==="linen")return<svg {...sv}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18"/><path d="M3 13h18"/><path d="M3 18h18"/></svg>;
+    if(k==="cream")return<svg {...sv}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v3"/><path d="M10 2v3"/><path d="M14 2v3"/></svg>;
     return<svg {...sv}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v3"/><path d="M10 2v3"/><path d="M14 2v3"/></svg>;
   };
-  const themes=[{k:"light",l:"Light"},{k:"paper",l:"Paper"},{k:"cream",l:"Cream"},{k:"dark",l:"Dark"}];
+  const themes=[{k:"light",l:"Light"},{k:"paper",l:"Paper"},{k:"cream",l:"Cream"},{k:"linen",l:"Linen"},{k:"dark",l:"Dark"}];
 
   if(!session)return(<div style={{padding:"30px 16px",textAlign:"center",color:t.ts}}>
     <div style={{fontSize:48,marginBottom:12,opacity:0.5}}>🔒</div>
@@ -4082,7 +4084,7 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
 function WealthHub(){
   const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);const[quickSheet,setQuickSheet]=useState(false);const[dashExpanded,setDashExpanded]=useState(()=>{try{return localStorage.getItem("wh-dash-expanded")==="1"}catch{return false}});const toggleDash=()=>{const next=!dashExpanded;setDashExpanded(next);try{localStorage.setItem("wh-dash-expanded",next?"1":"0")}catch{}};
   const isMobile=useIsMobile();
-  const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:L),m:isMobile}),[theme,isMobile]);
+  const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:theme==="linen"?Linen:L),m:isMobile}),[theme,isMobile]);
 
   useEffect(()=>{try{const saved=localStorage.getItem("wealthhub-theme");if(saved)setTheme(saved)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem("wealthhub-theme",theme)}catch{}},[theme]);
