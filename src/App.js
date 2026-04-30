@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF, enrichedCategories } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -446,7 +446,8 @@ function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||
 
 function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
   const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||"",goalId:initial.goalId||""}:{type:initialType||"expense",category:initialType==="income"?"salary":"food",amount:"",date:initialDate||td(),note:"",goalId:""});
-  const cats=f.type==="income"?IC:EC;const ok=+f.amount>0;
+  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems),[f.type,data?.cfItems]);
+  const ok=+f.amount>0;
   const goals=(data?.goals||[]).filter(g=>(g.saved||0)<(g.target||0));
   const ocrFileRef=useRef();
   const[ocr,setOcr]=useState({status:"",progress:0,err:""});
@@ -544,9 +545,10 @@ function GoalForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:
 function DebtForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:"",icon:"🏦",total:"",paid:"0",rate:"0"});const ok=f.name&&+f.total>0;return(<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{display:"flex",gap:4}}>{["🏦","💳","🏠","🚗","🎓"].map(ic=>(<button key={ic} onClick={()=>set("icon",ic)} style={{width:34,height:34,borderRadius:7,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",border:f.icon===ic?`2px solid ${t.am}`:`1px solid ${t.cb}`,background:f.icon===ic?t.amL:"transparent",cursor:"pointer"}}>{ic}</button>))}</div><Inp label="ชื่อหนี้" t={t} value={f.name} onChange={e=>set("name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="ยอดหนี้ (฿)" t={t} type="number" value={f.total} onChange={e=>set("total",e.target.value)}/><Inp label="จ่ายแล้ว (฿)" t={t} type="number" value={f.paid} onChange={e=>set("paid",e.target.value)}/></div><Inp label="ดอกเบี้ย (%/ปี)" t={t} type="number" step="0.1" value={f.rate} onChange={e=>set("rate",e.target.value)}/><div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>onSave(f)} style={{flex:1}}>{initial?"💾":"✓ เพิ่ม"}</Btn><Btn t={t} onClick={onCancel}>ยกเลิก</Btn></div></div>)}
 
 /* ═══ RECURRING FORM & PAGE ═══ */
-function RecurringForm({initial,onSave,onCancel,t}){
+function RecurringForm({initial,onSave,onCancel,t,data}){
   const[f,set]=useF(initial||{name:"",type:"expense",category:"food",amount:"",dayOfMonth:"1",active:true});
-  const cats=f.type==="income"?IC:EC;const ok=f.name&&+f.amount>0&&+f.dayOfMonth>=1&&+f.dayOfMonth<=31;
+  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems),[f.type,data?.cfItems]);
+  const ok=f.name&&+f.amount>0&&+f.dayOfMonth>=1&&+f.dayOfMonth<=31;
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับประจำ":"💸 รายจ่ายประจำ"}</button>))}</div>
     <Inp label="ชื่อรายการ" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เงินเดือน, ค่าเช่า, Netflix"/>
@@ -847,7 +849,7 @@ function CalendarPage({data,t,onAddTxn,setPage}){
       </div>
       {selData.txns.length===0?<div style={{textAlign:"center",color:t.tm,fontSize:11,padding:20}}>ไม่มีรายการในวันนี้ <button onClick={()=>{onAddTxn&&onAddTxn(selDay)}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11,marginLeft:4,textDecoration:"underline"}}>+ เพิ่ม</button></div>:
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {selData.txns.map(tx=>{const cats=tx.type==="income"?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
+          {selData.txns.map(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
             <span style={{fontSize:18}}>{cat.i}</span>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,fontWeight:500}}>{tx.note||cat.l}</div>
@@ -1830,8 +1832,8 @@ function CashFlowDetailPage({data,persist,t}){
   // Compute actual cash flow from real txns for the selected period
   const actualCF=useMemo(()=>{
     const txns=(data.transactions||[]).filter(t=>period==="monthly"?t.date.startsWith(mKey):t.date.startsWith(yKey));
-    return aggregateActualCF(txns,data.recurring||[]);
-  },[data.transactions,data.recurring,period,mKey,yKey]);
+    return aggregateActualCF(txns,data.recurring||[],data.cfItems);
+  },[data.transactions,data.recurring,data.cfItems,period,mKey,yKey]);
   const setVal=(k,v)=>{const n=+v||0;persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:{...store,[key]:{...row,[k]:n}}}})};
   const delPeriod=()=>{if(!window.confirm(`ลบข้อมูล ${key}?`))return;const n={...store};delete n[key];persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:n}})};
 
@@ -1931,7 +1933,7 @@ function CashFlowDetailPage({data,persist,t}){
       <MC icon="💰" label="กระแสเงินสดสุทธิ" value={`${net>=0?"+":"-"}${fB(net)}`} sub={totalIn>0?`${pct(net).toFixed(2)}% ของรายรับ`:""} t={t} color={net>=0?t.g:t.r}/>
     </div>
 
-    {viewMode==="compare"&&(<CompareSection budget={row} actual={actualCF} t={t}/>)}
+    {viewMode==="compare"&&(<CompareSection budget={row} actual={actualCF} cfItems={data.cfItems} t={t}/>)}
 
     {viewMode==="budget"&&(<>
     {/* Tables - 2 columns */}
@@ -1982,13 +1984,15 @@ function CashFlowDetailPage({data,persist,t}){
   </div>);
 }
 
-/* CompareSection — Budget vs Actual side-by-side per item */
-function CompareSection({budget,actual,t}){
+/* CompareSection — Budget vs Actual side-by-side per item.
+ * Uses cfItems (user-customized) when available; falls back to CF_DEFAULTS. */
+function CompareSection({budget,actual,cfItems,t}){
+  const itemsFor=s=>cfItems?.[s]||CF_DEFAULTS[s];
   const sections=[
-    {key:"inflow",l:"กระแสเงินสดรับ",color:t.g,items:[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}]},
-    {key:"fixed",l:"กระแสเงินสดจ่ายคงที่",color:t.am,items:[{k:"rent",l:"ค่าเช่า/ที่พัก"},{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"กองทุนสำรองเลี้ยงชีพ"}]},
-    {key:"variable",l:"กระแสเงินสดจ่ายผันแปร",color:t.r,items:[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่านันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าเดินทาง"},{k:"cloth",l:"เสื้อผ้า/ดูแลตัวเอง"},{k:"child",l:"บุตร/การศึกษา"},{k:"otherExp",l:"อื่นๆ"}]},
-    {key:"saving",l:"เงินออม / ลงทุน",color:t.ac,items:[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}]},
+    {key:"inflow",l:"กระแสเงินสดรับ",color:t.g,items:itemsFor("inflow")},
+    {key:"fixed",l:"กระแสเงินสดจ่ายคงที่",color:t.am,items:itemsFor("fixed")},
+    {key:"variable",l:"กระแสเงินสดจ่ายผันแปร",color:t.r,items:itemsFor("variable")},
+    {key:"saving",l:"เงินออม / ลงทุน",color:t.ac,items:itemsFor("saving")},
   ];
   const fmt=v=>v?Math.round(v).toLocaleString("th-TH"):"0";
   // Totals
@@ -2121,14 +2125,14 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
       if(minAmt&&tx.amount<+minAmt)return false;
       if(maxAmt&&tx.amount>+maxAmt)return false;
       if(q){
-        const cats=tx.type==="income"?IC:EC;
+        const cats=enrichedCategories(tx.type,data?.cfItems);
         const cat=cats.find(c=>c.v===tx.category);
         const hay=`${tx.note||""} ${cat?.l||""} ${cat?.v||""}`.toLowerCase();
         if(!hay.includes(q))return false;
       }
       return true;
     }).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  },[data.transactions,filter,catFilter,from,to,minAmt,maxAmt,search]);
+  },[data.transactions,data?.cfItems,filter,catFilter,from,to,minAmt,maxAmt,search]);
   const sumInc=filtered.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);
   const sumExp=filtered.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);
   const hasFilter=filter!=="all"||search||catFilter!=="all"||dateRange!=="month"||minAmt||maxAmt;
@@ -2138,7 +2142,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
     if(!filtered.length){window.alert("ไม่มีรายการให้ส่งออก");return;}
     const esc=v=>{const s=String(v??"").replace(/"/g,'""');return /[",\n]/.test(s)?`"${s}"`:s};
     const rows=[["วันที่","ประเภท","หมวดหมู่","จำนวนเงิน","โน้ต"]];
-    filtered.forEach(tx=>{const cats=tx.type==="income"?IC:EC;const cat=cats.find(c=>c.v===tx.category);rows.push([tx.date,tx.type==="income"?"รายรับ":"รายจ่าย",cat?.l||tx.category,tx.amount,tx.note||""])});
+    filtered.forEach(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category);rows.push([tx.date,tx.type==="income"?"รายรับ":"รายจ่าย",cat?.l||tx.category,tx.amount,tx.note||""])});
     rows.push([]);
     rows.push(["สรุป",`${filtered.length} รายการ`,"","",""]);
     rows.push(["รายรับรวม","","",sumInc,""]);
@@ -2156,11 +2160,12 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
    * formatted like CashFlowDetailPage (which is for budget/forecast). */
   const exportCFReport=()=>{
     if(!filtered.length){window.alert("ไม่มีรายการให้สร้างรายงาน");return;}
-    const cf=aggregateActualCF(filtered,data.recurring||[]);
-    const inflowItems=[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
-    const fixedItems=[{k:"rent",l:"ค่าเช่า/ที่พัก"},{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
-    const variableItems=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้า/บำรุงรักษาตัวเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร / การศึกษา"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
-    const savingItems=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
+    const cf=aggregateActualCF(filtered,data.recurring||[],data.cfItems);
+    // Use user's customized cfItems if exists, else fall back to defaults
+    const inflowItems=data.cfItems?.inflow||[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
+    const fixedItems=data.cfItems?.fixed||[{k:"rent",l:"ค่าเช่า/ที่พัก"},{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
+    const variableItems=data.cfItems?.variable||[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้า/บำรุงรักษาตัวเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร / การศึกษา"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
+    const savingItems=data.cfItems?.saving||[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
     const sumSec=(items,sec)=>items.reduce((s,it)=>s+(cf[sec][it.k]||0),0);
     const totalIn=sumSec(inflowItems,"inflow");
     const totalFixed=sumSec(fixedItems,"fixed");
@@ -2254,7 +2259,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
           <span style={{fontSize:11,color:t.ts}}>เลือกทั้งหมด ({filtered.length} รายการ)</span>
         </div>)}
         {filtered.map((tx,i)=>{
-        const isI=tx.type==="income";const cats=isI?IC:EC;const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
+        const isI=tx.type==="income";const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
         const checked=selIds.has(tx.id);
         const row=(<div onClick={selMode?()=>toggleSel(tx.id):undefined} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none",cursor:selMode?"pointer":"default",background:selMode&&checked?`${t.ac}10`:"transparent"}}>
           {selMode&&<input type="checkbox" checked={checked} onChange={()=>toggleSel(tx.id)} onClick={e=>e.stopPropagation()} style={{width:16,height:16,accentColor:t.ac,cursor:"pointer",flexShrink:0}}/>}
@@ -4200,7 +4205,7 @@ function RecentTxns({data,t,onMore,onEdit}){
     </div>
     <div style={{display:"flex",flexDirection:"column",gap:1}}>
       {recent.map(tx=>{
-        const cats=tx.type==="income"?IC:EC;
+        const cats=enrichedCategories(tx.type,data?.cfItems);
         const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
         const isToday=tx.date===td();
         const isI=tx.type==="income";
@@ -4889,7 +4894,7 @@ function WealthHub(){
     <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn} data={data}/>}</Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
     <Modal open={modal?.type==="addDebt"||modal?.type==="editDebt"} onClose={()=>setModal(null)} title={modal?.type==="editDebt"?"แก้ไข":"เพิ่มหนี้"} t={t}><DebtForm initial={modal?.debt} onSave={f=>modal?.type==="editDebt"?updateDebt(modal.debt.id,f):addDebt(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
-    <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
+    <Modal open={modal?.type==="addRecurring"||modal?.type==="editRecurring"} onClose={()=>setModal(null)} title={modal?.type==="editRecurring"?"แก้ไขรายการประจำ":"เพิ่มรายการประจำ"} t={t}><RecurringForm initial={modal?.recurring} onSave={f=>modal?.type==="editRecurring"?updateRecurring(modal.recurring.id,f):addRecurring(f)} onCancel={()=>setModal(null)} t={t} data={data}/></Modal>
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
     <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setQuickSheet(true)}/>
     <QuickAddSheet open={quickSheet&&!modal&&!showAuth} onClose={()=>setQuickSheet(false)} data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})}/>

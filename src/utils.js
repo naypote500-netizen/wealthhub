@@ -1,7 +1,7 @@
 /* ═══ UTILITIES ═══
  * Pure helper functions: ID, format, date, storage, recurring engine
  */
-import { SK, OSK, DF } from "./constants";
+import { SK, OSK, DF, IC, EC, CF_DEFAULTS } from "./constants";
 
 /* Random unique ID (used for new entities) */
 export const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -139,6 +139,27 @@ export function generateInsight(data,streak){
   return insights[0];
 }
 
+/* ═══ ENRICHED CATEGORIES ═══
+ * Returns built-in EC/IC categories + user-added CFD items (those NOT in
+ * CF_DEFAULTS, since defaults are already covered conceptually by EC/IC).
+ * Custom items get default emoji + g (group) by section. */
+export function enrichedCategories(type,cfItems){
+  if(type==="income"){
+    const customInflow=((cfItems?.inflow)||[]).filter(c=>!IC.some(b=>b.v===c.k)&&!CF_DEFAULTS.inflow.some(d=>d.k===c.k));
+    return[...IC,...customInflow.map(c=>({v:c.k,l:c.l,i:"💰",custom:true}))];
+  }
+  const isCustom=(c,sec)=>!EC.some(b=>b.v===c.k)&&!CF_DEFAULTS[sec].some(d=>d.k===c.k);
+  const customFixed=((cfItems?.fixed)||[]).filter(c=>isCustom(c,"fixed"));
+  const customVariable=((cfItems?.variable)||[]).filter(c=>isCustom(c,"variable"));
+  const customSaving=((cfItems?.saving)||[]).filter(c=>isCustom(c,"saving"));
+  return[
+    ...EC,
+    ...customFixed.map(c=>({v:c.k,l:c.l,i:"🏠",g:"fixed",custom:true})),
+    ...customVariable.map(c=>({v:c.k,l:c.l,i:"💸",g:"variable",custom:true})),
+    ...customSaving.map(c=>({v:c.k,l:c.l,i:"💰",g:"saving",custom:true})),
+  ];
+}
+
 /* ═══ TXN → CASH FLOW DETAIL (CFD) MAPPER ═══
  * Maps a transaction into one of CFD's 4 sections (inflow/fixed/variable/saving).
  * Income with goalId → also counted as 'saving' (allocated money).
@@ -150,6 +171,18 @@ export function generateInsight(data,streak){
  *  - INCOME w/ goalId → also added to saving */
 export function mapTxnToCFD(tx,opts={}){
   const recurringRules=opts.recurringRules||[];
+  const cfItems=opts.cfItems||null;
+  // 0. Custom CFD item key match — direct map to that section
+  if(cfItems&&tx.category){
+    for(const sec of["inflow","fixed","variable","saving"]){
+      const item=(cfItems[sec]||[]).find(c=>c.k===tx.category);
+      if(item){
+        const r={section:sec,key:tx.category};
+        if(tx.type==="income"&&tx.goalId)r.alsoSaving="save";
+        return r;
+      }
+    }
+  }
   if(tx.type==="income"){
     const inflowKey=
       tx.category==="salary"||tx.category==="bonus"?"salary":
@@ -200,16 +233,22 @@ export function mapTxnToCFD(tx,opts={}){
 /* Aggregate actual cash flow from txns into the CFD structure.
  * Returns {inflow:{...}, fixed:{...}, variable:{...}, saving:{...}}
  * with the same key shape as data.cashFlow.[period].[key] used by CFD page. */
-export function aggregateActualCF(txns,recurringRules=[]){
-  const result={
-    inflow:{salary:0,interest:0,dividend:0,otherInc:0},
-    fixed:{rent:0,debtPay:0,lifeIns:0,socSec:0,provFund:0},
-    variable:{food:0,phone:0,util:0,enter:0,tax:0,travel:0,cloth:0,child:0,otherExp:0},
-    saving:{save:0,invest:0},
-  };
+export function aggregateActualCF(txns,recurringRules=[],cfItems=null){
+  const sections=["inflow","fixed","variable","saving"];
+  const result={};
+  sections.forEach(s=>{
+    result[s]={};
+    // Initialize with CF_DEFAULTS keys
+    (CF_DEFAULTS[s]||[]).forEach(d=>{result[s][d.k]=0});
+    // Initialize with custom keys (user-added in CFD)
+    if(cfItems?.[s]){
+      cfItems[s].forEach(c=>{if(!(c.k in result[s]))result[s][c.k]=0});
+    }
+  });
   (txns||[]).forEach(tx=>{
-    const m=mapTxnToCFD(tx,{recurringRules});
-    if(m.section&&result[m.section]&&m.key in result[m.section]){
+    const m=mapTxnToCFD(tx,{recurringRules,cfItems});
+    if(m.section&&result[m.section]){
+      if(!(m.key in result[m.section]))result[m.section][m.key]=0;
       result[m.section][m.key]+=(+tx.amount||0);
     }
     if(m.alsoSaving&&result.saving[m.alsoSaving]!==undefined){
