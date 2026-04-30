@@ -491,14 +491,14 @@ function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
     {/* OCR scan + Slip paste (only for new txn) */}
     {!initial&&(<>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-        <button type="button" onClick={()=>{haptic(8);ocrFileRef.current?.click()}} disabled={!!ocr.status&&!ocr.status.startsWith("✓")&&!ocr.status.startsWith("⚠")} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 10px",border:`1px dashed ${t.ac}`,borderRadius:10,background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,cursor:"pointer",color:t.ac,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",justifyContent:"center"}}>
-          <span style={{fontSize:16}}>📸</span><span>สแกนใบเสร็จ</span>
+        <button type="button" onClick={()=>{haptic(8);ocrFileRef.current?.click()}} disabled={!!ocr.status&&!ocr.status.startsWith("✓")&&!ocr.status.startsWith("⚠")} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 10px",border:`1px dashed ${t.ac}`,borderRadius:10,background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,cursor:"pointer",color:t.ac,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",justifyContent:"center"}} title="ถ่ายรูปใหม่ หรือเลือกจากแกลเลอรี่">
+          <span style={{fontSize:16}}>📸</span><span>สแกน/รูป</span>
         </button>
         <button type="button" onClick={()=>{haptic(5);setSlipOpen(o=>!o)}} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 10px",border:`1px dashed ${t.g}`,borderRadius:10,background:`linear-gradient(135deg, ${t.g}10, ${t.tl}08)`,cursor:"pointer",color:t.g,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",justifyContent:"center"}}>
           <span style={{fontSize:16}}>📲</span><span>วาง Slip</span>
         </button>
       </div>
-      <input ref={ocrFileRef} type="file" accept="image/*" capture="environment" onChange={handleOCR} style={{display:"none"}}/>
+      <input ref={ocrFileRef} type="file" accept="image/*" onChange={handleOCR} style={{display:"none"}}/>
       {slipOpen&&(<div style={{display:"flex",flexDirection:"column",gap:6,padding:10,background:`${t.g}08`,border:`1px solid ${t.g}30`,borderRadius:10}}>
         <div style={{fontSize:10,color:t.tm,fontWeight:500}}>📲 Copy ข้อความจาก SMS / แอปธนาคารมาวาง — ระบบจะดึงยอด+วันที่อัตโนมัติ</div>
         <textarea value={slipText} onChange={e=>setSlipText(e.target.value)} placeholder="ตัวอย่าง: ทำรายการสำเร็จ จำนวน 459.00 บาท ไปยัง 7-eleven วันที่ 28 เม.ย. 14:30" rows={4} style={{width:"100%",padding:"8px 10px",border:`1px solid ${t.ibr}`,borderRadius:8,background:t.ib,color:t.text,fontSize:12,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
