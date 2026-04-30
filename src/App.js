@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -450,6 +450,18 @@ function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
   const goals=(data?.goals||[]).filter(g=>(g.saved||0)<(g.target||0));
   const ocrFileRef=useRef();
   const[ocr,setOcr]=useState({status:"",progress:0,err:""});
+  const[slipOpen,setSlipOpen]=useState(false);
+  const[slipText,setSlipText]=useState("");
+  const handleSlip=()=>{
+    if(!slipText.trim())return;
+    const{amount,date}=parseSlip(slipText);
+    const updates=[];
+    if(amount){set("amount",String(amount));updates.push(`฿${amount.toLocaleString()}`)}
+    if(date){set("date",date);updates.push(date)}
+    haptic(15);
+    if(updates.length){setOcr({status:`✓ ดึงได้: ${updates.join(" • ")}`,progress:100,err:""});setTimeout(()=>setOcr({status:"",progress:0,err:""}),3500);setSlipOpen(false);setSlipText("");}
+    else setOcr({status:"",progress:0,err:"⚠️ ไม่พบยอดเงิน — ตรวจข้อความ slip"});
+  };
   const handleOCR=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;
     e.target.value="";
@@ -476,13 +488,25 @@ function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
   const suggestion=useMemo(()=>{if(f.type!=="expense"||!f.note||f.note.length<2)return null;const words=f.note.toLowerCase().split(/[\s,.-]+/).filter(w=>w.length>=2);const scores={};words.forEach(w=>{if(noteMap[w])Object.entries(noteMap[w]).forEach(([c,n])=>{scores[c]=(scores[c]||0)+n})});const top=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];return(top&&top[0]!==f.category)?top[0]:null},[f.note,f.category,f.type,noteMap]);
   const sugCat=suggestion?EC.find(c=>c.v===suggestion):null;
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {/* OCR scan button (only for expense workflow; works on any file) */}
+    {/* OCR scan + Slip paste (only for new txn) */}
     {!initial&&(<>
-      <button type="button" onClick={()=>{haptic(8);ocrFileRef.current?.click()}} disabled={!!ocr.status&&!ocr.status.startsWith("✓")&&!ocr.status.startsWith("⚠")} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",border:`1px dashed ${t.ac}`,borderRadius:10,background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,cursor:"pointer",color:t.ac,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent"}}>
-        <span style={{fontSize:18}}>📸</span>
-        <span style={{flex:1,textAlign:"left"}}>สแกนใบเสร็จ <span style={{fontWeight:400,color:t.tm}}>(ดึงยอด+วันที่อัตโนมัติ)</span></span>
-      </button>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        <button type="button" onClick={()=>{haptic(8);ocrFileRef.current?.click()}} disabled={!!ocr.status&&!ocr.status.startsWith("✓")&&!ocr.status.startsWith("⚠")} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 10px",border:`1px dashed ${t.ac}`,borderRadius:10,background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,cursor:"pointer",color:t.ac,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",justifyContent:"center"}}>
+          <span style={{fontSize:16}}>📸</span><span>สแกนใบเสร็จ</span>
+        </button>
+        <button type="button" onClick={()=>{haptic(5);setSlipOpen(o=>!o)}} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 10px",border:`1px dashed ${t.g}`,borderRadius:10,background:`linear-gradient(135deg, ${t.g}10, ${t.tl}08)`,cursor:"pointer",color:t.g,fontSize:12,fontWeight:600,WebkitTapHighlightColor:"transparent",justifyContent:"center"}}>
+          <span style={{fontSize:16}}>📲</span><span>วาง Slip</span>
+        </button>
+      </div>
       <input ref={ocrFileRef} type="file" accept="image/*" capture="environment" onChange={handleOCR} style={{display:"none"}}/>
+      {slipOpen&&(<div style={{display:"flex",flexDirection:"column",gap:6,padding:10,background:`${t.g}08`,border:`1px solid ${t.g}30`,borderRadius:10}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:500}}>📲 Copy ข้อความจาก SMS / แอปธนาคารมาวาง — ระบบจะดึงยอด+วันที่อัตโนมัติ</div>
+        <textarea value={slipText} onChange={e=>setSlipText(e.target.value)} placeholder="ตัวอย่าง: ทำรายการสำเร็จ จำนวน 459.00 บาท ไปยัง 7-eleven วันที่ 28 เม.ย. 14:30" rows={4} style={{width:"100%",padding:"8px 10px",border:`1px solid ${t.ibr}`,borderRadius:8,background:t.ib,color:t.text,fontSize:12,fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:6}}>
+          <button type="button" onClick={handleSlip} disabled={!slipText.trim()} style={{flex:1,padding:"8px 12px",border:"none",borderRadius:7,background:slipText.trim()?t.g:t.cb,color:"#fff",fontSize:12,fontWeight:600,cursor:slipText.trim()?"pointer":"default",WebkitTapHighlightColor:"transparent"}}>✓ ดึงข้อมูล</button>
+          <button type="button" onClick={()=>{setSlipOpen(false);setSlipText("")}} style={{padding:"8px 12px",border:`1px solid ${t.cb}`,borderRadius:7,background:"transparent",color:t.tm,fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+        </div>
+      </div>)}
       {ocr.status&&<div style={{fontSize:11,color:ocr.status.startsWith("✓")?t.g:ocr.status.startsWith("⚠")?t.am:t.ac,padding:"6px 10px",background:`${ocr.status.startsWith("✓")?t.g:ocr.status.startsWith("⚠")?t.am:t.ac}10`,borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
         <span style={{flex:1}}>{ocr.status}</span>
         {ocr.progress>0&&ocr.progress<100&&<span style={{fontWeight:600}}>{ocr.progress}%</span>}
@@ -1650,6 +1674,118 @@ function EmergencyFundPage({data,t,setPage}){
     </div>
 
     <Btn t={t} onClick={()=>setPage("balance")} style={{background:`${t.ac}15`,color:t.ac,border:`1px solid ${t.ac}40`}}>→ แก้ไข cash / savings ในงบดุล</Btn>
+  </div>);
+}
+
+/* ═══ FUTURE SCENARIO PLANNER ═══
+ * Compound growth visualization. Sliders for monthly contribution, return %,
+ * years. Shows future value + principal vs interest breakdown. */
+function ScenarioPage({t}){
+  const[monthly,setMonthly]=useState(5000);
+  const[returnPct,setReturnPct]=useState(5);
+  const[years,setYears]=useState(10);
+  const presets=[
+    {l:"FIRE 1 ล้าน",m:8000,r:7,y:10},
+    {l:"เกษียณ 10 ล้าน",m:15000,r:6,y:25},
+    {l:"ดาวน์รถ ฿200K",m:6000,r:2,y:3},
+    {l:"กองฉุกเฉิน 6 เดือน",m:5000,r:2,y:3},
+  ];
+  // FV of annuity (end-of-month contributions)
+  const r=(returnPct||0)/100/12;
+  const n=years*12;
+  const principal=monthly*n;
+  const fv=r>0?monthly*((Math.pow(1+r,n)-1)/r):principal;
+  const interest=Math.max(0,fv-principal);
+  // Build year-by-year data for chart
+  const chartData=useMemo(()=>{
+    const points=[];
+    let bal=0;
+    for(let m=0;m<=n;m++){
+      if(m%12===0)points.push({year:m/12,balance:Math.round(bal),principal:Math.round(monthly*m)});
+      bal=bal*(1+r)+monthly;
+    }
+    return points;
+  },[monthly,r,n]);
+  const fN=v=>Math.round(v).toLocaleString();
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Hero */}
+    <div style={{background:`linear-gradient(135deg, ${t.pp}, ${t.ac})`,borderRadius:16,padding:"22px 18px",color:"#fff",boxShadow:`0 8px 24px ${t.pp}40`}}>
+      <div style={{fontSize:11,opacity:0.9,fontWeight:600,letterSpacing:0.4}}>🔮 ใน {years} ปีข้างหน้า คุณจะมี</div>
+      <div style={{fontSize:42,fontWeight:800,marginTop:4,lineHeight:1}}>฿{fN(fv)}</div>
+      <div style={{display:"flex",gap:14,marginTop:12,flexWrap:"wrap"}}>
+        <div><div style={{fontSize:9,opacity:0.85}}>เงินต้น</div><div style={{fontSize:14,fontWeight:700}}>฿{fN(principal)}</div></div>
+        <div><div style={{fontSize:9,opacity:0.85}}>ดอกเบี้ยทบต้น</div><div style={{fontSize:14,fontWeight:700,color:"#FCD34D"}}>+฿{fN(interest)}</div></div>
+        {principal>0&&<div><div style={{fontSize:9,opacity:0.85}}>เพิ่มขึ้น</div><div style={{fontSize:14,fontWeight:700}}>{((interest/principal)*100).toFixed(0)}%</div></div>}
+      </div>
+    </div>
+
+    {/* Sliders */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14,display:"flex",flexDirection:"column",gap:14}}>
+      {/* Monthly */}
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+          <span style={{fontSize:12,fontWeight:600,color:t.text}}>💰 ออมต่อเดือน</span>
+          <span style={{fontSize:14,fontWeight:700,color:t.ac}}>฿{fN(monthly)}</span>
+        </div>
+        <input type="range" min="500" max="50000" step="500" value={monthly} onChange={e=>setMonthly(+e.target.value)} style={{width:"100%",accentColor:t.ac}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:t.tm,marginTop:2}}><span>฿500</span><span>฿50,000</span></div>
+      </div>
+      {/* Return % */}
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+          <span style={{fontSize:12,fontWeight:600,color:t.text}}>📈 ผลตอบแทน/ปี</span>
+          <span style={{fontSize:14,fontWeight:700,color:t.g}}>{returnPct.toFixed(1)}%</span>
+        </div>
+        <input type="range" min="0" max="15" step="0.5" value={returnPct} onChange={e=>setReturnPct(+e.target.value)} style={{width:"100%",accentColor:t.g}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:t.tm,marginTop:2}}><span>0% (ฝากออมทรัพย์)</span><span>15% (เสี่ยงสูง)</span></div>
+        <div style={{fontSize:9,color:t.tm,marginTop:3,fontStyle:"italic"}}>📌 อ้างอิง: เงินฝาก ~1%, พันธบัตร ~3%, กองทุนรวม 5-8%, หุ้น 7-12%</div>
+      </div>
+      {/* Years */}
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+          <span style={{fontSize:12,fontWeight:600,color:t.text}}>⏰ ระยะเวลา</span>
+          <span style={{fontSize:14,fontWeight:700,color:t.am}}>{years} ปี</span>
+        </div>
+        <input type="range" min="1" max="40" step="1" value={years} onChange={e=>setYears(+e.target.value)} style={{width:"100%",accentColor:t.am}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:t.tm,marginTop:2}}><span>1 ปี</span><span>40 ปี</span></div>
+      </div>
+    </div>
+
+    {/* Compound Growth Chart */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:12,fontWeight:600,color:t.text,marginBottom:10}}>📊 การเติบโตของเงิน</div>
+      <ResponsiveContainer width="100%" height={220}>
+        <AreaChart data={chartData} margin={{top:5,right:5,left:0,bottom:5}}>
+          <defs>
+            <linearGradient id="bGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.pp} stopOpacity={0.5}/><stop offset="100%" stopColor={t.pp} stopOpacity={0}/></linearGradient>
+            <linearGradient id="pGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.ac} stopOpacity={0.4}/><stop offset="100%" stopColor={t.ac} stopOpacity={0}/></linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.cb}/>
+          <XAxis dataKey="year" tick={{fontSize:10,fill:t.tm}} label={{value:"ปี",position:"insideBottom",offset:-2,fontSize:10,fill:t.tm}}/>
+          <YAxis tick={{fontSize:10,fill:t.tm}} tickFormatter={v=>v>=1e6?`${(v/1e6).toFixed(1)}M`:v>=1e3?`${(v/1e3).toFixed(0)}K`:v}/>
+          <Tooltip formatter={(v,n)=>[`฿${fN(v)}`,n==="balance"?"มูลค่ารวม":"เงินต้น"]} labelFormatter={l=>`ปีที่ ${l}`} contentStyle={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:8,fontSize:11}}/>
+          <Area type="monotone" dataKey="balance" stroke={t.pp} strokeWidth={2} fill="url(#bGrad)" name="balance"/>
+          <Area type="monotone" dataKey="principal" stroke={t.ac} strokeWidth={1.5} fill="url(#pGrad)" strokeDasharray="3 3" name="principal"/>
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+
+    {/* Presets */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:12,fontWeight:600,color:t.text,marginBottom:10}}>⚡ ลองพรีเซ็ต</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {presets.map((p,i)=>(<button key={i} onClick={()=>{haptic(8);setMonthly(p.m);setReturnPct(p.r);setYears(p.y)}} style={{padding:"10px 12px",border:`1px solid ${t.cb}`,borderRadius:10,background:t.bg,color:t.text,cursor:"pointer",fontSize:11,fontWeight:600,textAlign:"left",WebkitTapHighlightColor:"transparent"}}>
+          <div>{p.l}</div>
+          <div style={{fontSize:9,color:t.tm,marginTop:2,fontWeight:400}}>฿{fN(p.m)}/เดือน × {p.y} ปี @ {p.r}%</div>
+        </button>))}
+      </div>
+    </div>
+
+    {/* Insight */}
+    <div style={{background:`linear-gradient(135deg, ${t.am}15, ${t.am}05)`,border:`1px solid ${t.am}40`,borderRadius:12,padding:14,fontSize:12,color:t.text,lineHeight:1.6}}>
+      <b style={{color:t.am}}>💡 สังเกต:</b> ดอกเบี้ยทบต้น (compound interest) ทำให้เงินที่ลงทุนเป็น 100% ของผลรวม
+      {interest>principal&&<><br/><b style={{color:t.g}}>🚀 เคล็ดลับ:</b> ใน {years} ปี ดอกเบี้ยมากกว่าเงินต้น — เริ่มเร็วยิ่งดี!</>}
+    </div>
   </div>);
 }
 
@@ -3064,7 +3200,7 @@ const NAV_COLORS={
   dca:"#6366F1",retire:"#F97316",plan:"#0D9488",tax:"#F472B6",
   reports:"#0891B2",challenges:"#FACC15",about:"#94A3B8",
   streak:"#F59E0B",profile:"#8B5CF6",
-  fund:"#0891B2",taxded:"#DC2626",takehome:"#059669",
+  fund:"#0891B2",taxded:"#DC2626",takehome:"#059669",scenario:"#8B5CF6",
 };
 
 /* ═══ NAV ICONS (Lucide-style SVG) ═══
@@ -3101,6 +3237,7 @@ function NavIcon({name,size=26}){
     case"fund":return<svg {...s}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
     case"taxded":return<svg {...s}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
     case"takehome":return<svg {...s}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
+    case"scenario":return<svg {...s}><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>;
     case"add":return<svg {...s} strokeWidth={2.6}><path d="M12 5v14"/><path d="M5 12h14"/></svg>;
     default:return null;
   }
@@ -3301,6 +3438,12 @@ function MenuIllustration({navKey,size=30}){
       <rect x="5.5" y="14" width="2.5" height="1" rx="0.3" fill="#A7F3D0"/>
       <rect x="16" y="14" width="2.5" height="1" rx="0.3" fill="#A7F3D0"/>
     </svg>;
+    case"scenario":return<svg {...s}>
+      <circle cx="12" cy="12" r="10" fill="#8B5CF6"/>
+      <path d="M12 2 A10 10 0 0 1 12 22" fill="#A78BFA"/>
+      <path d="M5 14 Q9 10 12 11 T19 8" fill="none" stroke="#FBBF24" strokeWidth="1.4" strokeLinecap="round"/>
+      <circle cx="19" cy="8" r="1.2" fill="#FCD34D"/>
+    </svg>;
     default:return null;
   }
 }
@@ -3370,7 +3513,7 @@ function MobileMenuPage({page,setPage,t}){
  * Avatar (Supabase Storage 'avatars' bucket), display name (user_profiles
  * table), email, theme switcher, logout. Required tables: see SQL doc.
  */
-function ProfilePage({session,t,theme,setTheme,onLogout}){
+function ProfilePage({session,t,theme,setTheme,onLogout,data,persist}){
   const[profile,setProfile]=useState({display_name:"",avatar_url:""});
   const[name,setName]=useState("");
   const[saving,setSaving]=useState(false);
@@ -3508,11 +3651,62 @@ function ProfilePage({session,t,theme,setTheme,onLogout}){
       </div>
     </div>
 
+    {/* 🪙 Round-up Savings */}
+    {data&&persist&&(()=>{const ru=data.roundup||{enabled:false,roundTo:10,goalId:""};const goals=data.goals||[];const setRu=p=>persist({...data,roundup:{...ru,...p}});const sample=82;const sampleRu=roundupAmount(sample,ru.roundTo||10);return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:t.text}}>🪙 Round-up Savings</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>ปัดยอดรายจ่ายขึ้น เก็บส่วนต่างเข้าเป้าหมายอัตโนมัติ</div>
+        </div>
+        <label style={{position:"relative",display:"inline-block",width:42,height:24,cursor:"pointer"}}>
+          <input type="checkbox" checked={ru.enabled} onChange={e=>setRu({enabled:e.target.checked})} style={{opacity:0,width:0,height:0}}/>
+          <span style={{position:"absolute",inset:0,background:ru.enabled?t.g:t.cb,borderRadius:12,transition:"background .2s"}}/>
+          <span style={{position:"absolute",top:2,left:ru.enabled?20:2,width:20,height:20,background:"#fff",borderRadius:"50%",transition:"left .2s",boxShadow:"0 2px 4px rgba(0,0,0,0.2)"}}/>
+        </label>
+      </div>
+      {ru.enabled&&(<div style={{display:"flex",flexDirection:"column",gap:10,paddingTop:8,borderTop:`1px dashed ${t.cb}`}}>
+        <div>
+          <div style={{fontSize:10,color:t.tm,marginBottom:5}}>ปัดเป็นบาทกลม</div>
+          <div style={{display:"flex",gap:6}}>
+            {[10,50,100].map(n=>(<button key={n} onClick={()=>{haptic(5);setRu({roundTo:n})}} style={{flex:1,padding:"8px",border:`1px solid ${ru.roundTo===n?t.g:t.cb}`,borderRadius:8,background:ru.roundTo===n?`${t.g}15`:t.bg,color:ru.roundTo===n?t.g:t.text,cursor:"pointer",fontSize:12,fontWeight:600}}>฿{n}</button>))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:t.tm,marginBottom:5}}>เก็บเข้าเป้าหมาย</div>
+          {goals.length===0?<div style={{padding:10,fontSize:11,color:t.tm,textAlign:"center",border:`1px dashed ${t.cb}`,borderRadius:8}}>⚠️ ยังไม่มีเป้าหมาย — สร้างที่หน้า "เป้าหมาย" ก่อน</div>:<select value={ru.goalId||""} onChange={e=>setRu({goalId:e.target.value})} style={{width:"100%",padding:"8px 10px",border:`1px solid ${t.ibr}`,borderRadius:8,background:t.ib,color:t.text,fontSize:12}}><option value="">— เลือกเป้าหมาย —</option>{goals.map(g=>(<option key={g.id} value={g.id}>{g.icon} {g.name}</option>))}</select>}
+        </div>
+        {ru.goalId&&<div style={{padding:10,background:`${t.g}10`,borderRadius:8,fontSize:11,color:t.text,lineHeight:1.5}}>
+          <b>ตัวอย่าง:</b> ใช้ ฿{sample} → ปัดเป็น ฿{sample+sampleRu} → <b style={{color:t.g}}>+฿{sampleRu}</b> เข้า "{goals.find(g=>g.id===ru.goalId)?.name}"
+        </div>}
+      </div>)}
+    </div>)})()}
+
     {/* Logout */}
     <button onClick={()=>{haptic([10,40,10]);onLogout()}} style={{width:"100%",padding:14,border:`1px solid ${t.r}40`,borderRadius:12,background:`${t.r}10`,color:t.r,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,WebkitTapHighlightColor:"transparent"}}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
       ออกจากระบบ
     </button>
+  </div>);
+}
+
+/* ═══ DAILY GREETING + INSIGHT ═══
+ * Time-aware welcome card on top of Dashboard.
+ * Greeting changes by hour, insight rotates from rule-based pool. */
+function DailyGreetingCard({data,streak,t,session}){
+  const[insight,setInsight]=useState(null);
+  useEffect(()=>{setInsight(generateInsight(data,streak))},[data,streak]);
+  const hour=new Date().getHours();
+  const greeting=hour<5?"😴 ดึกแล้ว":hour<12?"🌅 อรุณสวัสดิ์":hour<17?"☀️ สวัสดีตอนบ่าย":hour<20?"🌆 สวัสดีตอนเย็น":"🌙 สวัสดีตอนค่ำ";
+  const profile=session?.user?.user_metadata||{};
+  const name=profile.display_name||(session?.user?.email?.split("@")[0])||"";
+  if(!insight)return null;
+  return(<div style={{background:`linear-gradient(135deg, ${t.ac}10, ${t.pp}08)`,border:`1px solid ${t.ac}30`,borderRadius:14,padding:"14px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
+    <div style={{fontSize:36,lineHeight:1,flexShrink:0}}>{insight.emoji}</div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:11,color:t.tm,fontWeight:600,letterSpacing:0.3}}>{greeting}{name?`, ${name}`:""}</div>
+      <div style={{fontSize:13,fontWeight:700,color:t.text,marginTop:3,lineHeight:1.4}}>{insight.text}</div>
+      {insight.sub&&<div style={{fontSize:11,color:t.ts,marginTop:3,lineHeight:1.5}}>{insight.sub}</div>}
+    </div>
   </div>);
 }
 
@@ -3580,27 +3774,50 @@ function PWAInstallBanner({t}){
 /* ═══ ONBOARDING OVERLAY ═══
  * 3-slide first-run intro. Sets localStorage flag on completion/skip so it
  * won't show again. Mobile-friendly: full-screen, single CTA per slide. */
-function OnboardingOverlay({t}){
+function OnboardingOverlay({t,data,persist}){
   const[shown,setShown]=useState(()=>!localStorage.getItem("wh-onboarded"));
   const[step,setStep]=useState(0);
+  const[focus,setFocus]=useState(()=>new Set(data?.preferences?.focus||[]));
   const slides=[
     {emoji:"💰",title:"ยินดีต้อนรับสู่ WealthHub",desc:"แอปการเงินส่วนบุคคลครบในที่เดียว — รายรับ-รายจ่าย พอร์ตการลงทุน เป้าหมาย และอีกมากมาย"},
     {emoji:"⊕",title:"บันทึกง่าย กดเดียวจบ",desc:"กดปุ่มกลางที่แถบล่างเพื่อบันทึกรายรับ-รายจ่ายทันที — มีหมวดหมู่อัตโนมัติให้เลือก"},
     {emoji:"🎯",title:"ตั้งเป้า ออมได้จริง",desc:"ตั้งเป้าหมาย เช่น 'ซื้อรถ ฿500K' ผูกกับรายรับ — ระบบจะคำนวณเงินออมให้คุณอัตโนมัติ พร้อม streak ทุกวัน 🔥"},
+    {emoji:"🪄",title:"คุณสนใจอะไรมากที่สุด?",desc:"เลือกได้หลายอัน — เราจะปรับ Dashboard ให้แสดงสิ่งที่ตรงกับคุณ (เปลี่ยนได้ภายหลัง)",interactive:true},
   ];
-  const finish=()=>{haptic(15);localStorage.setItem("wh-onboarded","1");setShown(false)};
+  const focusOpts=[
+    {k:"expense",emoji:"💸",l:"จัดการรายรับ-รายจ่าย"},
+    {k:"invest",emoji:"📈",l:"ลงทุนระยะยาว"},
+    {k:"saving",emoji:"💰",l:"ออมเพื่อเป้าหมาย"},
+    {k:"debt",emoji:"🏦",l:"ปลดหนี้"},
+    {k:"tax",emoji:"📋",l:"วางแผนภาษี"},
+  ];
+  const toggleFocus=k=>{setFocus(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})};
+  const finish=()=>{
+    haptic(15);
+    localStorage.setItem("wh-onboarded","1");
+    if(data&&persist&&focus.size>0)persist({...data,preferences:{...(data.preferences||{}),focus:[...focus]}});
+    setShown(false);
+  };
   const next=()=>{haptic(8);if(step<slides.length-1)setStep(step+1);else finish()};
   if(!shown)return null;
   const slide=slides[step];
-  return(<div style={{position:"fixed",inset:0,zIndex:2000,background:`linear-gradient(180deg, ${t.bg}, ${t.acL})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,paddingTop:"calc(40px + env(safe-area-inset-top))",paddingBottom:"calc(40px + env(safe-area-inset-bottom))"}}>
+  const isLast=step===slides.length-1;
+  return(<div style={{position:"fixed",inset:0,zIndex:2000,background:`linear-gradient(180deg, ${t.bg}, ${t.acL})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,paddingTop:"calc(40px + env(safe-area-inset-top))",paddingBottom:"calc(40px + env(safe-area-inset-bottom))",overflowY:"auto"}}>
     <button onClick={finish} style={{position:"absolute",top:"calc(16px + env(safe-area-inset-top))",right:16,background:"transparent",border:"none",color:t.tm,fontSize:13,cursor:"pointer",padding:"8px 12px",fontWeight:500}}>ข้าม</button>
     <div key={step} style={{fontSize:88,marginBottom:24,animation:"obIn .45s ease"}}>{slide.emoji}</div>
     <div style={{fontSize:22,fontWeight:700,marginBottom:12,textAlign:"center",color:t.text,letterSpacing:-0.3,maxWidth:320}}>{slide.title}</div>
-    <div style={{fontSize:14,color:t.ts,textAlign:"center",lineHeight:1.7,maxWidth:340,marginBottom:32}}>{slide.desc}</div>
-    <div style={{display:"flex",gap:6,marginBottom:24}}>
+    <div style={{fontSize:14,color:t.ts,textAlign:"center",lineHeight:1.7,maxWidth:340,marginBottom:24}}>{slide.desc}</div>
+    {slide.interactive&&(<div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:340,marginBottom:20}}>
+      {focusOpts.map(opt=>{const sel=focus.has(opt.k);return(<button key={opt.k} onClick={()=>toggleFocus(opt.k)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",border:`2px solid ${sel?t.ac:t.cb}`,borderRadius:12,background:sel?`${t.ac}12`:t.card,cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",transition:"all .15s"}}>
+        <span style={{fontSize:24}}>{opt.emoji}</span>
+        <span style={{flex:1,fontSize:13,fontWeight:600,color:sel?t.ac:t.text}}>{opt.l}</span>
+        <span style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${sel?t.ac:t.cb}`,background:sel?t.ac:"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700}}>{sel?"✓":""}</span>
+      </button>)})}
+    </div>)}
+    <div style={{display:"flex",gap:6,marginBottom:20}}>
       {slides.map((_,i)=>(<div key={i} style={{width:i===step?22:8,height:8,borderRadius:4,background:i===step?t.ac:t.cb,transition:"width .25s"}}/>))}
     </div>
-    <button onClick={next} style={{padding:"13px 44px",background:t.ac,color:"#fff",border:"none",borderRadius:26,fontSize:14,fontWeight:600,cursor:"pointer",boxShadow:`0 6px 16px ${t.ac}50`,WebkitTapHighlightColor:"transparent",minWidth:200}}>{step<slides.length-1?"ถัดไป →":"🚀 เริ่มใช้งานเลย"}</button>
+    <button onClick={next} disabled={isLast&&focus.size===0} style={{padding:"13px 44px",background:isLast&&focus.size===0?t.cb:t.ac,color:"#fff",border:"none",borderRadius:26,fontSize:14,fontWeight:600,cursor:isLast&&focus.size===0?"not-allowed":"pointer",boxShadow:isLast&&focus.size===0?"none":`0 6px 16px ${t.ac}50`,WebkitTapHighlightColor:"transparent",minWidth:200,opacity:isLast&&focus.size===0?0.6:1}}>{!isLast?"ถัดไป →":focus.size===0?"เลือกอย่างน้อย 1 อย่าง":"🚀 เริ่มใช้งานเลย"}</button>
     <style>{`@keyframes obIn{from{opacity:0;transform:scale(0.5) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
   </div>);
 }
@@ -4179,9 +4396,20 @@ function WealthHub(){
     const txn={...f,id:uid(),amount:+f.amount,goalId:f.goalId||undefined};
     const d2={...data,transactions:[...data.transactions,txn]};
     const dl=goalDelta(f,1);
-    const nextGoals=applyGoalDelta(d2.goals,dl);
+    let nextGoals=applyGoalDelta(d2.goals,dl);
+    // 🪙 Round-up savings — applied to expense only, if enabled and goal exists
+    let roundupMsg="";
+    const ru=data.roundup;
+    if(ru?.enabled&&ru.goalId&&f.type==="expense"&&!f.goalId){
+      const ruAmt=roundupAmount(+f.amount,ru.roundTo||10);
+      if(ruAmt>0&&nextGoals.find(g=>g.id===ru.goalId)){
+        nextGoals=nextGoals.map(g=>g.id===ru.goalId?{...g,saved:(+g.saved||0)+ruAmt}:g);
+        roundupMsg=` +฿${ruAmt} → ${nextGoals.find(g=>g.id===ru.goalId)?.name||"goal"}`;
+      }
+    }
     checkGoalCompleted(data.goals,nextGoals);
     persist({...d2,goals:nextGoals});
+    if(roundupMsg)setToast({msg:`✓ บันทึก ${fB(+f.amount)}${roundupMsg}`});
     setModal(null);
   };
   const updateTxn=(id,f)=>{
@@ -4216,8 +4444,19 @@ function WealthHub(){
     const snap=data;
     haptic(15);
     const newTxn={type:"expense",category:tpl.category,amount:+tpl.amount,date:td(),note:tpl.note||"",id:uid()};
-    persist({...data,transactions:[...data.transactions,newTxn]});
-    setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}`,onUndo:()=>persist(snap)});
+    let goals=data.goals;
+    let roundupMsg="";
+    const ru=data.roundup;
+    if(ru?.enabled&&ru.goalId){
+      const ruAmt=roundupAmount(+tpl.amount,ru.roundTo||10);
+      const target=goals.find(g=>g.id===ru.goalId);
+      if(ruAmt>0&&target){
+        goals=goals.map(g=>g.id===ru.goalId?{...g,saved:(+g.saved||0)+ruAmt}:g);
+        roundupMsg=` +฿${ruAmt} 🪙→ ${target.name}`;
+      }
+    }
+    persist({...data,transactions:[...data.transactions,newTxn],goals});
+    setToast({msg:`✓ บันทึก ${tpl.note||(EC.find(c=>c.v===tpl.category)?.l||"")} ${fB(tpl.amount)}${roundupMsg}`,onUndo:()=>persist(snap)});
   };
   const addGoal=f=>{haptic(15);const ng={...f,id:uid(),target:+f.target,saved:+f.saved};const next=[...data.goals,ng];checkGoalCompleted([],next);persist({...data,goals:next});setModal(null)};
   const updateGoal=(id,f)=>{haptic(15);const next=data.goals.map(g=>g.id===id?{...g,...f,target:+f.target,saved:+f.saved}:g);checkGoalCompleted(data.goals,next);persist({...data,goals:next});setModal(null)};
@@ -4365,7 +4604,7 @@ function WealthHub(){
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
-          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile","subs","streak","taxded","takehome","fund"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
+          {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile","subs","streak","taxded","takehome","fund","scenario"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
         </div>
       </div>)}
 
@@ -4373,6 +4612,7 @@ function WealthHub(){
       {page==="dashboard"&&(<PullToRefresh t={t} disabled={!isMobile} onRefresh={async()=>{await refreshPrices().catch(()=>{});if(session?.user?.id){try{const{data:row}=await supabase.from("user_data").select("data").eq("user_id",session.user.id).single();if(row?.data)setData(row.data)}catch{}}}}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           {/* Always shown */}
+          <DailyGreetingCard data={data} streak={streak} t={t} session={session}/>
           <ReminderBanner streak={streak} data={data} persist={persist} t={t} onAddTxn={()=>setModal({type:"addTxn"})}/>
           {streak.current>0&&<div style={{display:"flex",justifyContent:"flex-start"}}><StreakChip streak={streak} t={t} onClick={()=>{haptic(5);setPage("streak")}}/></div>}
           <WeeklyReviewCard data={data} persist={persist} t={t}/>
@@ -4457,6 +4697,7 @@ function WealthHub(){
       {page==="taxded"&&<TaxDedPage data={data} persist={persist} t={t} setPage={setPage}/>}
       {page==="takehome"&&<TakeHomePage data={data} persist={persist} t={t} setPage={setPage}/>}
       {page==="fund"&&<EmergencyFundPage data={data} t={t} setPage={setPage}/>}
+      {page==="scenario"&&<ScenarioPage t={t}/>}
 
       {page==="reports"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:22}}>
         <div style={{fontSize:15,fontWeight:600,marginBottom:14}}>📄 รายงานสรุป</div>
@@ -4466,7 +4707,7 @@ function WealthHub(){
 
       {page==="challenges"&&(session?<ChallengesPage t={t} session={session} rate={rate} toThb={toThb} detailId={challengeDetailId} setDetailId={setChallengeDetailId}/>:<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}><div style={{fontSize:42,marginBottom:10}}>🏆</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>ชาเลนจ์การลงทุน</div><div style={{fontSize:12,color:t.ts,marginBottom:14,lineHeight:1.7}}>เข้าร่วมชาเลนจ์ลงทุนกับเพื่อน เปรียบเทียบพอร์ตหุ้น + เงินสด<br/>ดูกระดานคะแนนแบบเรียลไทม์</div><div style={{fontSize:11,color:t.tm,marginBottom:14}}>กรุณาเข้าสู่ระบบเพื่อใช้งานฟีเจอร์นี้</div><Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 เข้าสู่ระบบ</Btn></div>)}
       {page==="menu"&&<MobileMenuPage page={page} setPage={setPage} t={t}/>}
-      {page==="profile"&&<ProfilePage session={session} t={t} theme={theme} setTheme={setTheme} onLogout={logout}/>}
+      {page==="profile"&&<ProfilePage session={session} t={t} theme={theme} setTheme={setTheme} onLogout={logout} data={data} persist={persist}/>}
 
       {page==="about"&&(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:28,textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>♥</div>
@@ -4503,7 +4744,7 @@ function WealthHub(){
     {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
     {boxMilestone&&<MysteryBoxModal milestone={boxMilestone} onClaim={claimMysteryBox} t={t}/>}
     {isMobile&&!modal&&!showAuth&&!recovery&&<PWAInstallBanner t={t}/>}
-    {!loading&&!showAuth&&!recovery&&<OnboardingOverlay t={t}/>}
+    {!loading&&!showAuth&&!recovery&&<OnboardingOverlay t={t} data={data} persist={persist}/>}
     <Modal open={recovery} onClose={()=>setRecovery(false)} title="🔑 ตั้งรหัสผ่านใหม่" t={t}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:11,color:t.tm}}>กำหนดรหัสผ่านใหม่สำหรับบัญชี <b>{session?.user?.email}</b></div>

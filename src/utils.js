@@ -17,6 +17,128 @@ export const fB=n=>`฿${Math.abs(n).toLocaleString("th-TH",{maximumFractionDigi
 /* Format percent with sign — `+12.3%` / `-5.1%` */
 export const fP=n=>`${n>=0?"+":""}${n.toFixed(1)}%`;
 
+/* ═══ ROUND-UP SAVINGS ═══
+ * Calculate the round-up amount: how much to round X up to the next multiple of N.
+ * Example: roundupAmount(82, 10) = 8 ; roundupAmount(50, 10) = 0 (already round) */
+export const roundupAmount=(x,roundTo)=>{
+  if(!x||x<=0||!roundTo||roundTo<=0)return 0;
+  const rem=x%roundTo;
+  return rem===0?0:roundTo-rem;
+};
+
+/* ═══ SLIP PARSER ═══
+ * Extract amount + date from common Thai bank notification text.
+ * Uses pattern matching on amount keywords + Thai/Eng date formats. */
+export function parseSlip(text){
+  if(!text)return{amount:null,date:null};
+  let amount=null;
+  // Look for keywords near number: "จำนวน X", "ยอด X", "X บาท", "amount X"
+  const amountPatterns=[
+    /(?:จำนวน(?:เงิน)?|ยอด(?:เงิน)?|amount|total)[:\s]*([\d,]+(?:\.\d{1,2})?)/i,
+    /([\d,]+(?:\.\d{1,2})?)\s*(?:บาท|baht|thb)/i,
+    /฿\s*([\d,]+(?:\.\d{1,2})?)/,
+  ];
+  for(const re of amountPatterns){
+    const m=text.match(re);
+    if(m){amount=parseFloat(m[1].replace(/,/g,""));if(amount>0&&amount<10000000)break;}
+  }
+  // Date patterns: "27 เม.ย. 2569" / "27 เม.ย." / "27/04/2569" / "2026-04-27"
+  let date=null;
+  // ISO format
+  let m=text.match(/(20\d{2}|25\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
+  if(m){let y=+m[1];if(y>2500)y-=543;date=`${y}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`}
+  // dd/mm/yyyy
+  if(!date){m=text.match(/(\d{1,2})[/.](\d{1,2})[/.](20\d{2}|25\d{2})/);if(m){let y=+m[3];if(y>2500)y-=543;date=`${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`}}
+  // Thai short month: "27 เม.ย. 2569"
+  if(!date){
+    const thMonths={"ม.ค.":"01","ก.พ.":"02","มี.ค.":"03","เม.ย.":"04","พ.ค.":"05","มิ.ย.":"06","ก.ค.":"07","ส.ค.":"08","ก.ย.":"09","ต.ค.":"10","พ.ย.":"11","ธ.ค.":"12"};
+    m=text.match(/(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(?:(\d{2,4}))?/);
+    if(m){const yr=m[3]?(+m[3]>50?(+m[3]<100?2500+ +m[3]:+m[3]):2000+ +m[3]):new Date().getFullYear()+543;const y=yr>2500?yr-543:yr;date=`${y}-${thMonths[m[2]]}-${m[1].padStart(2,"0")}`;}
+  }
+  return{amount,date};
+}
+
+/* ═══ DAILY INSIGHT ═══
+ * Pick the most relevant rule-based insight for today.
+ * Returns {emoji, text, sub} or null. No AI required — uses local data only. */
+export function generateInsight(data,streak){
+  if(!data)return null;
+  const today=td();
+  const ym=today.slice(0,7);
+  const txns=data.transactions||[];
+  const insights=[];
+
+  // Today not logged yet
+  const todayTxns=txns.filter(t=>t.date===today);
+  if(todayTxns.length===0&&streak?.current>0){
+    insights.push({priority:90,emoji:"⚠️",text:`อย่าลืมบันทึกวันนี้นะ`,sub:`Streak ${streak.current} วันของคุณกำลังจะหายตอนเที่ยงคืน`});
+  }
+
+  // Streak milestone close
+  if(streak?.current>0){
+    const next=[5,10,15,20,25,30].find(m=>m>streak.current);
+    if(next&&next-streak.current<=2){
+      insights.push({priority:80,emoji:"🎁",text:`อีก ${next-streak.current} วันได้กล่องสุ่ม!`,sub:`บันทึกต่อเพื่อปลดล็อกกล่องสุ่ม "ท่านพจน์"`});
+    }
+  }
+
+  // Today vs avg
+  const last30=[];for(let i=1;i<=30;i++)last30.push(addDays(today,-i));
+  const last30Exp=txns.filter(t=>t.type==="expense"&&last30.includes(t.date)).reduce((s,t)=>s+t.amount,0);
+  const avgDaily=last30Exp/30;
+  const todayExp=todayTxns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  if(avgDaily>0&&todayExp>avgDaily*1.3){
+    insights.push({priority:70,emoji:"📈",text:`วันนี้ใช้สูงกว่าเฉลี่ย`,sub:`฿${Math.round(todayExp).toLocaleString()} (เฉลี่ย ฿${Math.round(avgDaily).toLocaleString()}/วัน)`});
+  }
+  if(avgDaily>0&&todayExp>0&&todayExp<avgDaily*0.7){
+    insights.push({priority:50,emoji:"💚",text:`วันนี้ใช้น้อยกว่าเฉลี่ย — ดีมาก!`,sub:`฿${Math.round(todayExp).toLocaleString()} (เฉลี่ย ฿${Math.round(avgDaily).toLocaleString()}/วัน)`});
+  }
+
+  // This month vs last month
+  const lastYm=(()=>{const d=new Date(today+"T00:00:00");d.setMonth(d.getMonth()-1);return d.toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"}).slice(0,7)})();
+  const thisMonthExp=txns.filter(t=>t.type==="expense"&&t.date.startsWith(ym)).reduce((s,t)=>s+t.amount,0);
+  const lastMonthExp=txns.filter(t=>t.type==="expense"&&t.date.startsWith(lastYm)).reduce((s,t)=>s+t.amount,0);
+  if(lastMonthExp>0&&thisMonthExp>0){
+    const diff=((thisMonthExp-lastMonthExp)/lastMonthExp)*100;
+    if(Math.abs(diff)>=15){
+      insights.push({priority:60,emoji:diff>0?"⚠️":"✨",text:`เดือนนี้ใช้${diff>0?"มากกว่า":"น้อยกว่า"}เดือนก่อน ${Math.abs(diff).toFixed(0)}%`,sub:`฿${Math.round(thisMonthExp).toLocaleString()} vs ฿${Math.round(lastMonthExp).toLocaleString()}`});
+    }
+  }
+
+  // Goal close to completion
+  const closestGoal=(data.goals||[]).map(g=>({...g,pct:g.target>0?(g.saved/g.target)*100:0})).filter(g=>g.pct>=80&&g.pct<100).sort((a,b)=>b.pct-a.pct)[0];
+  if(closestGoal){
+    insights.push({priority:75,emoji:"🎯",text:`เป้าหมาย "${closestGoal.name}" ใกล้สำเร็จแล้ว!`,sub:`เหลืออีก ฿${Math.round(closestGoal.target-closestGoal.saved).toLocaleString()} (${Math.round(closestGoal.pct)}%)`});
+  }
+
+  // Subscription due today
+  const today2=new Date(today+"T00:00:00");
+  const dueToday=(data.recurring||[]).filter(r=>r.active&&r.type==="expense"&&Math.min(+r.dayOfMonth||1,28)===today2.getDate());
+  if(dueToday.length>0){
+    insights.push({priority:65,emoji:"⏰",text:`Subscription ตัดวันนี้`,sub:dueToday.map(r=>`${r.name} ฿${(+r.amount).toLocaleString()}`).join(" · ")});
+  }
+
+  // Big expense yesterday
+  const yesterday=addDays(today,-1);
+  const yExp=txns.filter(t=>t.type==="expense"&&t.date===yesterday).reduce((s,t)=>s+t.amount,0);
+  if(yExp>avgDaily*2&&avgDaily>100){
+    insights.push({priority:40,emoji:"💸",text:`เมื่อวานใช้เยอะ`,sub:`฿${Math.round(yExp).toLocaleString()} — มีงาน special?`});
+  }
+
+  // First-time / Empty state
+  if(txns.length===0){
+    insights.push({priority:100,emoji:"👋",text:`ยินดีต้อนรับ!`,sub:`เริ่มบันทึกรายการแรก กด ⊕ ตรงกลางได้เลย`});
+  }
+
+  // No insight applicable → fallback motivational
+  if(insights.length===0){
+    insights.push({priority:10,emoji:"🌟",text:`คุณจัดการการเงินได้ดี`,sub:`รักษานิสัยนี้ไว้ ทุกวันคือก้าวเล็กๆ สู่อิสรภาพการเงิน`});
+  }
+
+  insights.sort((a,b)=>b.priority-a.priority);
+  return insights[0];
+}
+
 /* Today as `YYYY-MM-DD` (timezone-aware: Bangkok = UTC+7) */
 export const td=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
 

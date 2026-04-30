@@ -83,6 +83,7 @@ export const NAV=[
   {k:"dca",l:"คำนวณ DCA",i:"⟳",g:"เครื่องมือ"},
   {k:"retire",l:"วางแผนเกษียณ",i:"☰",g:"เครื่องมือ"},
   {k:"plan",l:"สุขภาพการเงิน",i:"⊞",g:"เครื่องมือ"},
+  {k:"scenario",l:"จำลองอนาคต",i:"🔮",g:"เครื่องมือ"},
   {k:"fund",l:"กองทุนฉุกเฉิน",i:"🛡️",g:"วางแผน"},
   {k:"taxded",l:"ลดหย่อนภาษี",i:"📋",g:"ภาษี"},
   {k:"takehome",l:"เงินเดือนหลังหัก",i:"💼",g:"ภาษี"},
@@ -159,6 +160,8 @@ export const DF={
   settings:{rate:35.5},
   streak:{badges:[],freezeTokens:2,freezeResetMonth:"",reminderDismissed:"",boxesClaimed:[]},
   insights:{weeklyDismissed:[]},
+  roundup:{enabled:false,roundTo:10,goalId:""}, // 🪙 ปัดยอดขึ้นเข้า goal
+  preferences:{focus:[]}, // 🪄 ["expense","invest","saving","tax","debt"]
   taxYear:{
     year:new Date().getFullYear(),
     salary:0, // monthly gross
