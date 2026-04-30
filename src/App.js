@@ -1805,6 +1805,120 @@ function ScenarioPage({t}){
 
 /* ═══ CASH FLOW DETAIL (งบกระแสเงินสดละเอียด ตามแบบมาตรฐานไทย) ═══ */
 /* NOTE: sub-components ต้องอยู่ระดับ module — ถ้าประกาศใน parent จะ unmount ทุกครั้งที่ re-render ทำให้ input เสีย focus */
+/* ═══ CASH FLOW REPORT HTML GENERATOR ═══
+ * Returns full HTML string for Budget or Actual cash-flow report.
+ * Both exports (CFD Budget + TxnPage Actual) use this for unified styling.
+ *
+ * opts: { title, badge:{text,color}, sections:[{key,icon,label,totalLabel,items:[{l,value}],total}], totalIn, net, footerNote, sourceCount? } */
+function generateCFReportHTML(opts){
+  const{title,badge,sections,totalIn,net,footerNote,sourceCount}=opts;
+  const fmt=v=>v?Math.round(v).toLocaleString("th-TH"):"0";
+  const pct=v=>totalIn>0?(v/totalIn*100):0;
+  const totalFixed=sections.find(s=>s.key==="fixed")?.total||0;
+  const totalVar=sections.find(s=>s.key==="variable")?.total||0;
+  const totalSave=sections.find(s=>s.key==="saving")?.total||0;
+  // Hero gradient
+  const heroFrom=net>=0?"#10b981":"#ef4444";
+  const heroTo=net>=0?"#059669":"#dc2626";
+  const netBg=net>=0?"#ecfdf5":"#fef2f2";
+  const netBorder=net>=0?"#10b981":"#ef4444";
+  const netText=net>=0?"#065f46":"#7f1d1d";
+  const sectionHTML=s=>{
+    const rows=s.items.map(it=>{
+      const v=+it.value||0;
+      const isZero=v===0;
+      const pctVal=totalIn>0?pct(v).toFixed(2):"0";
+      return`<tr${isZero?' class="zero"':""}><td>${it.l}</td><td class="num">${fmt(v)}</td><td class="num">${pctVal}</td></tr>`;
+    }).join("");
+    const sectionPct=s.key==="inflow"?"100":(totalIn>0?pct(s.total).toFixed(2):"0");
+    return`<div class="section"><div class="section-head section-${s.key}"><span class="icon">${s.icon}</span><span>${s.label}</span></div><table><thead><tr><th>รายการ</th><th class="num">บาท</th><th class="num pct-col">%</th></tr></thead><tbody>${rows}<tr class="total"><td>${s.totalLabel}</td><td class="num">${fmt(s.total)}</td><td class="num">${sectionPct}</td></tr></tbody></table></div>`;
+  };
+  const printDate=new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"});
+  const printTime=new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+  const inflow=sections.find(s=>s.key==="inflow");
+  const fixed=sections.find(s=>s.key==="fixed");
+  const variable=sections.find(s=>s.key==="variable");
+  const saving=sections.find(s=>s.key==="saving");
+  return`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>${title}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun','Segoe UI',-apple-system,sans-serif;padding:32px 36px;color:#1e293b;font-size:12px;background:#f8fafc;line-height:1.5}
+.container{max-width:820px;margin:0 auto}
+/* Header */
+.doc-header{border-bottom:3px solid #0ea5e9;padding-bottom:14px;margin-bottom:22px}
+.doc-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.doc-title{font-size:24px;font-weight:800;color:#0c4a6e;letter-spacing:-0.3px}
+.doc-badge{display:inline-block;padding:4px 12px;background:${badge.color};color:white;border-radius:14px;font-size:11px;font-weight:600;letter-spacing:0.3px;white-space:nowrap}
+.doc-meta{font-size:11px;color:#64748b;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+.doc-meta b{color:#334155;font-weight:600}
+/* Hero */
+.hero{background:linear-gradient(135deg,${heroFrom},${heroTo});color:#fff;padding:22px 26px;border-radius:14px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 22px ${heroFrom}40}
+.hero-label{font-size:12px;opacity:0.92;font-weight:600;letter-spacing:0.5px}
+.hero-value{font-size:36px;font-weight:800;line-height:1;margin-top:6px;font-variant-numeric:tabular-nums}
+.hero-status{background:rgba(0,0,0,0.22);padding:8px 16px;border-radius:24px;font-size:12px;font-weight:600;white-space:nowrap}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat{background:#fff;padding:12px 14px;border-radius:10px;border:1px solid #e2e8f0}
+.stat-emoji{font-size:18px;line-height:1}
+.stat-label{font-size:10px;color:#64748b;font-weight:600;margin-top:5px}
+.stat-amount{font-size:16px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat-pct{font-size:10px;color:#94a3b8;margin-top:1px;font-variant-numeric:tabular-nums}
+/* Tables */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.col{display:flex;flex-direction:column;gap:14px}
+.section{background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,0.05)}
+.section-head{padding:11px 16px;font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
+.section-head.section-inflow{background:linear-gradient(135deg,#10b981,#059669)}
+.section-head.section-fixed{background:linear-gradient(135deg,#f59e0b,#d97706)}
+.section-head.section-variable{background:linear-gradient(135deg,#ef4444,#dc2626)}
+.section-head.section-saving{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
+.section-head .icon{font-size:16px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:9px 14px;font-size:11.5px;text-align:left}
+thead th{background:#f8fafc;color:#64748b;font-weight:600;font-size:9.5px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:'tnum'}
+.pct-col{width:55px}
+tbody tr:not(:last-child) td{border-bottom:1px solid #f1f5f9}
+tbody tr td{color:#1e293b}
+tbody tr.zero td{color:#94a3b8;opacity:0.6}
+tbody tr.total td{font-weight:700;color:#78350f;background:linear-gradient(180deg,#fef3c7,#fde68a);border-top:2px solid #f59e0b;font-size:12.5px}
+/* Net cash flow */
+.net-bar{background:${netBg};border:2px solid ${netBorder};padding:18px 22px;border-radius:12px;margin-top:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.net-label{font-size:14px;font-weight:700;color:${netText};display:flex;align-items:center;gap:10px}
+.net-pct-inline{font-size:11px;color:${netText};opacity:0.75;font-weight:500}
+.net-value{font-size:26px;font-weight:800;color:${netText};font-variant-numeric:tabular-nums;letter-spacing:-0.3px}
+/* Footer */
+.footer{margin-top:28px;padding:14px 18px;background:#f1f5f9;border-radius:10px;font-size:10.5px;color:#64748b;line-height:1.7}
+.brand{font-weight:700;color:#0ea5e9}
+@media print{body{padding:18px;background:#fff}.container{max-width:100%}.section,.hero{break-inside:avoid;box-shadow:none}.grid{gap:12px}}
+</style></head><body><div class="container">
+  <div class="doc-header">
+    <div class="doc-title-row"><h1 class="doc-title">${title}</h1><span class="doc-badge">${badge.text}</span></div>
+    <div class="doc-meta"><span><b class="brand">WealthHub</b></span><span>พิมพ์เมื่อ <b>${printDate}</b> ${printTime}</span>${sourceCount?`<span>จาก <b>${sourceCount}</b> รายการ</span>`:""}</div>
+  </div>
+  <div class="hero">
+    <div><div class="hero-label">💰 กระแสเงินสดสุทธิ</div><div class="hero-value">${net>=0?"+":"-"}${fmt(Math.abs(net))} ฿</div></div>
+    <div class="hero-status">${net>=0?"✅ เกินดุล":"⚠️ ขาดดุล"}</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-emoji">⬆️</div><div class="stat-label">รายรับรวม</div><div class="stat-amount" style="color:#059669">${fmt(totalIn)}</div><div class="stat-pct">100%</div></div>
+    <div class="stat"><div class="stat-emoji">🏠</div><div class="stat-label">จ่ายคงที่</div><div class="stat-amount" style="color:#d97706">${fmt(totalFixed)}</div><div class="stat-pct">${totalIn>0?pct(totalFixed).toFixed(1):"0"}%</div></div>
+    <div class="stat"><div class="stat-emoji">💸</div><div class="stat-label">จ่ายผันแปร</div><div class="stat-amount" style="color:#dc2626">${fmt(totalVar)}</div><div class="stat-pct">${totalIn>0?pct(totalVar).toFixed(1):"0"}%</div></div>
+    <div class="stat"><div class="stat-emoji">💰</div><div class="stat-label">ออม / ลงทุน</div><div class="stat-amount" style="color:#7c3aed">${fmt(totalSave)}</div><div class="stat-pct">${totalIn>0?pct(totalSave).toFixed(1):"0"}%</div></div>
+  </div>
+  <div class="grid">
+    <div class="col">${inflow?sectionHTML(inflow):""}${fixed?sectionHTML(fixed):""}</div>
+    <div class="col">${variable?sectionHTML(variable):""}${saving?sectionHTML(saving):""}</div>
+  </div>
+  <div class="net-bar">
+    <div class="net-label">${net>=0?"✨":"⚠️"} กระแสเงินสดสุทธิ <span class="net-pct-inline">(${totalIn>0?pct(net).toFixed(2)+"%":"0%"} ของรายรับ)</span></div>
+    <div class="net-value">${net>=0?"+":"-"}${fmt(Math.abs(net))} ฿</div>
+  </div>
+  <div class="footer">${footerNote||""}<div style="margin-top:6px">📱 <span class="brand">WealthHub</span> — แอปการเงินส่วนบุคคลครบในที่เดียว</div></div>
+</div></body></html>`;
+}
+
 function CFRow({item,row,setVal,pct,t,onRename,onDelete}){
   return(<tr style={{borderBottom:`1px solid ${t.cb}`}}>
     <td style={{padding:"6px 10px",fontSize:11,color:t.text}}>
@@ -1858,53 +1972,20 @@ function CashFlowDetailPage({data,persist,t}){
 
   const exportPDF=()=>{
     const title=period==="monthly"?`งบกระแสเงินสด เดือน ${fm(mKey)}`:`งบกระแสเงินสด ปี ${yKey}`;
+    const sections=[
+      {key:"inflow",icon:"⬆️",label:"กระแสเงินสดรับ",totalLabel:"รวมรายรับ",items:inflow.map(it=>({l:it.l,value:+row[it.k]||0})),total:totalIn},
+      {key:"fixed",icon:"🏠",label:"กระแสเงินสดจ่ายคงที่",totalLabel:"รวมคงที่",items:fixed.map(it=>({l:it.l,value:+row[it.k]||0})),total:totalFixed},
+      {key:"variable",icon:"💸",label:"กระแสเงินสดจ่ายผันแปร",totalLabel:"รวมผันแปร",items:variable.map(it=>({l:it.l,value:+row[it.k]||0})),total:totalVar},
+      {key:"saving",icon:"💰",label:"เงินออม / ลงทุน",totalLabel:"รวมออม-ลงทุน",items:saving.map(it=>({l:it.l,value:+row[it.k]||0})),total:totalSave},
+    ];
+    const html=generateCFReportHTML({
+      title,
+      badge:{text:"📋 งบประมาณ (วางแผน)",color:"#3b82f6"},
+      sections,totalIn,net,
+      footerNote:`💡 รายงานนี้สร้างจาก<b>งบประมาณที่คุณตั้งไว้ล่วงหน้า</b> — เพื่อเปรียบเทียบกับธุรกรรมจริง toggle "📈 เปรียบเทียบ" ในหน้านี้`,
+    });
     const w=window.open("","_blank");
-    const mkRows=items=>items.map(it=>{const v=+row[it.k]||0;return`<tr><td>${it.l}</td><td class="num">${fmt(v)}</td><td class="num">${v?pct(v).toFixed(2):"0"}</td></tr>`}).join("");
-    w.document.write(`<html><head><title>${title}</title><style>
-      body{font-family:'Sarabun','Segoe UI',sans-serif;padding:30px;color:#1e293b;font-size:12px}
-      h1{color:#0ea5e9;font-size:18px;margin:0 0 4px}
-      .sub{color:#64748b;font-size:11px;margin-bottom:20px}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-      table{width:100%;border-collapse:collapse;margin-bottom:16px}
-      th,td{padding:6px 10px;border:1px solid #cbd5e1;text-align:left}
-      th{background:#f1f5f9;font-weight:600}
-      .num{text-align:right}
-      .sec{background:#e0f2fe;font-weight:600}
-      .tot{background:#fef3c7;font-weight:600}
-      .net{background:#d1fae5;font-weight:700;font-size:13px}
-      @media print{body{padding:15px}}
-    </style></head><body>
-      <h1>${title}</h1>
-      <div class="sub">WealthHub — พิมพ์เมื่อ ${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</div>
-      <div class="grid">
-        <div>
-          <table>
-            <thead><tr class="sec"><th>กระแสเงินสดรับ</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(inflow)}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody>
-          </table>
-          <table>
-            <thead><tr class="sec"><th>กระแสเงินสดจ่ายคงที่</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(fixed)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody>
-          </table>
-        </div>
-        <div>
-          <table>
-            <thead><tr class="sec"><th>กระแสเงินสดจ่ายผันแปร</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(variable)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody>
-          </table>
-          <table>
-            <thead><tr class="sec"><th>กระแสเงินสดจ่ายเพื่อการออม / การลงทุน</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead>
-            <tbody>${mkRows(saving)}<tr class="tot"><td>รวมกระแสเงินสดจ่ายเพื่อการออม / การลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody>
-          </table>
-          <table>
-            <tbody>
-              <tr class="tot"><td>กระแสเงินสดจ่ายรวม</td><td class="num">${fmt(totalOut)}</td><td class="num">${totalIn>0?pct(totalOut).toFixed(2):"0"}</td></tr>
-              <tr class="net"><td>กระแสเงินสดสุทธิ</td><td class="num">${net>=0?"":"-"}${fmt(Math.abs(net))}</td><td class="num">${totalIn>0?pct(net).toFixed(2):"0"}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+    w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
   };
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2171,15 +2252,23 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
     const totalFixed=sumSec(fixedItems,"fixed");
     const totalVar=sumSec(variableItems,"variable");
     const totalSave=sumSec(savingItems,"saving");
-    const totalOut=totalFixed+totalVar+totalSave;
-    const net=totalIn-totalOut;
-    const fmt=v=>v?Math.round(v).toLocaleString("th-TH"):"0";
-    const pct=v=>totalIn>0?(v/totalIn*100):0;
+    const net=totalIn-(totalFixed+totalVar+totalSave);
     const dateRangeLabel=from&&to?`${from} ถึง ${to}`:"ทั้งหมด";
-    const title=`รายงานกระแสเงินสด (Actual) — ${dateRangeLabel}`;
+    const sections=[
+      {key:"inflow",icon:"⬆️",label:"กระแสเงินสดรับ",totalLabel:"รวมรายรับ",items:inflowItems.map(it=>({l:it.l,value:cf.inflow[it.k]||0})),total:totalIn},
+      {key:"fixed",icon:"🏠",label:"กระแสเงินสดจ่ายคงที่",totalLabel:"รวมคงที่",items:fixedItems.map(it=>({l:it.l,value:cf.fixed[it.k]||0})),total:totalFixed},
+      {key:"variable",icon:"💸",label:"กระแสเงินสดจ่ายผันแปร",totalLabel:"รวมผันแปร",items:variableItems.map(it=>({l:it.l,value:cf.variable[it.k]||0})),total:totalVar},
+      {key:"saving",icon:"💰",label:"เงินออม / ลงทุน",totalLabel:"รวมออม-ลงทุน",items:savingItems.map(it=>({l:it.l,value:cf.saving[it.k]||0})),total:totalSave},
+    ];
+    const html=generateCFReportHTML({
+      title:`งบกระแสเงินสด — ${dateRangeLabel}`,
+      badge:{text:"📊 ที่เกิดขึ้นจริง (Actual)",color:"#10b981"},
+      sections,totalIn,net,
+      sourceCount:filtered.length,
+      footerNote:`💡 รายงานนี้คำนวณจาก<b>ธุรกรรมจริง</b>ในช่วงที่เลือก — เพื่อเปรียบเทียบกับงบที่ตั้งไว้ล่วงหน้า ไปที่หน้า "กระแสเงินสดละเอียด" → toggle "📈 เปรียบเทียบ"`,
+    });
     const w=window.open("","_blank");
-    const mkRows=(items,sec)=>items.map(it=>{const v=cf[sec][it.k]||0;return`<tr><td>${it.l}</td><td class="num">${fmt(v)}</td><td class="num">${v?pct(v).toFixed(2):"0"}</td></tr>`}).join("");
-    w.document.write(`<html><head><title>${title}</title><style>body{font-family:'Sarabun','Segoe UI',sans-serif;padding:30px;color:#1e293b;font-size:12px}h1{color:#0ea5e9;font-size:18px;margin:0 0 4px}.sub{color:#64748b;font-size:11px;margin-bottom:20px}.badge{display:inline-block;padding:2px 8px;background:#10b981;color:#fff;border-radius:10px;font-size:9px;font-weight:600;margin-left:8px;vertical-align:middle}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{padding:6px 10px;border:1px solid #cbd5e1;text-align:left}th{background:#f1f5f9;font-weight:600}.num{text-align:right}.sec{background:#d1fae5;font-weight:600}.tot{background:#fef3c7;font-weight:600}.net{background:${net>=0?"#d1fae5":"#fee2e2"};font-weight:700;font-size:13px}@media print{body{padding:15px}}</style></head><body><h1>${title}<span class="badge">📊 ที่เกิดขึ้นจริง</span></h1><div class="sub">WealthHub — สร้างจาก ${filtered.length} รายการในช่วงที่กรอง · พิมพ์เมื่อ ${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</div><div class="grid"><div><table><thead><tr class="sec"><th>กระแสเงินสดรับ</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(inflowItems,"inflow")}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody></table><table><thead><tr class="sec"><th>กระแสเงินสดจ่ายคงที่</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(fixedItems,"fixed")}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody></table></div><div><table><thead><tr class="sec"><th>กระแสเงินสดจ่ายผันแปร</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(variableItems,"variable")}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody></table><table><thead><tr class="sec"><th>เงินออม / เงินลงทุน</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(savingItems,"saving")}<tr class="tot"><td>รวมเงินออม/ลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody></table><table><tbody><tr class="tot"><td>กระแสเงินสดจ่ายรวม</td><td class="num">${fmt(totalOut)}</td><td class="num">${totalIn>0?pct(totalOut).toFixed(2):"0"}</td></tr><tr class="net"><td>กระแสเงินสดสุทธิ</td><td class="num">${net>=0?"":"-"}${fmt(Math.abs(net))}</td><td class="num">${totalIn>0?pct(net).toFixed(2):"0"}</td></tr></tbody></table></div></div><div style="margin-top:24px;padding:10px 14px;background:#f1f5f9;border-radius:6px;font-size:10px;color:#64748b">💡 รายงานนี้คำนวณจาก<b>ธุรกรรมจริง</b>ในช่วงที่เลือก — เพื่อเปรียบเทียบกับงบที่ตั้งไว้ล่วงหน้า ไปที่หน้า "กระแสเงินสดละเอียด" → toggle "📈 เปรียบเทียบ"</div></body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+    w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
