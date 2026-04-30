@@ -369,11 +369,40 @@ export function extractAmount(text){
     const matches=line.match(/(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g);
     if(!matches)continue;
     const lower=line.toLowerCase();
-    const isTotal=/total|รวม|ทั้งหมด|amount|net|grand|sum|จ่าย|ยอดสุทธิ/.test(lower);
+    const isTotal=/total|รวม|ทั้งหมด|amount|net|grand|sum|ยอดสุทธิ|ยอดเงิน|ยอดรวม|จำนวน(?:เงิน)?(?!เต็ม)/.test(lower);
     const hasCurrency=/฿|baht|บาท|thb/.test(lower);
+    // Year context: line mentions พ.ศ./ค.ศ./ปี/year — likely contains year, not amount
+    const isYearContext=/พ\.?ศ\.?|ค\.?ศ\.?|ปี|year|date|วันที่/i.test(line);
+    // Date pattern in this line — extract candidate years to exclude
+    const dateMatch=line.match(/\d{1,2}[/\-.\s]+(?:ม\.?ค\.?|ก\.?พ\.?|มี\.?ค\.?|เม\.?ย\.?|พ\.?ค\.?|มิ\.?ย\.?|ก\.?ค\.?|ส\.?ค\.?|ก\.?ย\.?|ต\.?ค\.?|พ\.?ย\.?|ธ\.?ค\.?|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2})[/\-.\s]+(\d{2,4})/i);
+    const datePartYear=dateMatch?+dateMatch[1]:null;
+
     matches.forEach(m=>{
       const n=parseFloat(m.replace(/,/g,""));
-      if(n>=10&&n<5000000)candidates.push({value:n,score:(isTotal?100:0)+(hasCurrency?20:0)+Math.log10(n)});
+      if(n<1||n>=5000000)return;
+      const hasDecimal=/\./.test(m);
+      const hasComma=/,/.test(m);
+      const isInt=!hasDecimal;
+      // Exclude obvious year (พ.ศ. 2400-2700, ค.ศ. 2000-2099) when no currency/total context
+      const isThaiYear=isInt&&!hasComma&&n>=2400&&n<=2700;
+      const isWesternYear=isInt&&!hasComma&&n>=2000&&n<=2099;
+      const isYearLike=isThaiYear||isWesternYear;
+      if(isYearLike&&!hasCurrency&&!isTotal)return;
+      if(isYearLike&&isYearContext)return;
+      if(datePartYear&&n===datePartYear)return; // exact match to extracted date year
+      // Exclude time-like (4-digit HHMM-ish under 2400 with no decimal — paranoid skip)
+      // Skipping not done because amounts can be 100-2399
+
+      let score=0;
+      if(isTotal)score+=100;
+      if(hasCurrency)score+=50;
+      if(hasDecimal)score+=40;       // receipts almost always have decimals
+      if(hasComma)score+=15;          // 1,234 format
+      // Penalty: pure 3-4 digit integer with no context (likely year/qty/page#)
+      if(isInt&&!hasComma&&!isTotal&&!hasCurrency&&n>=1000)score-=20;
+      // Light bonus by magnitude (but not dominant)
+      score+=Math.log10(n)*3;
+      candidates.push({value:n,score});
     });
   }
   if(!candidates.length)return null;
