@@ -153,37 +153,47 @@ export function mapTxnToCFD(tx,opts={}){
   if(tx.type==="income"){
     const inflowKey=
       tx.category==="salary"||tx.category==="bonus"?"salary":
-      tx.category==="investment"?"dividend":
+      tx.category==="interest"?"interest":
+      tx.category==="dividend"||tx.category==="investment"?"dividend":
       "otherInc";
     return{section:"inflow",key:inflowKey,alsoSaving:tx.goalId?"save":null};
   }
-  // Expense
-  const ruleId=tx.recurringId;
-  const rule=ruleId?recurringRules.find(r=>r.id===ruleId):null;
-  const ruleName=(rule?.name||tx.note||"").toLowerCase();
-  // Fixed: recurring or known fixed-expense keywords
-  const isFixed=!!rule||/ผ่อน|loan|หนี้|debt|ประกัน|insurance|ประกันสังคม|pvd|สำรองเลี้ยง/i.test(ruleName);
-  if(isFixed){
-    if(/ประกันสังคม|social\s?sec/i.test(ruleName))return{section:"fixed",key:"socSec"};
-    if(/pvd|สำรองเลี้ยง|provident/i.test(ruleName))return{section:"fixed",key:"provFund"};
-    if(/ประกัน(?!สัง)|insurance|life\s?ins/i.test(ruleName))return{section:"fixed",key:"lifeIns"};
-    // Default fixed: debt/loan
-    return{section:"fixed",key:"debtPay"};
-  }
-  // Variable mapping by category
+  // Expense — use category first (explicit user choice), fallback to keyword matching
   const cat=tx.category;
-  const note=(tx.note||"").toLowerCase();
+  // 💰 Saving categories
+  if(cat==="save")return{section:"saving",key:"save"};
+  if(cat==="invest")return{section:"saving",key:"invest"};
+  // 🏠 Fixed categories (explicit)
+  if(cat==="rent")return{section:"fixed",key:"rent"};
+  if(cat==="loan")return{section:"fixed",key:"debtPay"};
+  if(cat==="insurance")return{section:"fixed",key:"lifeIns"};
+  // 💸 Variable categories (explicit)
   if(cat==="food")return{section:"variable",key:"food"};
   if(cat==="transport")return{section:"variable",key:"travel"};
   if(cat==="shopping")return{section:"variable",key:"cloth"};
   if(cat==="entertainment")return{section:"variable",key:"enter"};
   if(cat==="education")return{section:"variable",key:"child"};
+  if(cat==="travel")return{section:"variable",key:"travel"};
+  if(cat==="tax")return{section:"variable",key:"tax"};
+  if(cat==="phone")return{section:"variable",key:"phone"};
   if(cat==="bills"){
+    const note=(tx.note||"").toLowerCase();
     if(/phone|โทร|เบอร์|เน็ต|internet|wifi/i.test(note))return{section:"variable",key:"phone"};
-    if(/ภาษี|tax|รายได้บุคคล/i.test(note))return{section:"variable",key:"tax"};
     return{section:"variable",key:"util"};
   }
   if(cat==="health")return{section:"variable",key:"otherExp"};
+  // Fallback: recurring without explicit category → fixed
+  const ruleId=tx.recurringId;
+  const rule=ruleId?recurringRules.find(r=>r.id===ruleId):null;
+  const ruleName=(rule?.name||tx.note||"").toLowerCase();
+  const isFixed=!!rule||/ผ่อน|loan|หนี้|debt|ประกัน|insurance|ประกันสังคม|pvd|สำรองเลี้ยง|ค่าเช่า|rent/i.test(ruleName);
+  if(isFixed){
+    if(/ค่าเช่า|rent|ห้อง|หอ/i.test(ruleName))return{section:"fixed",key:"rent"};
+    if(/ประกันสังคม|social\s?sec/i.test(ruleName))return{section:"fixed",key:"socSec"};
+    if(/pvd|สำรองเลี้ยง|provident/i.test(ruleName))return{section:"fixed",key:"provFund"};
+    if(/ประกัน(?!สัง)|insurance|life\s?ins/i.test(ruleName))return{section:"fixed",key:"lifeIns"};
+    return{section:"fixed",key:"debtPay"};
+  }
   return{section:"variable",key:"otherExp"};
 }
 
@@ -193,7 +203,7 @@ export function mapTxnToCFD(tx,opts={}){
 export function aggregateActualCF(txns,recurringRules=[]){
   const result={
     inflow:{salary:0,interest:0,dividend:0,otherInc:0},
-    fixed:{debtPay:0,lifeIns:0,socSec:0,provFund:0},
+    fixed:{rent:0,debtPay:0,lifeIns:0,socSec:0,provFund:0},
     variable:{food:0,phone:0,util:0,enter:0,tax:0,travel:0,cloth:0,child:0,otherExp:0},
     saving:{save:0,invest:0},
   };

@@ -14,24 +14,38 @@ export const AT=[
   {v:"other",l:"อื่นๆ",i:"💼"},
 ];
 
-/* Expense categories */
+/* Expense categories
+ * g (group): fixed | variable | saving — เพื่อให้ map กับ Cash Flow Detail ได้ตรง */
 export const EC=[
-  {v:"food",l:"อาหาร",i:"🍜"},
-  {v:"transport",l:"เดินทาง",i:"🚗"},
-  {v:"shopping",l:"ช้อปปิ้ง",i:"🛍️"},
-  {v:"bills",l:"ค่าบิล",i:"💡"},
-  {v:"health",l:"สุขภาพ",i:"💊"},
-  {v:"entertainment",l:"บันเทิง",i:"🎬"},
-  {v:"education",l:"การศึกษา",i:"📚"},
-  {v:"other",l:"อื่นๆ",i:"📦"},
+  // 🏠 รายจ่ายคงที่ (Fixed)
+  {v:"rent",l:"ค่าเช่า/ที่พัก",i:"🏠",g:"fixed"},
+  {v:"loan",l:"ผ่อนหนี้/บัตร",i:"🏦",g:"fixed"},
+  {v:"insurance",l:"เบี้ยประกัน",i:"🛡️",g:"fixed"},
+  // 💸 รายจ่ายผันแปร (Variable)
+  {v:"food",l:"อาหาร",i:"🍜",g:"variable"},
+  {v:"transport",l:"เดินทาง",i:"🚗",g:"variable"},
+  {v:"shopping",l:"ช้อปปิ้ง/เสื้อผ้า",i:"🛍️",g:"variable"},
+  {v:"bills",l:"ค่าน้ำ-ไฟ-แก๊ส",i:"💡",g:"variable"},
+  {v:"phone",l:"ค่าโทรศัพท์/เน็ต",i:"📱",g:"variable"},
+  {v:"health",l:"สุขภาพ",i:"💊",g:"variable"},
+  {v:"entertainment",l:"บันเทิง",i:"🎬",g:"variable"},
+  {v:"education",l:"การศึกษา/บุตร",i:"📚",g:"variable"},
+  {v:"travel",l:"ท่องเที่ยว",i:"✈️",g:"variable"},
+  {v:"tax",l:"ภาษี",i:"💼",g:"variable"},
+  {v:"other",l:"อื่นๆ",i:"📦",g:"variable"},
+  // 💰 ออม / ลงทุน (Saving)
+  {v:"save",l:"ออม",i:"💰",g:"saving"},
+  {v:"invest",l:"ลงทุน",i:"📈",g:"saving"},
 ];
 
 /* Income categories */
 export const IC=[
   {v:"salary",l:"เงินเดือน",i:"💰"},
   {v:"freelance",l:"ฟรีแลนซ์",i:"💻"},
-  {v:"investment",l:"ผลตอบแทนลงทุน",i:"📈"},
   {v:"bonus",l:"โบนัส",i:"🎁"},
+  {v:"interest",l:"ดอกเบี้ยรับ",i:"🏦"},
+  {v:"dividend",l:"เงินปันผล",i:"💹"},
+  {v:"investment",l:"ผลตอบแทนลงทุน",i:"📊"},
   {v:"other",l:"อื่นๆ",i:"📦"},
 ];
 
@@ -43,6 +57,7 @@ export const CFI=[
   {k:"otherInc",l:"รายได้อื่น"},
 ];
 export const CFF=[
+  {k:"rent",l:"ค่าเช่า/ที่พัก"},
   {k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},
   {k:"lifeIns",l:"เบี้ยประกันชีวิต"},
   {k:"socSec",l:"ประกันสังคม"},

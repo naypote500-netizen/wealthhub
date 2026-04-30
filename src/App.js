@@ -514,7 +514,13 @@ function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
       {ocr.err&&<div style={{fontSize:11,color:t.r,padding:"6px 10px",background:`${t.r}10`,borderRadius:8}}>{ocr.err}</div>}
     </>)}
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับ":"💸 รายจ่าย"}</button>))}</div>
-    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
+    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>
+      {f.type==="expense"?(<>
+        <optgroup label="🏠 รายจ่ายคงที่">{cats.filter(c=>c.g==="fixed").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+        <optgroup label="💸 รายจ่ายผันแปร">{cats.filter(c=>c.g==="variable").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+        <optgroup label="💰 ออม / ลงทุน">{cats.filter(c=>c.g==="saving").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+      </>):cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}
+    </Sel>
     {sugCat&&<button type="button" onClick={()=>set("category",suggestion)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",border:`1px dashed ${t.ac}`,borderRadius:8,background:`${t.ac}10`,cursor:"pointer",color:t.ac,fontSize:11,textAlign:"left"}}>💡 น่าจะเป็นหมวด <b>{sugCat.i} {sugCat.l}</b> ใช่ไหม? <span style={{marginLeft:"auto",fontSize:10,color:t.tm}}>คลิกเพื่อเปลี่ยน →</span></button>}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="จำนวนเงิน (฿)" t={t} type="number" inputMode="decimal" value={f.amount} onChange={e=>set("amount",e.target.value)}/><Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></div>
     {/* Quick amount chips — tap to add to current amount */}
@@ -544,7 +550,13 @@ function RecurringForm({initial,onSave,onCancel,t}){
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับประจำ":"💸 รายจ่ายประจำ"}</button>))}</div>
     <Inp label="ชื่อรายการ" t={t} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="เงินเดือน, ค่าเช่า, Netflix"/>
-    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>{cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</Sel>
+    <Sel label="หมวดหมู่" t={t} value={f.category} onChange={e=>set("category",e.target.value)}>
+      {f.type==="expense"?(<>
+        <optgroup label="🏠 รายจ่ายคงที่">{cats.filter(c=>c.g==="fixed").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+        <optgroup label="💸 รายจ่ายผันแปร">{cats.filter(c=>c.g==="variable").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+        <optgroup label="💰 ออม / ลงทุน">{cats.filter(c=>c.g==="saving").map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}</optgroup>
+      </>):cats.map(c=><option key={c.v} value={c.v}>{c.i} {c.l}</option>)}
+    </Sel>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
       <Inp label="จำนวนเงิน (฿)" t={t} type="number" value={f.amount} onChange={e=>set("amount",e.target.value)}/>
       <Inp label="วันที่ของเดือน (1-31)" t={t} type="number" min="1" max="31" value={f.dayOfMonth} onChange={e=>set("dayOfMonth",e.target.value)}/>
@@ -1974,7 +1986,7 @@ function CashFlowDetailPage({data,persist,t}){
 function CompareSection({budget,actual,t}){
   const sections=[
     {key:"inflow",l:"กระแสเงินสดรับ",color:t.g,items:[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}]},
-    {key:"fixed",l:"กระแสเงินสดจ่ายคงที่",color:t.am,items:[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"กองทุนสำรองเลี้ยงชีพ"}]},
+    {key:"fixed",l:"กระแสเงินสดจ่ายคงที่",color:t.am,items:[{k:"rent",l:"ค่าเช่า/ที่พัก"},{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"กองทุนสำรองเลี้ยงชีพ"}]},
     {key:"variable",l:"กระแสเงินสดจ่ายผันแปร",color:t.r,items:[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่านันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าเดินทาง"},{k:"cloth",l:"เสื้อผ้า/ดูแลตัวเอง"},{k:"child",l:"บุตร/การศึกษา"},{k:"otherExp",l:"อื่นๆ"}]},
     {key:"saving",l:"เงินออม / ลงทุน",color:t.ac,items:[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}]},
   ];
@@ -2146,7 +2158,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
     if(!filtered.length){window.alert("ไม่มีรายการให้สร้างรายงาน");return;}
     const cf=aggregateActualCF(filtered,data.recurring||[]);
     const inflowItems=[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
-    const fixedItems=[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
+    const fixedItems=[{k:"rent",l:"ค่าเช่า/ที่พัก"},{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
     const variableItems=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้า/บำรุงรักษาตัวเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร / การศึกษา"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
     const savingItems=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
     const sumSec=(items,sec)=>items.reduce((s,it)=>s+(cf[sec][it.k]||0),0);
