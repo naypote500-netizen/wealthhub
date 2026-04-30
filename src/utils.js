@@ -139,6 +139,76 @@ export function generateInsight(data,streak){
   return insights[0];
 }
 
+/* ═══ TXN → CASH FLOW DETAIL (CFD) MAPPER ═══
+ * Maps a transaction into one of CFD's 4 sections (inflow/fixed/variable/saving).
+ * Income with goalId → also counted as 'saving' (allocated money).
+ *
+ * Section logic:
+ *  - INCOME → inflow (salary/dividend/otherInc by category)
+ *  - EXPENSE w/ recurringId or matching name (loan/insurance/PVD) → FIXED
+ *  - EXPENSE otherwise → VARIABLE (mapped by category)
+ *  - INCOME w/ goalId → also added to saving */
+export function mapTxnToCFD(tx,opts={}){
+  const recurringRules=opts.recurringRules||[];
+  if(tx.type==="income"){
+    const inflowKey=
+      tx.category==="salary"||tx.category==="bonus"?"salary":
+      tx.category==="investment"?"dividend":
+      "otherInc";
+    return{section:"inflow",key:inflowKey,alsoSaving:tx.goalId?"save":null};
+  }
+  // Expense
+  const ruleId=tx.recurringId;
+  const rule=ruleId?recurringRules.find(r=>r.id===ruleId):null;
+  const ruleName=(rule?.name||tx.note||"").toLowerCase();
+  // Fixed: recurring or known fixed-expense keywords
+  const isFixed=!!rule||/ผ่อน|loan|หนี้|debt|ประกัน|insurance|ประกันสังคม|pvd|สำรองเลี้ยง/i.test(ruleName);
+  if(isFixed){
+    if(/ประกันสังคม|social\s?sec/i.test(ruleName))return{section:"fixed",key:"socSec"};
+    if(/pvd|สำรองเลี้ยง|provident/i.test(ruleName))return{section:"fixed",key:"provFund"};
+    if(/ประกัน(?!สัง)|insurance|life\s?ins/i.test(ruleName))return{section:"fixed",key:"lifeIns"};
+    // Default fixed: debt/loan
+    return{section:"fixed",key:"debtPay"};
+  }
+  // Variable mapping by category
+  const cat=tx.category;
+  const note=(tx.note||"").toLowerCase();
+  if(cat==="food")return{section:"variable",key:"food"};
+  if(cat==="transport")return{section:"variable",key:"travel"};
+  if(cat==="shopping")return{section:"variable",key:"cloth"};
+  if(cat==="entertainment")return{section:"variable",key:"enter"};
+  if(cat==="education")return{section:"variable",key:"child"};
+  if(cat==="bills"){
+    if(/phone|โทร|เบอร์|เน็ต|internet|wifi/i.test(note))return{section:"variable",key:"phone"};
+    if(/ภาษี|tax|รายได้บุคคล/i.test(note))return{section:"variable",key:"tax"};
+    return{section:"variable",key:"util"};
+  }
+  if(cat==="health")return{section:"variable",key:"otherExp"};
+  return{section:"variable",key:"otherExp"};
+}
+
+/* Aggregate actual cash flow from txns into the CFD structure.
+ * Returns {inflow:{...}, fixed:{...}, variable:{...}, saving:{...}}
+ * with the same key shape as data.cashFlow.[period].[key] used by CFD page. */
+export function aggregateActualCF(txns,recurringRules=[]){
+  const result={
+    inflow:{salary:0,interest:0,dividend:0,otherInc:0},
+    fixed:{debtPay:0,lifeIns:0,socSec:0,provFund:0},
+    variable:{food:0,phone:0,util:0,enter:0,tax:0,travel:0,cloth:0,child:0,otherExp:0},
+    saving:{save:0,invest:0},
+  };
+  (txns||[]).forEach(tx=>{
+    const m=mapTxnToCFD(tx,{recurringRules});
+    if(m.section&&result[m.section]&&m.key in result[m.section]){
+      result[m.section][m.key]+=(+tx.amount||0);
+    }
+    if(m.alsoSaving&&result.saving[m.alsoSaving]!==undefined){
+      result.saving[m.alsoSaving]+=(+tx.amount||0);
+    }
+  });
+  return result;
+}
+
 /* Today as `YYYY-MM-DD` (timezone-aware: Bangkok = UTC+7) */
 export const td=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
 

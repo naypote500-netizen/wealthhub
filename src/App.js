@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -1811,9 +1811,15 @@ function CashFlowDetailPage({data,persist,t}){
   const[period,setPeriod]=useState("monthly");
   const[mKey,setMKey]=useState(mk(td()));
   const[yKey,setYKey]=useState(td().slice(0,4));
+  const[viewMode,setViewMode]=useState("budget"); // budget | compare
   const key=period==="monthly"?mKey:yKey;
   const store=(data.cashFlow||{})[period]||{};
   const row=store[key]||{};
+  // Compute actual cash flow from real txns for the selected period
+  const actualCF=useMemo(()=>{
+    const txns=(data.transactions||[]).filter(t=>period==="monthly"?t.date.startsWith(mKey):t.date.startsWith(yKey));
+    return aggregateActualCF(txns,data.recurring||[]);
+  },[data.transactions,data.recurring,period,mKey,yKey]);
   const setVal=(k,v)=>{const n=+v||0;persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:{...store,[key]:{...row,[k]:n}}}})};
   const delPeriod=()=>{if(!window.confirm(`ลบข้อมูล ${key}?`))return;const n={...store};delete n[key];persist({...data,cashFlow:{...(data.cashFlow||{monthly:{},yearly:{}}),[period]:n}})};
 
@@ -1900,6 +1906,12 @@ function CashFlowDetailPage({data,persist,t}){
       {periods.includes(key)&&<Btn small danger t={t} onClick={delPeriod}>ลบข้อมูลช่วงนี้</Btn>}
     </div>
 
+    {/* View mode toggle: Budget (input) vs Compare (vs Actual from txns) */}
+    <div style={{display:"flex",gap:6,background:t.bg,borderRadius:10,padding:4,border:`1px solid ${t.cb}`}}>
+      <button onClick={()=>{haptic(5);setViewMode("budget")}} style={{flex:1,padding:"8px 12px",fontSize:12,border:"none",borderRadius:7,cursor:"pointer",background:viewMode==="budget"?t.ac:"transparent",color:viewMode==="budget"?"#fff":t.ts,fontWeight:600}}>📋 งบประมาณ <span style={{fontSize:9,opacity:0.85,fontWeight:400,marginLeft:4}}>(วางแผน)</span></button>
+      <button onClick={()=>{haptic(5);setViewMode("compare")}} style={{flex:1,padding:"8px 12px",fontSize:12,border:"none",borderRadius:7,cursor:"pointer",background:viewMode==="compare"?t.ac:"transparent",color:viewMode==="compare"?"#fff":t.ts,fontWeight:600}}>📈 เปรียบเทียบ <span style={{fontSize:9,opacity:0.85,fontWeight:400,marginLeft:4}}>(vs จริง)</span></button>
+    </div>
+
     {/* Summary */}
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="⬆" label="กระแสเงินสดรับ" value={fB(totalIn)} t={t} color={t.g}/>
@@ -1907,6 +1919,9 @@ function CashFlowDetailPage({data,persist,t}){
       <MC icon="💰" label="กระแสเงินสดสุทธิ" value={`${net>=0?"+":"-"}${fB(net)}`} sub={totalIn>0?`${pct(net).toFixed(2)}% ของรายรับ`:""} t={t} color={net>=0?t.g:t.r}/>
     </div>
 
+    {viewMode==="compare"&&(<CompareSection budget={row} actual={actualCF} t={t}/>)}
+
+    {viewMode==="budget"&&(<>
     {/* Tables - 2 columns */}
     <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:14}}>
       {/* LEFT: รับ + จ่ายคงที่ */}
@@ -1951,6 +1966,107 @@ function CashFlowDetailPage({data,persist,t}){
     </div>
 
     <div style={{fontSize:10,color:t.tm,textAlign:"center"}}>* ข้อมูลบันทึกอัตโนมัติ • คลิกชื่อหัวข้อเพื่อเปลี่ยนชื่อ • ✕ เพื่อลบ • "+ เพิ่มหัวข้อ" เพื่อเพิ่ม • ร้อยละคำนวณจากกระแสเงินสดรับรวม</div>
+    </>)}
+  </div>);
+}
+
+/* CompareSection — Budget vs Actual side-by-side per item */
+function CompareSection({budget,actual,t}){
+  const sections=[
+    {key:"inflow",l:"กระแสเงินสดรับ",color:t.g,items:[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}]},
+    {key:"fixed",l:"กระแสเงินสดจ่ายคงที่",color:t.am,items:[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"กองทุนสำรองเลี้ยงชีพ"}]},
+    {key:"variable",l:"กระแสเงินสดจ่ายผันแปร",color:t.r,items:[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่านันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าเดินทาง"},{k:"cloth",l:"เสื้อผ้า/ดูแลตัวเอง"},{k:"child",l:"บุตร/การศึกษา"},{k:"otherExp",l:"อื่นๆ"}]},
+    {key:"saving",l:"เงินออม / ลงทุน",color:t.ac,items:[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}]},
+  ];
+  const fmt=v=>v?Math.round(v).toLocaleString("th-TH"):"0";
+  // Totals
+  const totals=sections.map(s=>{
+    let bSum=0,aSum=0;
+    s.items.forEach(it=>{bSum+=(+budget[it.k]||0);aSum+=(actual[s.key]?.[it.k]||0)});
+    return{...s,bSum,aSum};
+  });
+  const totalBIn=totals.find(s=>s.key==="inflow").bSum;
+  const totalAIn=totals.find(s=>s.key==="inflow").aSum;
+  const totalBOut=totals.filter(s=>s.key!=="inflow").reduce((s,x)=>s+x.bSum,0);
+  const totalAOut=totals.filter(s=>s.key!=="inflow").reduce((s,x)=>s+x.aSum,0);
+  const bNet=totalBIn-totalBOut;
+  const aNet=totalAIn-totalAOut;
+  // Empty state
+  const totalActual=Object.values(actual).reduce((s,sec)=>s+Object.values(sec).reduce((a,b)=>a+b,0),0);
+  if(totalActual===0)return(<div style={{background:`${t.am}10`,border:`1px solid ${t.am}40`,borderRadius:12,padding:18,textAlign:"center"}}>
+    <div style={{fontSize:36,marginBottom:8}}>📈</div>
+    <div style={{fontSize:13,fontWeight:600,color:t.text,marginBottom:6}}>ยังไม่มีรายการในช่วงนี้</div>
+    <div style={{fontSize:11,color:t.ts,lineHeight:1.5}}>เปรียบเทียบ Budget vs Actual ต้องมีรายการจริงในช่วงเดือน/ปีที่เลือก<br/>กลับไปบันทึกที่หน้า "รายรับ-รายจ่าย" ก่อน</div>
+  </div>);
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Summary banner */}
+    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr 1fr":"1fr 1fr 1fr",gap:8}}>
+      {[
+        {l:"รายรับ",b:totalBIn,a:totalAIn,c:t.g},
+        {l:"รายจ่ายรวม",b:totalBOut,a:totalAOut,c:t.r,inverse:true},
+        {l:"สุทธิ",b:bNet,a:aNet,c:aNet>=0?t.g:t.r},
+      ].map((row,i)=>{const variance=row.a-row.b;const pct=row.b!==0?(variance/Math.abs(row.b)*100):0;const goodVariance=row.inverse?variance<0:variance>0;return(<div key={i} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:10,padding:12}}>
+        <div style={{fontSize:10,color:t.tm,fontWeight:600}}>{row.l}</div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11}}>
+          <span style={{color:t.tm}}>📋 งบ</span>
+          <span style={{fontWeight:600,color:t.text}}>{fmt(row.b)}</span>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+          <span style={{color:t.tm}}>📊 จริง</span>
+          <span style={{fontWeight:600,color:row.c}}>{fmt(row.a)}</span>
+        </div>
+        {row.b!==0&&<div style={{marginTop:6,paddingTop:6,borderTop:`1px dashed ${t.cb}`,fontSize:10,color:goodVariance?t.g:t.r,fontWeight:600,textAlign:"right"}}>{variance>=0?"+":""}{fmt(variance)} ({pct>=0?"+":""}{pct.toFixed(0)}%)</div>}
+      </div>)})}
+    </div>
+
+    {/* Detailed compare per section */}
+    {sections.map(s=>{
+      const items=s.items.filter(it=>(+budget[it.k]||0)>0||(actual[s.key]?.[it.k]||0)>0);
+      if(items.length===0)return null;
+      return(<div key={s.key} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",fontSize:12,fontWeight:700,color:s.color,background:`${s.color}10`,borderBottom:`2px solid ${s.color}30`}}>{s.l}</div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{background:t.thBg}}>
+            <th style={{padding:"6px 10px",textAlign:"left",fontSize:9,color:t.tm,fontWeight:500}}>หัวข้อ</th>
+            <th style={{padding:"6px 8px",textAlign:"right",fontSize:9,color:t.tm,fontWeight:500}}>📋 งบ</th>
+            <th style={{padding:"6px 8px",textAlign:"right",fontSize:9,color:t.tm,fontWeight:500}}>📊 จริง</th>
+            <th style={{padding:"6px 8px",textAlign:"right",fontSize:9,color:t.tm,fontWeight:500}}>ส่วนต่าง</th>
+            <th style={{padding:"6px 8px",textAlign:"right",fontSize:9,color:t.tm,fontWeight:500,width:60}}>สถานะ</th>
+          </tr></thead>
+          <tbody>
+            {items.map(it=>{
+              const b=+budget[it.k]||0;
+              const a=actual[s.key]?.[it.k]||0;
+              const v=a-b;
+              const pct=b!==0?(v/Math.abs(b)*100):(a>0?100:0);
+              // Status: for inflow/saving, more = good. For fixed/variable, less = good
+              const isExpense=s.key==="fixed"||s.key==="variable";
+              const statusEmoji=Math.abs(pct)<5?"✓":isExpense?(v>0?"⚠️":"💚"):(v>0?"💚":"⚠️");
+              const statusColor=Math.abs(pct)<5?t.g:isExpense?(v>0?t.r:t.g):(v>0?t.g:t.r);
+              return(<tr key={it.k} style={{borderBottom:`1px solid ${t.cb}`}}>
+                <td style={{padding:"7px 10px",color:t.text}}>{it.l}</td>
+                <td style={{padding:"7px 8px",textAlign:"right",color:t.tm}}>{fmt(b)}</td>
+                <td style={{padding:"7px 8px",textAlign:"right",color:t.text,fontWeight:500}}>{fmt(a)}</td>
+                <td style={{padding:"7px 8px",textAlign:"right",color:statusColor,fontWeight:600}}>{v>=0?"+":""}{fmt(v)}</td>
+                <td style={{padding:"7px 8px",textAlign:"right"}}><span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:10,fontWeight:600,color:statusColor}}>{statusEmoji} {b!==0?(pct>=0?"+":"")+pct.toFixed(0)+"%":""}</span></td>
+              </tr>);
+            })}
+            <tr style={{background:`${s.color}08`,fontWeight:700}}>
+              <td style={{padding:"8px 10px",color:s.color}}>รวม</td>
+              <td style={{padding:"8px 8px",textAlign:"right",color:s.color}}>{fmt(totals.find(x=>x.key===s.key).bSum)}</td>
+              <td style={{padding:"8px 8px",textAlign:"right",color:s.color}}>{fmt(totals.find(x=>x.key===s.key).aSum)}</td>
+              <td style={{padding:"8px 8px",textAlign:"right",color:s.color}}>{(()=>{const v=totals.find(x=>x.key===s.key).aSum-totals.find(x=>x.key===s.key).bSum;return(v>=0?"+":"")+fmt(v)})()}</td>
+              <td style={{padding:"8px 8px"}}/>
+            </tr>
+          </tbody>
+        </table>
+      </div>);
+    })}
+
+    <div style={{fontSize:10,color:t.tm,padding:"8px 14px",background:t.bg,borderRadius:8,lineHeight:1.5}}>
+      💡 <b>💚 ดี</b> = ทำได้ดีกว่าแผน · <b>⚠️ เกิน</b> = หลุดงบ · <b>✓ ตรง</b> = ใกล้แผน (±5%)<br/>
+      📋 งบ = ตัวเลขที่คุณกรอกไว้ใน "งบประมาณ" • 📊 จริง = คำนวณจากธุรกรรมในเดือน/ปีนี้
+    </div>
   </div>);
 }
 
@@ -2024,6 +2140,30 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+  /* Export Cash Flow Report — actual numbers from filtered txns,
+   * formatted like CashFlowDetailPage (which is for budget/forecast). */
+  const exportCFReport=()=>{
+    if(!filtered.length){window.alert("ไม่มีรายการให้สร้างรายงาน");return;}
+    const cf=aggregateActualCF(filtered,data.recurring||[]);
+    const inflowItems=[{k:"salary",l:"เงินเดือน (รวมโบนัส, ค่าคอม)"},{k:"interest",l:"ดอกเบี้ยรับ"},{k:"dividend",l:"เงินปันผลรับ"},{k:"otherInc",l:"รายได้อื่น"}];
+    const fixedItems=[{k:"debtPay",l:"เงินผ่อนชำระคืนหนี้สิน"},{k:"lifeIns",l:"เบี้ยประกันชีวิต"},{k:"socSec",l:"ประกันสังคม"},{k:"provFund",l:"เงินสะสมกองทุนสำรองเลี้ยงชีพ"}];
+    const variableItems=[{k:"food",l:"ค่าอาหาร"},{k:"phone",l:"ค่าโทรศัพท์"},{k:"util",l:"ค่าสาธารณูปโภค"},{k:"enter",l:"ค่าใช้จ่ายนันทนาการ"},{k:"tax",l:"ภาษี"},{k:"travel",l:"ค่าใช้จ่ายในการเดินทาง"},{k:"cloth",l:"ค่าเสื้อผ้า/บำรุงรักษาตัวเอง"},{k:"child",l:"ค่าใช้จ่ายของบุตร / การศึกษา"},{k:"otherExp",l:"ค่าใช้จ่ายอื่นๆ"}];
+    const savingItems=[{k:"save",l:"เงินออม"},{k:"invest",l:"เงินลงทุน"}];
+    const sumSec=(items,sec)=>items.reduce((s,it)=>s+(cf[sec][it.k]||0),0);
+    const totalIn=sumSec(inflowItems,"inflow");
+    const totalFixed=sumSec(fixedItems,"fixed");
+    const totalVar=sumSec(variableItems,"variable");
+    const totalSave=sumSec(savingItems,"saving");
+    const totalOut=totalFixed+totalVar+totalSave;
+    const net=totalIn-totalOut;
+    const fmt=v=>v?Math.round(v).toLocaleString("th-TH"):"0";
+    const pct=v=>totalIn>0?(v/totalIn*100):0;
+    const dateRangeLabel=from&&to?`${from} ถึง ${to}`:"ทั้งหมด";
+    const title=`รายงานกระแสเงินสด (Actual) — ${dateRangeLabel}`;
+    const w=window.open("","_blank");
+    const mkRows=(items,sec)=>items.map(it=>{const v=cf[sec][it.k]||0;return`<tr><td>${it.l}</td><td class="num">${fmt(v)}</td><td class="num">${v?pct(v).toFixed(2):"0"}</td></tr>`}).join("");
+    w.document.write(`<html><head><title>${title}</title><style>body{font-family:'Sarabun','Segoe UI',sans-serif;padding:30px;color:#1e293b;font-size:12px}h1{color:#0ea5e9;font-size:18px;margin:0 0 4px}.sub{color:#64748b;font-size:11px;margin-bottom:20px}.badge{display:inline-block;padding:2px 8px;background:#10b981;color:#fff;border-radius:10px;font-size:9px;font-weight:600;margin-left:8px;vertical-align:middle}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{padding:6px 10px;border:1px solid #cbd5e1;text-align:left}th{background:#f1f5f9;font-weight:600}.num{text-align:right}.sec{background:#d1fae5;font-weight:600}.tot{background:#fef3c7;font-weight:600}.net{background:${net>=0?"#d1fae5":"#fee2e2"};font-weight:700;font-size:13px}@media print{body{padding:15px}}</style></head><body><h1>${title}<span class="badge">📊 ที่เกิดขึ้นจริง</span></h1><div class="sub">WealthHub — สร้างจาก ${filtered.length} รายการในช่วงที่กรอง · พิมพ์เมื่อ ${new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</div><div class="grid"><div><table><thead><tr class="sec"><th>กระแสเงินสดรับ</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(inflowItems,"inflow")}<tr class="tot"><td>รวมกระแสเงินสดรับ</td><td class="num">${fmt(totalIn)}</td><td class="num">100</td></tr></tbody></table><table><thead><tr class="sec"><th>กระแสเงินสดจ่ายคงที่</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(fixedItems,"fixed")}<tr class="tot"><td>รวมกระแสเงินสดจ่ายคงที่</td><td class="num">${fmt(totalFixed)}</td><td class="num">${totalIn>0?pct(totalFixed).toFixed(2):"0"}</td></tr></tbody></table></div><div><table><thead><tr class="sec"><th>กระแสเงินสดจ่ายผันแปร</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(variableItems,"variable")}<tr class="tot"><td>รวมกระแสเงินสดจ่ายผันแปร</td><td class="num">${fmt(totalVar)}</td><td class="num">${totalIn>0?pct(totalVar).toFixed(2):"0"}</td></tr></tbody></table><table><thead><tr class="sec"><th>เงินออม / เงินลงทุน</th><th class="num">บาท</th><th class="num">ร้อยละ</th></tr></thead><tbody>${mkRows(savingItems,"saving")}<tr class="tot"><td>รวมเงินออม/ลงทุน</td><td class="num">${fmt(totalSave)}</td><td class="num">${totalIn>0?pct(totalSave).toFixed(2):"0"}</td></tr></tbody></table><table><tbody><tr class="tot"><td>กระแสเงินสดจ่ายรวม</td><td class="num">${fmt(totalOut)}</td><td class="num">${totalIn>0?pct(totalOut).toFixed(2):"0"}</td></tr><tr class="net"><td>กระแสเงินสดสุทธิ</td><td class="num">${net>=0?"":"-"}${fmt(Math.abs(net))}</td><td class="num">${totalIn>0?pct(net).toFixed(2):"0"}</td></tr></tbody></table></div></div><div style="margin-top:24px;padding:10px 14px;background:#f1f5f9;border-radius:6px;font-size:10px;color:#64748b">💡 รายงานนี้คำนวณจาก<b>ธุรกรรมจริง</b>ในช่วงที่เลือก — เพื่อเปรียบเทียบกับงบที่ตั้งไว้ล่วงหน้า ไปที่หน้า "กระแสเงินสดละเอียด" → toggle "📈 เปรียบเทียบ"</div></body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+  };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="💵" label="รายรับ" value={fB(stats.incomeThisMonth)} t={t} color={t.g}/>
@@ -2040,7 +2180,8 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
           {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:t.tm,fontSize:13}}>✕</button>}
         </div>
         <button onClick={()=>setShowAdv(s=>!s)} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${showAdv?t.ac:t.cb}`,borderRadius:8,cursor:"pointer",background:showAdv?`${t.ac}15`:"transparent",color:showAdv?t.ac:t.text,fontWeight:500,whiteSpace:"nowrap"}}>{showAdv?"⚙ ปิดตัวกรอง":"⚙ ตัวกรอง"}</button>
-        <button onClick={exportCSV} disabled={!filtered.length} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${t.g}40`,borderRadius:8,cursor:filtered.length?"pointer":"not-allowed",background:filtered.length?`${t.g}15`:"transparent",color:t.g,fontWeight:500,whiteSpace:"nowrap",opacity:filtered.length?1:0.4}} title="ส่งออกเป็น CSV (รายการที่กรองไว้)">📤 Export</button>
+        <button onClick={exportCSV} disabled={!filtered.length} style={{padding:"8px 10px",fontSize:11,border:`1px solid ${t.g}40`,borderRadius:8,cursor:filtered.length?"pointer":"not-allowed",background:filtered.length?`${t.g}15`:"transparent",color:t.g,fontWeight:500,whiteSpace:"nowrap",opacity:filtered.length?1:0.4}} title="ส่งออกเป็น CSV (รายการที่กรองไว้)">📤 CSV</button>
+        <button onClick={exportCFReport} disabled={!filtered.length} style={{padding:"8px 10px",fontSize:11,border:`1px solid ${t.ac}40`,borderRadius:8,cursor:filtered.length?"pointer":"not-allowed",background:filtered.length?`${t.ac}15`:"transparent",color:t.ac,fontWeight:500,whiteSpace:"nowrap",opacity:filtered.length?1:0.4}} title="รายงาน Cash Flow รูปแบบงบกระแสเงินสด — จากรายการจริง">📊 Cash Flow</button>
         <button onClick={()=>{haptic(5);if(selMode)clearSel();else setSelMode(true)}} disabled={!filtered.length&&!selMode} style={{padding:"8px 12px",fontSize:11,border:`1px solid ${selMode?t.r:t.cb}`,borderRadius:8,cursor:"pointer",background:selMode?`${t.r}15`:"transparent",color:selMode?t.r:t.text,fontWeight:500,whiteSpace:"nowrap",opacity:(filtered.length||selMode)?1:0.4}} title="เลือกหลายรายการ">{selMode?"✕ ออก":"☑ เลือก"}</button>
       </div>
 
