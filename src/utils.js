@@ -20,6 +20,11 @@ export const fP=n=>`${n>=0?"+":""}${n.toFixed(1)}%`;
 /* Today as `YYYY-MM-DD` (timezone-aware: Bangkok = UTC+7) */
 export const td=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
 
+/* Convert any Date object to `YYYY-MM-DD` in Bangkok timezone.
+ * Use this anywhere you'd reach for `d.toISOString().slice(0,10)` — that
+ * one gives UTC date and breaks past 17:00 UTC (= midnight BKK). */
+export const tdBkk=d=>(d instanceof Date?d:new Date(d)).toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
+
 /* Add days to a YYYY-MM-DD string */
 export const addDays=(s,n)=>{const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+n);return d.toLocaleDateString("en-CA")};
 

@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -238,7 +238,7 @@ function CashFlowPage({data,stats,t}){
   const totalInc=stats.incomeThisMonth;const totalExp=stats.expenseThisMonth;const netCash=totalInc-totalExp;
 
   // 6-month trend
-  const ms=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}
+  const ms=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(tdBkk(d)))}
   const trend=ms.map(m=>{
     const inc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0);
     const exp=data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0);
@@ -532,7 +532,7 @@ function RecurringForm({initial,onSave,onCancel,t}){
 }
 
 function RecurringPage({data,onAdd,onEdit,onDel,onToggle,onRunNow,onCreateFromCandidate,t}){
-  const list=data.recurring||[];
+  const list=useMemo(()=>data.recurring||[],[data.recurring]);
   const monthlyIn=list.filter(r=>r.active&&r.type==="income").reduce((s,r)=>s+(+r.amount||0),0);
   const monthlyOut=list.filter(r=>r.active&&r.type==="expense").reduce((s,r)=>s+(+r.amount||0),0);
   const[dismissed,setDismissed]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("wh-recur-dismiss")||"[]"))}catch{return new Set()}});
@@ -843,7 +843,7 @@ function EnvelopesPage({data,persist,t}){
   const totalAlloc=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
   const unalloc=monthInc-totalAlloc;
   const setEnv=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
-  const autoAlloc=()=>{if(!window.confirm("จัดสรรอัตโนมัติตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด?\n(จะเขียนทับซองเดิมที่ตั้งไว้)"))return;const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}const totals={};let grand=0;EC.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});if(grand===0){window.alert("ยังไม่มีข้อมูลรายจ่าย 3 เดือนย้อนหลังพอที่จะจัดสรรอัตโนมัติ");return}const newB={...budgets};EC.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});persist({...data,budgets:newB})};
+  const autoAlloc=()=>{if(!window.confirm("จัดสรรอัตโนมัติตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด?\n(จะเขียนทับซองเดิมที่ตั้งไว้)"))return;const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(tdBkk(d)))}const totals={};let grand=0;EC.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});if(grand===0){window.alert("ยังไม่มีข้อมูลรายจ่าย 3 เดือนย้อนหลังพอที่จะจัดสรรอัตโนมัติ");return}const newB={...budgets};EC.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});persist({...data,budgets:newB})};
   const reset=()=>{if(window.confirm("ล้างซองทั้งหมด?")){const newB={};EC.forEach(c=>newB[c.v]=0);persist({...data,budgets:newB})}};
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -935,7 +935,7 @@ function AnalyticsPage({data,stats,t}){
     const start=new Date(today);start.setDate(today.getDate()-89);
     while(start.getDay()!==0)start.setDate(start.getDate()-1);
     const cells=[];const cur=new Date(start);
-    while(cur<=today){const k=cur.toISOString().slice(0,10);cells.push({date:k,day:cur.getDay(),amount:dailyExp[k]||0});cur.setDate(cur.getDate()+1)}
+    while(cur<=today){const k=tdBkk(cur);cells.push({date:k,day:cur.getDay(),amount:dailyExp[k]||0});cur.setDate(cur.getDate()+1)}
     const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
     const max=Math.max(1,...cells.map(c=>c.amount));
     return{weeks,max};
@@ -1562,7 +1562,6 @@ function TakeHomePage({data,persist,t,setPage}){
  * "If you lost income today, how long can you survive?"
  * Pulls cash + savings from balanceSheet, average expense from txn history. */
 function EmergencyFundPage({data,t,setPage}){
-  const today=td();
   // Liquid emergency fund = cash + savings (from balanceSheet)
   const liquid=(data.balanceSheet?.cash||0)+(data.balanceSheet?.savings||0);
   // Average monthly expense over last 6 months (excluding partial current month)
@@ -1699,7 +1698,7 @@ function CashFlowDetailPage({data,persist,t}){
   const periods=Object.keys(store).sort().reverse();
   const curYear=new Date().getFullYear();
   const years=[];for(let y=curYear+1;y>=curYear-5;y--)years.push(String(y));
-  const months=[];for(let i=0;i<24;i++){const d=new Date();d.setMonth(d.getMonth()-i);months.push(mk(d.toISOString().slice(0,10)))}
+  const months=[];for(let i=0;i<24;i++){const d=new Date();d.setMonth(d.getMonth()-i);months.push(mk(tdBkk(d)))}
 
   const exportPDF=()=>{
     const title=period==="monthly"?`งบกระแสเงินสด เดือน ${fm(mKey)}`:`งบกระแสเงินสด ปี ${yKey}`;
@@ -2353,7 +2352,7 @@ function NoSpendChallengeView({challenge,members,session,t,onLoad}){
     let streak=0;
     for(let i=0;i<elapsedDays;i++){
       const d=new Date(startD);d.setDate(d.getDate()+(elapsedDays-1-i));
-      const ds=d.toISOString().slice(0,10);
+      const ds=tdBkk(d);
       if(violationDates.has(ds))break;
       streak++;
     }
@@ -2441,7 +2440,7 @@ function ChallengeDetail({id,onBack,t,session,rate,toThb}){
     if(!challenge||!session?.user||!members.length)return;
     const me2=members.find(m=>m.user_id===session.user.id);if(!me2)return;
     const nv=calcNetWorth(me2);
-    const today=new Date().toISOString().slice(0,10);
+    const today=td();
     if(challenge.mode!=="no_spend")supabase.from("challenge_snapshots").upsert({challenge_id:id,user_id:session.user.id,date:today,net_worth:+nv.toFixed(2)},{onConflict:"challenge_id,user_id,date"}).then(()=>{});
     // Check challenge end-date notification
     if(challenge.end_date){
@@ -2927,7 +2926,7 @@ function PullToRefresh({onRefresh,t,children,disabled}){
  * Falls through to plain div on desktop (no touch). */
 function SwipeRow({onEdit,onDelete,children,t,disabled}){
   const[dx,setDx]=useState(0);
-  const[snapped,setSnapped]=useState(0); // -1 = revealed delete, 1 = revealed edit, 0 = closed
+  // Note: dx is the only kinetic state needed; snap state was tracked separately previously
   const startX=useRef(null);
   const startY=useRef(null);
   const moved=useRef(false);
@@ -2957,9 +2956,9 @@ function SwipeRow({onEdit,onDelete,children,t,disabled}){
   const onTouchEnd=()=>{
     if(disabled||startX.current==null){startX.current=null;return}
     if(moved.current){
-      if(dx<=-threshold&&onDelete){haptic(15);onDelete();setDx(0);setSnapped(0)}
-      else if(dx>=threshold&&onEdit){haptic(10);onEdit();setDx(0);setSnapped(0)}
-      else{setDx(0);setSnapped(0)}
+      if(dx<=-threshold&&onDelete){haptic(15);onDelete();setDx(0)}
+      else if(dx>=threshold&&onEdit){haptic(10);onEdit();setDx(0)}
+      else{setDx(0)}
     }
     startX.current=null;moved.current=false;
   };
@@ -3037,51 +3036,6 @@ function QuickAddSheet({open,onClose,data,t,onQuickAdd,onOpenFull}){
         @keyframes qaSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}
       `}</style>
     </div>
-  </>);
-}
-
-/* ═══ QUICK ADD FAB ═══ */
-function QuickAddFAB({data,t,onQuickAdd,onOpenFull,disabled}){
-  const[open,setOpen]=useState(false);
-  const templates=useMemo(()=>{
-    const now=Date.now();const days60=60*86400000;
-    const recent=(data?.transactions||[]).filter(tx=>tx.type==="expense"&&(now-new Date(tx.date).getTime())<=days60);
-    const groups={};
-    recent.forEach(tx=>{
-      const bucket=Math.round(tx.amount/10)*10||10;
-      const key=`${tx.category}-${bucket}`;
-      if(!groups[key])groups[key]={count:0,category:tx.category,amount:bucket,note:tx.note||""};
-      groups[key].count++;
-      if(tx.note&&!groups[key].note)groups[key].note=tx.note;
-    });
-    const sorted=Object.values(groups).sort((a,b)=>b.count-a.count).slice(0,5);
-    if(sorted.length<4){
-      const defaults=[{category:"food",amount:60,note:"กาแฟ"},{category:"food",amount:80,note:"ข้าวเที่ยง"},{category:"transport",amount:50,note:"เดินทาง"},{category:"shopping",amount:100,note:"เซเว่น"}];
-      defaults.forEach(d=>{if(sorted.length<4&&!sorted.some(s=>s.category===d.category&&s.amount===d.amount))sorted.push(d)});
-    }
-    return sorted.slice(0,5);
-  },[data?.transactions]);
-  useEffect(()=>{if(disabled&&open)setOpen(false)},[disabled,open]);
-  if(disabled)return null;
-  const cats=EC.reduce((a,c)=>{a[c.v]=c;return a},{});
-  return(<>
-    {open&&<div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:998,backdropFilter:"blur(2px)"}}/>}
-    <div style={{position:"fixed",right:"calc(16px + env(safe-area-inset-right))",bottom:"calc(74px + env(safe-area-inset-bottom))",zIndex:999,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
-      {open&&(<>
-        {templates.map((tpl,i)=>{const c=cats[tpl.category]||cats.other;return(
-          <button key={i} onClick={()=>{onQuickAdd(tpl);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:24,boxShadow:"0 4px 12px rgba(0,0,0,0.18)",cursor:"pointer",color:t.text,fontSize:13,fontWeight:500,animation:`fabIn .22s ease ${i*0.04}s both`,whiteSpace:"nowrap"}}>
-            <span style={{fontSize:16}}>{c.i}</span>
-            <span style={{maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{tpl.note||c.l}</span>
-            <span style={{color:t.r,fontWeight:600}}>{fB(tpl.amount)}</span>
-          </button>
-        )})}
-        <button onClick={()=>{onOpenFull();setOpen(false)}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:24,boxShadow:"0 4px 12px rgba(0,0,0,0.18)",cursor:"pointer",color:t.text,fontSize:13,fontWeight:500,animation:`fabIn .22s ease ${templates.length*0.04}s both`}}>
-          <span style={{fontSize:16}}>📝</span><span>กรอกเอง</span>
-        </button>
-      </>)}
-      <button onClick={()=>setOpen(o=>!o)} aria-label="quick add" style={{width:56,height:56,borderRadius:"50%",background:t.ac,color:"#fff",border:"none",fontSize:28,fontWeight:300,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .22s ease",transform:open?"rotate(45deg)":"rotate(0)",lineHeight:1}}>+</button>
-    </div>
-    <style>{`@keyframes fabIn{from{opacity:0;transform:translateY(8px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
   </>);
 }
 
@@ -4185,7 +4139,7 @@ function WealthHub(){
       setPriceRefresh({loading:false,msg:"",err:"ดึงข้อมูลไม่สำเร็จ: "+e.message});
     }
   };
-  const rate=data?.settings?.rate||35.5;const setRate=r=>persist({...data,settings:{...data.settings,rate:r}});
+  const rate=data?.settings?.rate||35.5;
   const toThb=useCallback((v,cur)=>cur==="USD"?v*rate:v,[rate]);
 
   // Generic delete + undo: snapshot before delete, show toast w/ "ยกเลิก" for 5s
@@ -4321,7 +4275,7 @@ function WealthHub(){
     const claimed=new Set(data.streak?.boxesClaimed||[]);
     const due=BOX_MILESTONES.find(m=>streak.current>=m&&!claimed.has(m));
     if(due)setBoxMilestone(due);
-  },[streak.current,data,boxMilestone]);
+  },[streak,data,boxMilestone]);
 
   const claimMysteryBox=(reward)=>{
     if(!data||!boxMilestone||!reward)return;
@@ -4360,7 +4314,7 @@ function WealthHub(){
     const bsLiabs=(bs.creditCard||0)+(bs.carLoan||0)+(bs.homeLoan||0)+(bs.otherLiab||0);
     const nw=tp+gs+bsAssets-dr-bsLiabs;
     const alloc=data.assets.map((a,i)=>{const v=toThb(a.units*a.currentPrice,a.currency||"THB");const c=toThb(a.units*a.avgCost,a.currency||"THB");return{...a,value:v,cost:c,pl:v-c,pct:tp>0?(v/tp)*100:0,color:PC[i%PC.length]}}).sort((a,b)=>b.value-a.value);
-    const ms=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(d.toISOString().slice(0,10)))}
+    const ms=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(tdBkk(d)))}
     const mt=ms.map(m=>({month:fm(m),income:data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0),expense:data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===m).reduce((s,tx)=>s+tx.amount,0)}));
     const ec={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{ec[tx.category]=(ec[tx.category]||0)+tx.amount});
     const ecd=Object.entries(ec).map(([k,v],i)=>{const cat=EC.find(c=>c.v===k)||EC[7];return{name:cat.l,value:v,color:PC[i%PC.length],icon:cat.i}}).sort((a,b)=>b.value-a.value);
@@ -4370,7 +4324,7 @@ function WealthHub(){
   // Daily net worth snapshot
   useEffect(()=>{
     if(!session?.user||!data||stats.netWorth===undefined)return;
-    const today=new Date().toISOString().slice(0,10);
+    const today=td();
     const key=`nwSnap_${session.user.id}_${today}`;
     if(localStorage.getItem(key))return;
     const realNW=(stats.totalAssets||0)-(stats.totalLiab||0);
@@ -4545,7 +4499,6 @@ function WealthHub(){
     {showAuth&&!session&&(<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflow:"auto"}} onClick={()=>setShowAuth(false)}><div onClick={e=>e.stopPropagation()} style={{position:"relative"}}><button onClick={()=>setShowAuth(false)} style={{position:"absolute",top:8,right:8,zIndex:2,background:"rgba(0,0,0,0.1)",border:"none",width:28,height:28,borderRadius:"50%",fontSize:14,cursor:"pointer",color:t.tm}}>✕</button><AuthPage theme={theme} setTheme={setTheme} t={t}/></div></div>)}
     <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setQuickSheet(true)}/>
     <QuickAddSheet open={quickSheet&&!modal&&!showAuth} onClose={()=>setQuickSheet(false)} data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})}/>
-    <QuickAddFAB data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})} disabled={true /* replaced by BottomTabBar center + button */}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
     {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
     {boxMilestone&&<MysteryBoxModal milestone={boxMilestone} onClaim={claimMysteryBox} t={t}/>}
