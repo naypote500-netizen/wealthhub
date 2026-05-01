@@ -179,6 +179,7 @@ export const DF={
   preferences:{focus:[]}, // 🪄 ["expense","invest","saving","tax","debt"]
   targetAllocation:{}, // 🎯 {stock_th:30, stock_us:20, crypto:10, ...} sum to 100
   assetTrades:[], // 💰 [{id,assetId,type:"buy"|"sell",units,price,currency,date,note}]
+  security:{pinHash:"",autoLockMin:5}, // 🔒 PIN-locked app entry
   taxYear:{
     year:new Date().getFullYear(),
     salary:0, // monthly gross

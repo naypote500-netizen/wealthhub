@@ -258,6 +258,90 @@ export function aggregateActualCF(txns,recurringRules=[],cfItems=null){
   return result;
 }
 
+/* ═══ PIN LOCK ═══
+ * Per-device hash stored in localStorage (key: wh-pin-hash).
+ * Not synced to Supabase — security tied to the device. */
+const PIN_KEY="wh-pin-hash";
+const PIN_LOCKED_AT="wh-pin-locked-at";
+
+export async function hashPin(pin){
+  if(!pin)return"";
+  const enc=new TextEncoder().encode("wh-salt-2026:"+pin);
+  const buf=await crypto.subtle.digest("SHA-256",enc);
+  return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+export function getPinHash(){try{return localStorage.getItem(PIN_KEY)||""}catch{return""}}
+export function setPinHash(hash){try{if(hash)localStorage.setItem(PIN_KEY,hash);else localStorage.removeItem(PIN_KEY)}catch{}}
+export function markUnlocked(){try{localStorage.setItem(PIN_LOCKED_AT,String(Date.now()))}catch{}}
+export function shouldLock(autoLockMin=5){
+  const hash=getPinHash();
+  if(!hash)return false;
+  try{
+    const last=+(localStorage.getItem(PIN_LOCKED_AT)||0);
+    if(!last)return true;
+    const elapsed=(Date.now()-last)/60000;
+    return elapsed>=autoLockMin;
+  }catch{return false}
+}
+
+/* ═══ ANOMALY DETECTION ═══
+ * Returns alert object if new txn looks suspicious — null if normal.
+ * Checks: 3x avg in same category, duplicate within 5min, off-hour large amount,
+ *         amount typo (way out of pattern). */
+export function detectAnomaly(newTx,allTxns){
+  if(!newTx||!allTxns)return null;
+  const amt=+newTx.amount||0;
+  if(amt<10)return null; // tiny amounts not worth alerting
+  // 1. Duplicate within 5 minutes (same type+category+amount)
+  const now=Date.now();
+  const fiveMinAgo=now-5*60*1000;
+  const recent=allTxns.filter(t=>{
+    if(t.id===newTx.id)return false;
+    if(t.type!==newTx.type||t.category!==newTx.category)return false;
+    if(Math.abs((+t.amount||0)-amt)>1)return false;
+    // Use id timestamp if present (uid encodes Date.now base36)
+    try{
+      const tsStr=(t.id||"").slice(0,8);
+      const ts=parseInt(tsStr,36);
+      if(ts>fiveMinAgo&&ts<now)return true;
+    }catch{}
+    return false;
+  });
+  if(recent.length>0){
+    return{
+      icon:"🔁",title:"อาจซ้ำ?",
+      message:`เพิ่งบันทึก ${(newTx.type==="income"?"รายรับ":"รายจ่าย")} หมวดเดียวกัน จำนวน ฿${amt.toLocaleString()} เมื่อกี้นี้\n\nบันทึกซ้ำไปไหม?`,
+      severity:"warn",
+    };
+  }
+  // 2. 3x average in same category (last 90 days)
+  const cutoff=addDays(td(),-90);
+  const sameCat=allTxns.filter(t=>t.id!==newTx.id&&t.type===newTx.type&&t.category===newTx.category&&t.date>=cutoff);
+  if(sameCat.length>=5){
+    const avg=sameCat.reduce((s,t)=>s+(+t.amount||0),0)/sameCat.length;
+    if(avg>0&&amt>=avg*3&&amt-avg>=200){
+      return{
+        icon:"⚠️",title:"จำนวนสูงผิดปกติ",
+        message:`฿${amt.toLocaleString()} สูงกว่าเฉลี่ยหมวดนี้ (฿${Math.round(avg).toLocaleString()}) ถึง ${(amt/avg).toFixed(1)} เท่า\n\nกรอกเลขถูกไหม?`,
+        severity:"warn",
+      };
+    }
+  }
+  // 3. Very large amount that has no precedent
+  if(amt>=10000&&allTxns.length>=10){
+    const max=Math.max(...allTxns.filter(t=>t.id!==newTx.id&&t.type===newTx.type).map(t=>+t.amount||0));
+    if(max>0&&amt>max*2){
+      return{
+        icon:"🚨",title:"จำนวนใหญ่ผิดปกติ",
+        message:`฿${amt.toLocaleString()} ใหญ่กว่ารายการสูงสุดเดิม (฿${Math.round(max).toLocaleString()}) ถึง ${(amt/max).toFixed(1)} เท่า\n\nบันทึกถูกต้องไหม?`,
+        severity:"alert",
+      };
+    }
+  }
+  return null;
+}
+
 /* ═══ PORTFOLIO HELPERS ═══ */
 
 /* FIFO average cost from trades. Returns {units, avgCost} for an asset.

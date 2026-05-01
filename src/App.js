@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF, enrichedCategories, computeAvgCostFromTrades, diversificationScore } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF, enrichedCategories, computeAvgCostFromTrades, diversificationScore, detectAnomaly, hashPin, getPinHash, setPinHash, markUnlocked, shouldLock } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -3761,6 +3761,14 @@ function MobileMenuPage({page,setPage,t}){
  * table), email, theme switcher, logout. Required tables: see SQL doc.
  */
 function ProfilePage({session,t,theme,setTheme,onLogout,data,persist}){
+  const[pinSetupOpen,setPinSetupOpen]=useState(false);
+  const[pinHashState,setPinHashState]=useState(getPinHash());
+  const[yirOpen,setYirOpen]=useState(false);
+  const yirYear=new Date().getFullYear();
+  const removePin=async()=>{
+    const ok=await confirmAsync({icon:"🔓",title:"ลบ PIN ?",message:"แอปจะเปิดได้โดยไม่ต้องใส่ PIN — แน่ใจไหม?",confirmText:"ลบ PIN",danger:true});
+    if(ok){setPinHash("");setPinHashState("");haptic(15)}
+  };
   const[profile,setProfile]=useState({display_name:"",avatar_url:""});
   const[name,setName]=useState("");
   const[saving,setSaving]=useState(false);
@@ -3898,6 +3906,31 @@ function ProfilePage({session,t,theme,setTheme,onLogout,data,persist}){
       </div>
     </div>
 
+    {/* 📅 Year in Review */}
+    <button onClick={()=>{haptic(15);setYirOpen(true)}} style={{padding:"14px 16px",border:"none",borderRadius:12,background:`linear-gradient(135deg, ${t.pp}, ${t.ac})`,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:12,WebkitTapHighlightColor:"transparent",boxShadow:`0 6px 18px ${t.pp}40`}}>
+      <span style={{fontSize:24}}>📅</span>
+      <div style={{flex:1,textAlign:"left"}}>
+        <div>WealthHub Wrapped {yirYear+543}</div>
+        <div style={{fontSize:10,opacity:0.85,fontWeight:500,marginTop:2}}>สรุปปีของคุณแบบ Spotify Wrapped</div>
+      </div>
+      <span>→</span>
+    </button>
+    {yirOpen&&<YearInReview open={true} onClose={()=>setYirOpen(false)} data={data} year={yirYear} t={t}/>}
+
+    {/* 🔒 PIN Lock */}
+    <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:t.text}}>🔒 ล็อกแอปด้วย PIN</div>
+          <div style={{fontSize:10,color:t.tm,marginTop:2}}>{pinHashState?"✅ เปิดใช้แล้ว — ใส่ PIN 4 หลัก, auto-lock 5 นาที":"ปกป้องข้อมูลทรัพย์สินของคุณ"}</div>
+        </div>
+        {pinHashState?<Btn small danger t={t} onClick={removePin}>ลบ PIN</Btn>:<Btn small primary t={t} onClick={()=>setPinSetupOpen(true)}>ตั้ง PIN</Btn>}
+      </div>
+    </div>
+    {pinSetupOpen&&<Modal open={true} onClose={()=>setPinSetupOpen(false)} title="🔒 ตั้ง PIN" t={t}>
+      <PinSetup onClose={()=>{setPinSetupOpen(false);setPinHashState(getPinHash())}} t={t}/>
+    </Modal>}
+
     {/* 🪙 Round-up Savings */}
     {data&&persist&&(()=>{const ru=data.roundup||{enabled:false,roundTo:10,goalId:""};const goals=data.goals||[];const setRu=p=>persist({...data,roundup:{...ru,...p}});const sample=82;const sampleRu=roundupAmount(sample,ru.roundTo||10);return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -3933,6 +3966,266 @@ function ProfilePage({session,t,theme,setTheme,onLogout,data,persist}){
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
       ออกจากระบบ
     </button>
+  </div>);
+}
+
+/* ═══ YEAR IN REVIEW ═══ Spotify Wrapped style annual summary */
+function YearInReview({open,onClose,data,year,t}){
+  const[slide,setSlide]=useState(0);
+  useEffect(()=>{if(open)setSlide(0)},[open]);
+  const stats=useMemo(()=>{
+    if(!data)return null;
+    const yearTxns=(data.transactions||[]).filter(tx=>tx.date.startsWith(String(year)));
+    const expense=yearTxns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+    const income=yearTxns.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+    // Top category
+    const catTotals={};
+    yearTxns.filter(t=>t.type==="expense").forEach(t=>{catTotals[t.category]=(catTotals[t.category]||0)+t.amount});
+    const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
+    const topCatInfo=topCat?EC.find(c=>c.v===topCat[0])||{i:"📦",l:topCat[0]}:null;
+    // Most expensive month
+    const monthTotals={};
+    yearTxns.filter(t=>t.type==="expense").forEach(t=>{const m=t.date.slice(0,7);monthTotals[m]=(monthTotals[m]||0)+t.amount});
+    const peakMonth=Object.entries(monthTotals).sort((a,b)=>b[1]-a[1])[0];
+    // Streak from data.streak
+    const longestStreak=data.streak?.boxesClaimed?.length||0;
+    // Goals
+    const goalsCompleted=(data.goals||[]).filter(g=>(+g.saved||0)>=(+g.target||0)&&(+g.target||0)>0).length;
+    const totalSaved=(data.goals||[]).reduce((s,g)=>s+(+g.saved||0),0);
+    // Achievements
+    const badges=data.streak?.badges?.length||0;
+    // Mystery boxes
+    const boxes=data.streak?.boxesClaimed?.length||0;
+    // Net change (approximate via balanceSheet snapshot stored)
+    const txnCount=yearTxns.length;
+    const dailyAvg=txnCount/365;
+    const biggestTxn=yearTxns.sort((a,b)=>b.amount-a.amount)[0];
+    return{income,expense,net:income-expense,topCatInfo,topCatAmount:topCat?topCat[1]:0,peakMonth,longestStreak,goalsCompleted,totalSaved,badges,boxes,txnCount,dailyAvg,biggestTxn};
+  },[data,year]);
+  if(!open||!stats)return null;
+  const fN=v=>Math.round(v).toLocaleString("th-TH");
+  const slides=[
+    {bg:`linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)`,emoji:"🎉",title:`ปี ${year+543}`,sub:"WealthHub Wrapped",body:<div style={{textAlign:"center"}}><div style={{fontSize:14,marginTop:14,opacity:0.95,lineHeight:1.7}}>มาดูกันว่า ปีนี้คุณ<br/>จัดการการเงินอย่างไร</div></div>},
+    {bg:`linear-gradient(135deg, #f59e0b, #ef4444)`,emoji:"💸",title:"ใช้เงินไป",body:<div style={{textAlign:"center"}}><div style={{fontSize:48,fontWeight:800,letterSpacing:-1}}>฿{fN(stats.expense)}</div><div style={{fontSize:13,marginTop:8,opacity:0.9}}>{stats.txnCount} รายการ · เฉลี่ย ฿{fN(stats.expense/Math.max(1,stats.txnCount))}/ครั้ง</div>{stats.peakMonth&&<div style={{marginTop:16,padding:"8px 14px",background:"rgba(0,0,0,0.2)",borderRadius:20,fontSize:11}}>📈 เดือนใช้เยอะสุด: {fm(stats.peakMonth[0])} (฿{fN(stats.peakMonth[1])})</div>}</div>},
+    {bg:`linear-gradient(135deg, #10b981, #14b8a6)`,emoji:"💰",title:"รายรับรวม",body:<div style={{textAlign:"center"}}><div style={{fontSize:48,fontWeight:800,letterSpacing:-1}}>฿{fN(stats.income)}</div><div style={{fontSize:13,marginTop:8,opacity:0.95}}>{stats.net>=0?`+ ${fN(stats.net)} เก็บได้สุทธิ 🎉`:`- ${fN(Math.abs(stats.net))} ใช้เกินรายรับ ⚠️`}</div></div>},
+    {bg:`linear-gradient(135deg, #f97316, #f59e0b)`,emoji:stats.topCatInfo?.i||"🍜",title:"หมวดยอดฮิต",body:<div style={{textAlign:"center"}}><div style={{fontSize:32,fontWeight:800}}>{stats.topCatInfo?.l||"-"}</div><div style={{fontSize:13,marginTop:6,opacity:0.95}}>฿{fN(stats.topCatAmount)} ตลอดปี</div><div style={{fontSize:11,marginTop:12,opacity:0.85}}>{stats.expense>0?`คิดเป็น ${(stats.topCatAmount/stats.expense*100).toFixed(0)}% ของรายจ่ายทั้งหมด`:""}</div></div>},
+    {bg:`linear-gradient(135deg, #fbbf24, #f59e0b)`,emoji:"🔥",title:"ความสม่ำเสมอ",body:<div style={{textAlign:"center"}}><div style={{fontSize:14,marginBottom:10,opacity:0.9}}>คุณบันทึกต่อเนื่อง</div><div style={{display:"flex",justifyContent:"center",gap:24,marginTop:10}}><div><div style={{fontSize:36,fontWeight:800}}>{stats.boxes}</div><div style={{fontSize:11,opacity:0.85,marginTop:2}}>กล่องสุ่ม</div></div><div><div style={{fontSize:36,fontWeight:800}}>{stats.badges}</div><div style={{fontSize:11,opacity:0.85,marginTop:2}}>Badges</div></div></div></div>},
+    {bg:`linear-gradient(135deg, #3b82f6, #6366f1)`,emoji:"🎯",title:"เป้าหมาย",body:<div style={{textAlign:"center"}}><div style={{fontSize:32,fontWeight:800}}>{stats.goalsCompleted} / {(data.goals||[]).length}</div><div style={{fontSize:13,marginTop:8,opacity:0.95}}>เป้าหมายสำเร็จ</div><div style={{marginTop:14,padding:"8px 14px",background:"rgba(0,0,0,0.2)",borderRadius:20,fontSize:11,display:"inline-block"}}>💰 ออมรวม ฿{fN(stats.totalSaved)}</div></div>},
+    {bg:`linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b)`,emoji:"🌟",title:"ขอบคุณที่ใช้ WealthHub",body:<div style={{textAlign:"center"}}><div style={{fontSize:14,marginTop:8,lineHeight:1.7,opacity:0.95}}>ปีหน้าไปต่อ<br/>กับเป้าหมายใหม่ๆ ด้วยกัน 💪</div><div style={{marginTop:24,fontSize:11,opacity:0.7}}>WealthHub · {year+543}</div></div>},
+  ];
+  const cur=slides[slide];
+  const next=()=>{haptic(8);if(slide<slides.length-1)setSlide(slide+1);else onClose()};
+  const prev=()=>{haptic(5);if(slide>0)setSlide(slide-1)};
+  return(<div style={{position:"fixed",inset:0,zIndex:2700,background:cur.bg,color:"#fff",display:"flex",flexDirection:"column",padding:"calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))",transition:"background 0.6s ease",overflow:"hidden"}}>
+    {/* Progress bars */}
+    <div style={{display:"flex",gap:4,marginBottom:18}}>{slides.map((_,i)=>(<div key={i} style={{flex:1,height:3,background:"rgba(255,255,255,0.3)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",background:"#fff",width:i<slide?"100%":i===slide?"100%":"0%",transition:i===slide?"width .4s":"none"}}/></div>))}</div>
+    {/* Close */}
+    <button onClick={onClose} style={{position:"absolute",top:"calc(20px + env(safe-area-inset-top))",right:14,background:"rgba(0,0,0,0.25)",border:"none",borderRadius:"50%",width:32,height:32,color:"#fff",fontSize:14,cursor:"pointer",zIndex:1}}>✕</button>
+    {/* Content */}
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative"}}>
+      {/* Tap zones */}
+      <div onClick={prev} style={{position:"absolute",left:0,top:0,bottom:0,width:"30%",zIndex:0}}/>
+      <div onClick={next} style={{position:"absolute",right:0,top:0,bottom:0,width:"70%",zIndex:0}}/>
+      <div style={{textAlign:"center",animation:"yrSlideIn .5s ease",zIndex:1,padding:"0 8px"}}>
+        <div style={{fontSize:90,marginBottom:18}}>{cur.emoji}</div>
+        <div style={{fontSize:13,opacity:0.85,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{cur.title}</div>
+        {cur.sub&&<div style={{fontSize:24,fontWeight:800,marginTop:6}}>{cur.sub}</div>}
+        <div style={{marginTop:22}}>{cur.body}</div>
+      </div>
+    </div>
+    {/* Hint */}
+    <div style={{textAlign:"center",fontSize:10,opacity:0.7,marginTop:14}}>{slide<slides.length-1?"แตะที่ขอบขวาเพื่อไปหน้าถัดไป":"🎉 ขอบคุณ — แตะปิด"}</div>
+    <style>{`@keyframes yrSlideIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
+  </div>);
+}
+
+/* ═══ PIN PAD ═══ Reusable 4-digit numeric pad */
+function PinPad({onComplete,t,disabled}){
+  const[pin,setPin]=useState("");
+  const press=d=>{
+    if(disabled)return;
+    haptic(5);
+    if(d==="del"){setPin(p=>p.slice(0,-1));return;}
+    setPin(p=>{
+      const next=p+d;
+      if(next.length===4){setTimeout(()=>{onComplete(next);setPin("")},100);return next;}
+      return next;
+    });
+  };
+  return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:24}}>
+    <div style={{display:"flex",gap:14}}>{[0,1,2,3].map(i=><div key={i} style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${pin.length>i?t.ac:t.cb}`,background:pin.length>i?t.ac:"transparent",transition:"all .15s"}}/>)}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3, 70px)",gap:14}}>
+      {["1","2","3","4","5","6","7","8","9","","0","del"].map((d,i)=>(
+        d===""?<div key={i}/>:
+        <button key={i} onClick={()=>press(d)} disabled={disabled} style={{width:70,height:70,borderRadius:"50%",border:`1px solid ${t.cb}`,background:t.card,color:t.text,fontSize:d==="del"?20:24,fontWeight:500,cursor:disabled?"default":"pointer",WebkitTapHighlightColor:"transparent",opacity:disabled?0.5:1,transition:"transform .1s"}}
+          onTouchStart={e=>{e.currentTarget.style.transform="scale(0.92)"}}
+          onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)"}}
+        >{d==="del"?"⌫":d}</button>
+      ))}
+    </div>
+  </div>);
+}
+
+/* ═══ PIN LOCK SCREEN ═══ Shown when app launches with PIN set */
+function PinLockScreen({onUnlock,t}){
+  const[err,setErr]=useState("");
+  const[busy,setBusy]=useState(false);
+  const tryPin=async(pin)=>{
+    setBusy(true);setErr("");
+    const stored=getPinHash();
+    const h=await hashPin(pin);
+    if(h===stored){haptic(15);markUnlocked();onUnlock()}
+    else{haptic([30,30,30]);setErr("PIN ไม่ถูกต้อง");setBusy(false);setTimeout(()=>setErr(""),1500)}
+  };
+  return(<div style={{position:"fixed",inset:0,zIndex:3000,background:`linear-gradient(180deg, ${t.bg}, ${t.acL})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,paddingTop:"calc(40px + env(safe-area-inset-top))",paddingBottom:"calc(40px + env(safe-area-inset-bottom))"}}>
+    <div style={{fontSize:48,marginBottom:14}}>🔒</div>
+    <div style={{fontSize:18,fontWeight:700,color:t.text,marginBottom:6}}>WealthHub Locked</div>
+    <div style={{fontSize:12,color:t.tm,marginBottom:32}}>ใส่ PIN 4 หลักเพื่อปลดล็อก</div>
+    <PinPad onComplete={tryPin} t={t} disabled={busy}/>
+    {err&&<div style={{marginTop:18,padding:"6px 16px",background:`${t.r}15`,color:t.r,borderRadius:20,fontSize:12,fontWeight:600,animation:"shakeX .4s"}}>{err}</div>}
+    <style>{`@keyframes shakeX{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}`}</style>
+  </div>);
+}
+
+/* ═══ PIN SETUP ═══ Two-step PIN creation in Profile settings */
+function PinSetup({onClose,t}){
+  const[step,setStep]=useState("first"); // first | confirm | success
+  const[firstPin,setFirstPin]=useState("");
+  const[err,setErr]=useState("");
+  const handleFirst=p=>{setFirstPin(p);setStep("confirm")};
+  const handleConfirm=async p=>{
+    if(p===firstPin){
+      const h=await hashPin(p);
+      setPinHash(h);
+      markUnlocked();
+      haptic([30,40,30,40,30]);
+      setStep("success");
+      setTimeout(onClose,1500);
+    }else{
+      haptic([30,30,30]);
+      setErr("PIN ไม่ตรง — เริ่มใหม่");
+      setStep("first");
+      setFirstPin("");
+      setTimeout(()=>setErr(""),2000);
+    }
+  };
+  return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:14,gap:18}}>
+    {step==="success"?<>
+      <div style={{fontSize:60}}>✅</div>
+      <div style={{fontSize:16,fontWeight:700,color:t.g}}>ตั้ง PIN สำเร็จ!</div>
+      <div style={{fontSize:11,color:t.tm,textAlign:"center"}}>ครั้งต่อไปต้องใส่ PIN ก่อนเปิดแอป</div>
+    </>:<>
+      <div style={{fontSize:14,fontWeight:700,color:t.text}}>{step==="first"?"🔒 ตั้ง PIN ใหม่":"🔁 ยืนยัน PIN อีกครั้ง"}</div>
+      <div style={{fontSize:11,color:t.tm,textAlign:"center",lineHeight:1.5}}>{step==="first"?"PIN 4 หลักสำหรับล็อกแอป":"กรอก PIN เดิมเพื่อยืนยัน"}</div>
+      <PinPad onComplete={step==="first"?handleFirst:handleConfirm} t={t}/>
+      {err&&<div style={{padding:"6px 14px",background:`${t.r}15`,color:t.r,borderRadius:20,fontSize:11,fontWeight:600}}>{err}</div>}
+    </>}
+  </div>);
+}
+
+/* ═══ GLOBAL SEARCH (Cmd+K) ═══
+ * Spotlight-style overlay searching pages, txns, assets, goals, debts, recurring.
+ * Keyboard: Cmd/Ctrl+K to open, ↑↓ navigate, Enter select, Esc close. */
+function GlobalSearch({open,onClose,data,setPage,setModal,t}){
+  const[q,setQ]=useState("");
+  const[idx,setIdx]=useState(0);
+  const inputRef=useRef();
+  useEffect(()=>{if(open){setQ("");setIdx(0);setTimeout(()=>inputRef.current?.focus(),50)}},[open]);
+  const results=useMemo(()=>{
+    if(!q.trim())return[];
+    const ql=q.toLowerCase();
+    const res=[];
+    // Pages
+    NAV.forEach(n=>{if(n.l.toLowerCase().includes(ql)||n.k.toLowerCase().includes(ql)||n.g.toLowerCase().includes(ql))res.push({type:"page",icon:n.i,label:n.l,sub:`เมนู → ${n.g}`,action:()=>setPage(n.k)})});
+    // Transactions (top 10 matching note or category)
+    const txnMatches=(data?.transactions||[]).filter(tx=>{
+      const cats=tx.type==="income"?IC:EC;
+      const cat=cats.find(c=>c.v===tx.category);
+      const hay=`${tx.note||""} ${cat?.l||""} ${tx.amount}`.toLowerCase();
+      return hay.includes(ql);
+    }).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+    txnMatches.forEach(tx=>{const cats=tx.type==="income"?IC:EC;const cat=cats.find(c=>c.v===tx.category)||{i:"📦",l:tx.category};const isI=tx.type==="income";res.push({type:"txn",icon:cat.i,label:tx.note||cat.l,sub:`${isI?"+":"-"}${fB(tx.amount)} · ${tx.date}`,color:isI?t.g:t.r,action:()=>{setPage("txn");setModal({type:"editTxn",txn:tx})}})});
+    // Assets
+    (data?.assets||[]).filter(a=>a.name.toLowerCase().includes(ql)).slice(0,5).forEach(a=>{const tp=AT.find(at=>at.v===a.type)||AT[7];res.push({type:"asset",icon:tp.i,label:a.name,sub:`${tp.l} · ${a.units} หน่วย`,action:()=>{setPage("portfolio");setModal({type:"assetDetail",asset:a})}})});
+    // Goals
+    (data?.goals||[]).filter(g=>g.name.toLowerCase().includes(ql)).slice(0,5).forEach(g=>{const pct=g.target>0?(g.saved/g.target)*100:0;res.push({type:"goal",icon:g.icon||"🎯",label:g.name,sub:`${fB(g.saved)}/${fB(g.target)} (${Math.round(pct)}%)`,action:()=>setPage("goals")})});
+    // Debts
+    (data?.debts||[]).filter(d=>d.name.toLowerCase().includes(ql)).slice(0,5).forEach(d=>{res.push({type:"debt",icon:d.icon||"🏦",label:d.name,sub:`${d.rate}% · เหลือ ${fB(d.total-d.paid)}`,action:()=>setPage("debts")})});
+    // Recurring
+    (data?.recurring||[]).filter(r=>r.name?.toLowerCase().includes(ql)).slice(0,5).forEach(r=>{res.push({type:"recurring",icon:"↻",label:r.name,sub:`${fB(r.amount)} ทุกวันที่ ${r.dayOfMonth}`,action:()=>setPage("recurring")})});
+    return res.slice(0,30);
+  },[q,data,setPage,setModal,t]);
+  useEffect(()=>{
+    if(!open)return;
+    const onKey=e=>{
+      if(e.key==="Escape"){onClose();return;}
+      if(e.key==="ArrowDown"){e.preventDefault();setIdx(i=>Math.min(results.length-1,i+1))}
+      else if(e.key==="ArrowUp"){e.preventDefault();setIdx(i=>Math.max(0,i-1))}
+      else if(e.key==="Enter"&&results[idx]){e.preventDefault();haptic(10);results[idx].action();onClose()}
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[open,results,idx,onClose]);
+  if(!open)return null;
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:2400,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"60px 16px 16px",backdropFilter:"blur(4px)",animation:"gsFade .15s ease"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderRadius:14,width:"100%",maxWidth:540,boxShadow:"0 16px 50px rgba(0,0,0,0.3)",overflow:"hidden",animation:"gsSlide .2s ease"}}>
+      <div style={{padding:"14px 16px",borderBottom:`1px solid ${t.cb}`,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:18}}>🔍</span>
+        <input ref={inputRef} value={q} onChange={e=>{setQ(e.target.value);setIdx(0)}} placeholder="ค้นหาเมนู, รายการ, หุ้น, เป้าหมาย..." style={{flex:1,padding:"6px 0",border:"none",background:"transparent",color:t.text,fontSize:14,outline:"none"}}/>
+        <kbd style={{fontSize:9,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:4,color:t.tm,fontFamily:"inherit"}}>Esc</kbd>
+      </div>
+      <div style={{maxHeight:"60vh",overflowY:"auto"}}>
+        {!q.trim()?(<div style={{padding:"30px 20px",textAlign:"center",color:t.tm,fontSize:12,lineHeight:1.7}}>
+          <div style={{fontSize:40,marginBottom:10,opacity:0.5}}>🔍</div>
+          <div>ค้นหาทุกอย่าง — เมนู, รายการ, หุ้น, เป้าหมาย</div>
+          <div style={{fontSize:10,marginTop:8,color:t.tm}}>↑↓ เลือก · Enter เปิด · Esc ปิด</div>
+        </div>):results.length===0?(<div style={{padding:"30px 20px",textAlign:"center",color:t.tm,fontSize:12}}>ไม่พบ "{q}"</div>):
+        results.map((r,i)=>(<button key={i} onClick={()=>{haptic(10);r.action();onClose()}} onMouseEnter={()=>setIdx(i)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",width:"100%",border:"none",background:i===idx?`${t.ac}15`:"transparent",cursor:"pointer",textAlign:"left",borderLeft:`3px solid ${i===idx?t.ac:"transparent"}`,WebkitTapHighlightColor:"transparent"}}>
+          <div style={{width:34,height:34,borderRadius:8,background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{r.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:r.color||t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.label}</div>
+            <div style={{fontSize:10,color:t.tm,marginTop:1}}>{r.sub}</div>
+          </div>
+          <span style={{fontSize:9,padding:"2px 8px",background:t.bg,borderRadius:10,color:t.tm,fontWeight:600,letterSpacing:0.3}}>{r.type==="page"?"PAGE":r.type.toUpperCase()}</span>
+        </button>))}
+      </div>
+      <style>{`@keyframes gsFade{from{opacity:0}to{opacity:1}}@keyframes gsSlide{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    </div>
+  </div>);
+}
+
+/* ═══ CUSTOM CONFIRM MODAL ═══
+ * Native-feel themed alternative to window.confirm/alert.
+ * Promise-based — `await confirmAsync(opts)` resolves true/false.
+ * Module-scoped subscriber so any code can call without prop drilling. */
+let _confirmHandler=null;
+function confirmAsync(opts){
+  if(!_confirmHandler){
+    // Fallback to native if modal not mounted
+    return Promise.resolve(window.confirm(typeof opts==="string"?opts:opts.message||opts.title));
+  }
+  return _confirmHandler(typeof opts==="string"?{title:opts}:opts);
+}
+function ConfirmModalHost({t}){
+  const[state,setState]=useState(null);
+  useEffect(()=>{
+    _confirmHandler=opts=>new Promise(resolve=>{setState({...opts,resolve})});
+    return()=>{_confirmHandler=null};
+  },[]);
+  if(!state)return null;
+  const close=(result)=>{state.resolve(result);setState(null)};
+  const danger=state.danger;
+  return(<div onClick={()=>close(false)} style={{position:"fixed",inset:0,zIndex:2500,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(2px)",animation:"cmFade .15s ease"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderRadius:16,padding:"22px 22px 18px",maxWidth:380,width:"100%",boxShadow:"0 12px 40px rgba(0,0,0,0.25)",animation:"cmSlide .2s ease"}}>
+      {state.icon&&<div style={{fontSize:42,textAlign:"center",marginBottom:8}}>{state.icon}</div>}
+      {state.title&&<div style={{fontSize:16,fontWeight:700,color:t.text,marginBottom:state.message?6:14,textAlign:"center"}}>{state.title}</div>}
+      {state.message&&<div style={{fontSize:13,color:t.ts,marginBottom:18,textAlign:"center",whiteSpace:"pre-wrap",lineHeight:1.5}}>{state.message}</div>}
+      <div style={{display:"flex",gap:8}}>
+        {!state.alert&&<button onClick={()=>close(false)} style={{flex:1,padding:"12px 16px",border:`1px solid ${t.cb}`,borderRadius:10,background:"transparent",color:t.text,fontSize:13,fontWeight:600,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>{state.cancelText||"ยกเลิก"}</button>}
+        <button onClick={()=>close(true)} style={{flex:state.alert?undefined:2,width:state.alert?"100%":"auto",padding:"12px 16px",border:"none",borderRadius:10,background:danger?t.r:t.ac,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 12px ${danger?t.r:t.ac}40`,WebkitTapHighlightColor:"transparent"}}>{state.confirmText||"ตกลง"}</button>
+      </div>
+    </div>
+    <style>{`@keyframes cmFade{from{opacity:0}to{opacity:1}}@keyframes cmSlide{from{opacity:0;transform:scale(0.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
   </div>);
 }
 
@@ -4785,7 +5078,21 @@ function BottomTabBar({page,setPage,t,disabled,onAdd}){
 
 /* ═══ MAIN APP ═══ */
 function WealthHub(){
-  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);const[quickSheet,setQuickSheet]=useState(false);const[dashExpanded,setDashExpanded]=useState(()=>{try{return localStorage.getItem("wh-dash-expanded")==="1"}catch{return false}});const toggleDash=()=>{const next=!dashExpanded;setDashExpanded(next);try{localStorage.setItem("wh-dash-expanded",next?"1":"0")}catch{}};
+  const[data,setData]=useState(null);const[loading,setLoading]=useState(true);const[page,setPage]=useState("dashboard");const[modal,setModal]=useState(null);const[theme,setTheme]=useState("light");const[sbOpen,setSbOpen]=useState(false);const[session,setSession]=useState(undefined);const[showAuth,setShowAuth]=useState(false);const[recovery,setRecovery]=useState(false);const[newPw,setNewPw]=useState("");const[newPw2,setNewPw2]=useState("");const[showNewPw,setShowNewPw]=useState(false);const[recErr,setRecErr]=useState("");const[recLoading,setRecLoading]=useState(false);const[challengeDetailId,setChallengeDetailId]=useState(null);const[toast,setToast]=useState(null);const[showConfetti,setShowConfetti]=useState(false);const[boxMilestone,setBoxMilestone]=useState(null);const[quickSheet,setQuickSheet]=useState(false);const[searchOpen,setSearchOpen]=useState(false);const[locked,setLocked]=useState(()=>shouldLock());
+  // PIN auto-lock on visibility change (when user backgrounds app)
+  useEffect(()=>{
+    const onVis=()=>{if(document.hidden)markUnlocked()};
+    const onFocus=()=>{if(getPinHash()&&shouldLock(5))setLocked(true)};
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("focus",onFocus);
+    return()=>{document.removeEventListener("visibilitychange",onVis);window.removeEventListener("focus",onFocus)};
+  },[]);const[dashExpanded,setDashExpanded]=useState(()=>{try{return localStorage.getItem("wh-dash-expanded")==="1"}catch{return false}});const toggleDash=()=>{const next=!dashExpanded;setDashExpanded(next);try{localStorage.setItem("wh-dash-expanded",next?"1":"0")}catch{}};
+  // Cmd+K / Ctrl+K to open search
+  useEffect(()=>{
+    const onKey=e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setSearchOpen(s=>!s)}};
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[]);
   const isMobile=useIsMobile();
   const t=useMemo(()=>({...(theme==="dark"?Dk:theme==="paper"?Paper:theme==="cream"?Cream:theme==="linen"?Linen:L),m:isMobile}),[theme,isMobile]);
 
@@ -4901,7 +5208,17 @@ function WealthHub(){
 
   const addAsset=f=>{haptic(15);persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
   const updateAsset=(id,f)=>{haptic(15);persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
-  const delAsset=id=>{const a=data.assets.find(x=>x.id===id);deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id),assetTrades:(d.assetTrades||[]).filter(tr=>tr.assetId!==id)}))};
+  const delAsset=async id=>{
+    const a=data.assets.find(x=>x.id===id);
+    const tradeCount=(data.assetTrades||[]).filter(tr=>tr.assetId===id).length;
+    const ok=await confirmAsync({
+      icon:"🗑️",title:`ลบ "${a?.name}"?`,
+      message:tradeCount>0?`ประวัติซื้อ-ขาย ${tradeCount} รายการ จะถูกลบด้วย\n(กด ↶ ใน toast เพื่อย้อนกลับได้)`:"การกระทำนี้ย้อนกลับได้ผ่าน toast",
+      confirmText:"🗑️ ลบ",danger:true,
+    });
+    if(!ok)return;
+    deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id),assetTrades:(d.assetTrades||[]).filter(tr=>tr.assetId!==id)}));
+  };
   // 💰 Trade log: add/del + auto-sync asset.units & asset.avgCost from FIFO
   const syncAssetFromTrades=(assetId,nextTrades,currentData)=>{
     const result=computeAvgCostFromTrades(nextTrades.filter(tr=>tr.assetId===assetId));
@@ -4948,9 +5265,18 @@ function WealthHub(){
     }
     return false;
   };
-  const addTxn=f=>{
+  const addTxn=async f=>{
     haptic(15);
     const txn={...f,id:uid(),amount:+f.amount,goalId:f.goalId||undefined};
+    // 🤖 Anomaly check before saving
+    const anomaly=detectAnomaly(txn,data.transactions||[]);
+    if(anomaly){
+      const ok=await confirmAsync({
+        icon:anomaly.icon,title:anomaly.title,message:anomaly.message,
+        confirmText:"✓ ใช่ ถูกต้อง",cancelText:"❌ ลบทิ้ง",
+      });
+      if(!ok){haptic(10);setModal(null);return;}
+    }
     const d2={...data,transactions:[...data.transactions,txn]};
     const dl=goalDelta(f,1);
     let nextGoals=applyGoalDelta(d2.goals,dl);
@@ -5150,7 +5476,10 @@ function WealthHub(){
       {/* Mobile minimal header for menu/profile pages */}
       {hideMobileHeader&&(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,gap:10}}>
         <h1 style={{margin:0,fontSize:20,fontWeight:700,letterSpacing:-0.3}}>{mobileTitle}</h1>
-        <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button onClick={()=>{haptic(5);setSearchOpen(true)}} aria-label="ค้นหา" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${t.cb}`,background:t.card,color:t.text,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>🔍</button>
+          <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
+        </div>
       </div>)}
       {/* Standard header (desktop always; mobile when not on minimal-header pages) */}
       {!hideMobileHeader&&(<div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",marginBottom:16,gap:10,flexWrap:"wrap"}}>
@@ -5159,6 +5488,7 @@ function WealthHub(){
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {!isMobile&&<span style={{fontSize:11,color:t.tm}}>{new Date().toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"})}</span>}
+          <button onClick={()=>{haptic(5);setSearchOpen(true)}} aria-label="ค้นหา (Ctrl+K)" title="ค้นหา (Ctrl+K)" style={{padding:"6px 10px",borderRadius:8,border:`1px solid ${t.cb}`,background:t.card,color:t.tm,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",gap:6}}>🔍 {!isMobile&&<kbd style={{fontSize:9,padding:"1px 5px",border:`1px solid ${t.cb}`,borderRadius:3}}>⌘K</kbd>}</button>
           <NotifBell session={session} t={t} onNavigate={link=>{if(link?.startsWith("challenge:")){setChallengeDetailId(link.slice(10));setPage("challenges")}else if(link)setPage(link)}}/>
           {!session&&<Btn primary t={t} onClick={()=>setShowAuth(true)}>🔐 ลงทะเบียน / เข้าสู่ระบบ</Btn>}
           {!["reports","dca","retire","plan","balance","cashflow","cfdetail","tax","about","challenges","calendar","envelopes","analytics","menu","profile","subs","streak","taxded","takehome","fund","scenario"].includes(page)&&<Btn primary t={t} onClick={()=>{if(page==="portfolio")setModal({type:"addAsset"});else if(page==="txn")setModal({type:"addTxn"});else if(page==="goals")setModal({type:"addGoal"});else if(page==="debts")setModal({type:"addDebt"});else if(page==="recurring")setModal({type:"addRecurring"});else setModal({type:"addTxn"})}}>+ เพิ่มรายการ</Btn>}
@@ -5227,7 +5557,7 @@ function WealthHub(){
           <PortfolioTreemap allocation={stats.allocation} t={t} onAssetClick={a=>setModal({type:"assetDetail",asset:a})}/>
           <DiversificationCard allocation={stats.allocation} t={t}/>
           <TargetAllocationCard data={data} allocation={stats.allocation} persist={persist} t={t}/>
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";const tradeCount=(data.assetTrades||[]).filter(tr=>tr.assetId===a.id).length;return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}{tradeCount>0&&<span title={`${tradeCount} ธุรกรรม`} style={{marginLeft:6,fontSize:9,color:t.ac,background:`${t.ac}15`,padding:"1px 5px",borderRadius:3}}>📜{tradeCount}</span>}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"assetDetail",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.ac}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ac}} title="ประวัติซื้อ-ขาย">📜</button><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?\n(ประวัติซื้อ-ขายของ asset นี้จะถูกลบด้วย)`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>
+          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";const tradeCount=(data.assetTrades||[]).filter(tr=>tr.assetId===a.id).length;return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}{tradeCount>0&&<span title={`${tradeCount} ธุรกรรม`} style={{marginLeft:6,fontSize:9,color:t.ac,background:`${t.ac}15`,padding:"1px 5px",borderRadius:3}}>📜{tradeCount}</span>}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"assetDetail",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.ac}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ac}} title="ประวัติซื้อ-ขาย">📜</button><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>delAsset(a.id)} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>
         </>)}
       </div>)}
 
@@ -5304,6 +5634,9 @@ function WealthHub(){
     <BottomTabBar page={page} setPage={setPage} t={t} disabled={!isMobile||!!modal||showAuth||recovery} onAdd={()=>setQuickSheet(true)}/>
     <QuickAddSheet open={quickSheet&&!modal&&!showAuth} onClose={()=>setQuickSheet(false)} data={data} t={t} onQuickAdd={quickAddTxn} onOpenFull={()=>setModal({type:"addTxn"})}/>
     <Toast toast={toast} onClose={()=>setToast(null)} t={t}/>
+    <ConfirmModalHost t={t}/>
+    <GlobalSearch open={searchOpen} onClose={()=>setSearchOpen(false)} data={data} setPage={setPage} setModal={setModal} t={t}/>
+    {locked&&<PinLockScreen onUnlock={()=>setLocked(false)} t={t}/>}
     {showConfetti&&<Confetti onDone={()=>setShowConfetti(false)}/>}
     {boxMilestone&&<MysteryBoxModal milestone={boxMilestone} onClaim={claimMysteryBox} t={t}/>}
     {isMobile&&!modal&&!showAuth&&!recovery&&<PWAInstallBanner t={t}/>}
