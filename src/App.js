@@ -876,58 +876,116 @@ function CalendarPage({data,t,onAddTxn,setPage}){
 function EnvelopesPage({data,persist,t}){
   const budgets=data.budgets||{};
   const tm=mk(td());
+  // Use enriched categories — includes user CFD items + new groups (fixed/variable/saving)
+  const allCats=useMemo(()=>enrichedCategories("expense",data?.cfItems),[data?.cfItems]);
   const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
   const monthInc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===tm).reduce((s,tx)=>s+tx.amount,0);
-  const totalAlloc=EC.reduce((s,c)=>s+(+budgets[c.v]||0),0);
+  const totalAlloc=allCats.reduce((s,c)=>s+(+budgets[c.v]||0),0);
   const unalloc=monthInc-totalAlloc;
   const setEnv=(k,v)=>persist({...data,budgets:{...budgets,[k]:+v||0}});
-  const autoAlloc=()=>{if(!window.confirm("จัดสรรอัตโนมัติตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด?\n(จะเขียนทับซองเดิมที่ตั้งไว้)"))return;const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(tdBkk(d)))}const totals={};let grand=0;EC.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});if(grand===0){window.alert("ยังไม่มีข้อมูลรายจ่าย 3 เดือนย้อนหลังพอที่จะจัดสรรอัตโนมัติ");return}const newB={...budgets};EC.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});persist({...data,budgets:newB})};
-  const reset=()=>{if(window.confirm("ล้างซองทั้งหมด?")){const newB={};EC.forEach(c=>newB[c.v]=0);persist({...data,budgets:newB})}};
+  const autoAlloc=async()=>{
+    const ok=await confirmAsync({icon:"🤖",title:"จัดสรรอัตโนมัติ?",message:"คำนวณตามสัดส่วนรายจ่ายเฉลี่ย 3 เดือนล่าสุด\n(จะเขียนทับซองเดิม)",confirmText:"จัดสรร"});
+    if(!ok)return;
+    const ms=[];for(let i=0;i<3;i++){const d=new Date();d.setMonth(d.getMonth()-i);ms.push(mk(tdBkk(d)))}
+    const totals={};let grand=0;
+    allCats.forEach(c=>{totals[c.v]=data.transactions.filter(tx=>tx.type==="expense"&&tx.category===c.v&&ms.includes(mk(tx.date))).reduce((s,tx)=>s+tx.amount,0)/3;grand+=totals[c.v]});
+    if(grand===0){await confirmAsync({icon:"⚠️",title:"ข้อมูลไม่พอ",message:"ยังไม่มีรายจ่าย 3 เดือนย้อนหลัง",alert:true,confirmText:"ตกลง"});return}
+    const newB={...budgets};allCats.forEach(c=>{newB[c.v]=Math.round(totals[c.v])});
+    persist({...data,budgets:newB});haptic(15);
+  };
+  const reset=async()=>{
+    const ok=await confirmAsync({icon:"🗑",title:"ล้างซองทั้งหมด?",message:"งบที่ตั้งไว้ทุกซองจะหาย",confirmText:"ล้าง",danger:true});
+    if(ok){const newB={};allCats.forEach(c=>newB[c.v]=0);persist({...data,budgets:newB});haptic(15)}
+  };
+  // Group categories by section
+  const sections=[
+    {key:"fixed",icon:"🏠",label:"รายจ่ายคงที่",color:t.am,desc:"ค่าใช้จ่ายเดือนละเท่าๆ กัน"},
+    {key:"variable",icon:"💸",label:"รายจ่ายผันแปร",color:t.r,desc:"ใช้ตามแต่ละเดือน"},
+    {key:"saving",icon:"💰",label:"ออม / ลงทุน",color:t.g,desc:"เงินที่ตั้งใจเก็บ"},
+  ];
+  // 50/30/20 rule helper: 50% fixed, 30% variable, 20% saving
+  const apply503020=async()=>{
+    if(monthInc<=0){await confirmAsync({icon:"⚠️",title:"ไม่มีรายรับ",message:"ต้องมีรายรับเดือนนี้ก่อน",alert:true,confirmText:"ตกลง"});return}
+    const ok=await confirmAsync({icon:"📐",title:"ใช้กฎ 50/30/20?",message:`จัดสรรรายรับ ฿${monthInc.toLocaleString()} เป็น:\n• คงที่ 50% = ฿${Math.round(monthInc*0.5).toLocaleString()}\n• ผันแปร 30% = ฿${Math.round(monthInc*0.3).toLocaleString()}\n• ออม 20% = ฿${Math.round(monthInc*0.2).toLocaleString()}\n\nกระจายตามจำนวนหมวดในแต่ละกลุ่ม`,confirmText:"ใช้กฎนี้"});
+    if(!ok)return;
+    const newB={...budgets};
+    sections.forEach(s=>{
+      const cats=allCats.filter(c=>c.g===s.key);
+      const pct=s.key==="fixed"?0.5:s.key==="variable"?0.3:0.2;
+      const total=monthInc*pct;
+      const per=cats.length>0?total/cats.length:0;
+      cats.forEach(c=>{newB[c.v]=Math.round(per)});
+    });
+    persist({...data,budgets:newB});haptic(15);
+  };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
       <MC icon="💵" label="รายรับเดือนนี้" value={fB(monthInc)} t={t} color={t.g}/>
       <MC icon="💌" label="จัดสรรเข้าซองรวม" value={fB(totalAlloc)} sub={monthInc>0?`${(totalAlloc/monthInc*100).toFixed(0)}% ของรายรับ`:""} t={t} color={t.ac}/>
       <MC icon="🪙" label={unalloc>=0?"ยังไม่จัดสรร":"จัดสรรเกินรายรับ"} value={fB(Math.abs(unalloc))} t={t} color={unalloc>=0?t.am:t.r}/>
     </div>
-    <div style={{background:`${t.ac}10`,border:`1px solid ${t.ac}40`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <span style={{fontSize:11,color:t.ts,flex:1,minWidth:200}}>💡 <b>แนวคิดซองเงิน</b>: ใส่เงินเข้าซองตามหมวดค่าใช้จ่าย เมื่อซองหมด = หยุดใช้หมวดนั้น เพื่อสร้างวินัยการใช้เงิน</span>
-      <Btn small t={t} onClick={autoAlloc}>🤖 จัดสรรอัตโนมัติ</Btn>
+    <div style={{background:`${t.ac}10`,border:`1px solid ${t.ac}40`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{fontSize:11,color:t.ts,flex:1,minWidth:180}}>💡 <b>ซองเงิน</b>: ใส่เงินตามหมวด — ซองหมด = หยุดใช้</span>
+      <Btn small t={t} onClick={apply503020}>📐 50/30/20</Btn>
+      <Btn small t={t} onClick={autoAlloc}>🤖 อัตโนมัติ</Btn>
       <Btn small t={t} onClick={reset} style={{color:t.r,borderColor:`${t.r}40`}}>🗑 ล้าง</Btn>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-      {EC.map(c=>{
-        const b=+budgets[c.v]||0;const s=spent[c.v]||0;const remain=b-s;const pct=b>0?(s/b*100):0;
-        const status=b===0?"empty":pct>=100?"over":pct>=80?"low":"ok";
-        const col=status==="over"?t.r:status==="low"?t.am:status==="ok"?t.g:t.tm;
-        const fillH=Math.max(0,100-Math.min(pct,100));
-        return(<div key={c.v} style={{background:t.card,border:`2px solid ${b>0?col:t.cb}`,borderRadius:12,padding:14,position:"relative",overflow:"hidden",minHeight:200}}>
-          <div style={{position:"absolute",left:0,right:0,bottom:0,height:`${100-fillH}%`,background:`${col}10`,transition:"height .3s",pointerEvents:"none"}}/>
-          <div style={{position:"relative"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-              <div style={{width:40,height:40,borderRadius:10,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{c.i}</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600}}>{c.l}</div>
-                <div style={{fontSize:10,color:t.tm}}>💌 ซองเงิน</div>
-              </div>
-              {b>0&&<div style={{fontSize:10,fontWeight:700,color:col,padding:"3px 7px",borderRadius:6,background:`${col}20`}}>{status==="over"?"⚠️ เกิน":status==="low"?"⚠ ใกล้หมด":"✓ ปกติ"}</div>}
-            </div>
-            <div style={{fontSize:10,color:t.tm,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>💵 <span>เงินในซอง</span></div>
-            <div style={{position:"relative",marginBottom:10}}>
-              <div style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:26,height:26,borderRadius:8,background:b>0?col:t.cb,color:b>0?"#fff":t.tm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,transition:"all .2s",pointerEvents:"none"}}>฿</div>
-              <input type="number" inputMode="decimal" value={b||""} onChange={e=>setEnv(c.v,e.target.value)} onFocus={e=>{e.target.parentElement.style.boxShadow=`0 0 0 3px ${col}30`;e.target.style.borderColor=col}} onBlur={e=>{e.target.parentElement.style.boxShadow="none";e.target.style.borderColor=t.ibr}} placeholder="0" style={{width:"100%",boxSizing:"border-box",padding:"12px 14px 12px 44px",borderRadius:10,border:`1.5px solid ${t.ibr}`,fontSize:18,background:t.ib,color:t.text,fontWeight:700,letterSpacing:0.3,outline:"none",transition:"border-color .2s,box-shadow .2s",fontFamily:"inherit",display:"block"}}/>
-            </div>
-            {b>0&&<><PB pct={Math.min(pct,100)} color={col} height={10} t={t}/>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginTop:6}}>
-                <span style={{color:t.tm}}>ใช้ไป {fB(s)}</span>
-                <span style={{color:col,fontWeight:600}}>{pct.toFixed(0)}%</span>
-              </div>
-              <div style={{textAlign:"center",fontSize:13,fontWeight:700,marginTop:8,color:col}}>
-                {pct>=100?`⚠️ เกินซอง ${fB(s-b)}`:`💰 เหลือ ${fB(remain)}`}
-              </div></>}
+    {sections.map(sec=>{
+      const sectionCats=allCats.filter(c=>c.g===sec.key);
+      if(sectionCats.length===0)return null;
+      const sectionAlloc=sectionCats.reduce((s,c)=>s+(+budgets[c.v]||0),0);
+      const sectionSpent=sectionCats.reduce((s,c)=>s+(spent[c.v]||0),0);
+      const sectionPct=sectionAlloc>0?(sectionSpent/sectionAlloc*100):0;
+      return(<div key={sec.key} style={{background:t.card,border:`1px solid ${sec.color}30`,borderRadius:14,overflow:"hidden"}}>
+        {/* Section header */}
+        <div style={{padding:"12px 14px",background:`linear-gradient(135deg, ${sec.color}18, ${sec.color}05)`,borderBottom:`1px solid ${sec.color}25`,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:24}}>{sec.icon}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:sec.color}}>{sec.label}</div>
+            <div style={{fontSize:9,color:t.tm}}>{sec.desc} · {sectionCats.length} หมวด</div>
           </div>
-        </div>);
-      })}
-    </div>
+          {sectionAlloc>0&&(<div style={{textAlign:"right"}}>
+            <div style={{fontSize:13,fontWeight:700,color:sec.color}}>{fB(sectionAlloc)}</div>
+            <div style={{fontSize:9,color:t.tm}}>ใช้ไป {fB(sectionSpent)} ({sectionPct.toFixed(0)}%)</div>
+          </div>)}
+        </div>
+        {/* Envelopes grid */}
+        <div style={{padding:12,display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+          {sectionCats.map(c=>{
+            const b=+budgets[c.v]||0;const s=spent[c.v]||0;const remain=b-s;const pct=b>0?(s/b*100):0;
+            const status=b===0?"empty":pct>=100?"over":pct>=80?"low":"ok";
+            const col=status==="over"?t.r:status==="low"?t.am:status==="ok"?t.g:t.tm;
+            const fillH=Math.max(0,100-Math.min(pct,100));
+            return(<div key={c.v} style={{background:t.bg,border:`2px solid ${b>0?col:t.cb}`,borderRadius:10,padding:12,position:"relative",overflow:"hidden",minHeight:170}}>
+              <div style={{position:"absolute",left:0,right:0,bottom:0,height:`${100-fillH}%`,background:`${col}10`,transition:"height .3s",pointerEvents:"none"}}/>
+              <div style={{position:"relative"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{c.i}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.l}</div>
+                  </div>
+                  {b>0&&<div style={{fontSize:9,fontWeight:700,color:col,padding:"2px 6px",borderRadius:5,background:`${col}20`,whiteSpace:"nowrap"}}>{status==="over"?"⚠️ เกิน":status==="low"?"⚠ ใกล้หมด":"✓"}</div>}
+                </div>
+                <div style={{position:"relative",marginBottom:8}}>
+                  <div style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",width:22,height:22,borderRadius:6,background:b>0?col:t.cb,color:b>0?"#fff":t.tm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,pointerEvents:"none"}}>฿</div>
+                  <input type="number" inputMode="decimal" value={b||""} onChange={e=>setEnv(c.v,e.target.value)} placeholder="0" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px 10px 38px",borderRadius:8,border:`1.5px solid ${t.ibr}`,fontSize:16,background:t.ib,color:t.text,fontWeight:700,outline:"none",fontFamily:"inherit",display:"block"}}/>
+                </div>
+                {b>0&&<>
+                  <PB pct={Math.min(pct,100)} color={col} height={6} t={t}/>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:9,marginTop:4}}>
+                    <span style={{color:t.tm}}>ใช้ {fB(s)}</span>
+                    <span style={{color:col,fontWeight:600}}>{pct.toFixed(0)}%</span>
+                  </div>
+                  <div style={{textAlign:"center",fontSize:11,fontWeight:700,marginTop:5,color:col}}>
+                    {pct>=100?`⚠️ เกิน ${fB(s-b)}`:`💰 เหลือ ${fB(remain)}`}
+                  </div>
+                </>}
+              </div>
+            </div>);
+          })}
+        </div>
+      </div>);
+    })}
   </div>);
 }
 
