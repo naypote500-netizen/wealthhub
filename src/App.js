@@ -446,7 +446,7 @@ function AssetForm({initial,onSave,onCancel,t,rate}){const[f,set]=useF(initial||
 
 function TxnForm({onSave,onCancel,t,initialDate,initialType,initial,data}){
   const[f,set]=useF(initial?{type:initial.type,category:initial.category,amount:String(initial.amount),date:initial.date,note:initial.note||"",goalId:initial.goalId||""}:{type:initialType||"expense",category:initialType==="income"?"salary":"food",amount:"",date:initialDate||td(),note:"",goalId:""});
-  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems),[f.type,data?.cfItems]);
+  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems,data?.categoryEmojis),[f.type,data?.cfItems,data?.categoryEmojis]);
   const ok=+f.amount>0;
   const goals=(data?.goals||[]).filter(g=>(g.saved||0)<(g.target||0));
   const ocrFileRef=useRef();
@@ -547,7 +547,7 @@ function DebtForm({initial,onSave,onCancel,t}){const[f,set]=useF(initial||{name:
 /* ═══ RECURRING FORM & PAGE ═══ */
 function RecurringForm({initial,onSave,onCancel,t,data}){
   const[f,set]=useF(initial||{name:"",type:"expense",category:"food",amount:"",dayOfMonth:"1",active:true});
-  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems),[f.type,data?.cfItems]);
+  const cats=useMemo(()=>enrichedCategories(f.type,data?.cfItems,data?.categoryEmojis),[f.type,data?.cfItems,data?.categoryEmojis]);
   const ok=f.name&&+f.amount>0&&+f.dayOfMonth>=1&&+f.dayOfMonth<=31;
   return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",gap:6}}>{["income","expense"].map(tp=>(<button key={tp} onClick={()=>{set("type",tp);set("category",tp==="income"?"salary":"food")}} style={{flex:1,padding:8,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,background:f.type===tp?(tp==="income"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="income"?"💵 รายรับประจำ":"💸 รายจ่ายประจำ"}</button>))}</div>
@@ -849,7 +849,7 @@ function CalendarPage({data,t,onAddTxn,setPage}){
       </div>
       {selData.txns.length===0?<div style={{textAlign:"center",color:t.tm,fontSize:11,padding:20}}>ไม่มีรายการในวันนี้ <button onClick={()=>{onAddTxn&&onAddTxn(selDay)}} style={{background:"none",border:"none",color:t.ac,cursor:"pointer",fontSize:11,marginLeft:4,textDecoration:"underline"}}>+ เพิ่ม</button></div>:
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {selData.txns.map(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
+          {selData.txns.map(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems,data?.categoryEmojis);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];return(<div key={tx.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:t.bg,border:`1px solid ${t.cb}`}}>
             <span style={{fontSize:18}}>{cat.i}</span>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,fontWeight:500}}>{tx.note||cat.l}</div>
@@ -873,11 +873,59 @@ function CalendarPage({data,t,onAddTxn,setPage}){
   </div>);
 }
 
+/* ═══ EMOJI PICKER ═══ Small popover for selecting category emoji */
+function EmojiPicker({current,defaultEmoji,onSelect,onReset,onClose,t}){
+  const presets=["🍜","🍕","🍔","🍣","🥗","🍱","☕","🍺","🥤","🍰",
+    "🚗","🚌","🚕","✈️","🚲","⛽","🛺",
+    "🏠","🏡","🏢","🏪","🏬","🏨",
+    "👕","👔","👗","👜","👟","💄",
+    "🛍️","🛒","🎁","📦",
+    "💊","🏥","🩺","💉",
+    "🎬","🎵","🎮","🎰","🎯",
+    "📚","🎓","📝","✏️","📖",
+    "🏝️","🗺️","🏔️","⛺","🌋",
+    "💰","💵","💎","💳","🏦","📈","📊","🪙",
+    "💡","💧","🛁","🌡️","🔌",
+    "📱","💻","🎧","📞",
+    "🛡️","❤️","✨","🎉","🌟","🌈","💪","🔥"];
+  const[val,setVal]=useState(current||"");
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:2600,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(2px)"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderRadius:14,padding:18,maxWidth:380,width:"100%",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.25)"}}>
+      <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:12,textAlign:"center"}}>🎨 เปลี่ยน emoji</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"8px 12px",background:t.bg,borderRadius:10}}>
+        <span style={{fontSize:11,color:t.tm}}>ปัจจุบัน:</span>
+        <span style={{fontSize:24}}>{current||defaultEmoji}</span>
+        <span style={{flex:1}}/>
+        <span style={{fontSize:11,color:t.tm}}>หรือพิมพ์:</span>
+        <input value={val} onChange={e=>setVal(e.target.value)} maxLength={4} placeholder="🎯" style={{width:50,padding:"6px 8px",border:`1px solid ${t.ibr}`,borderRadius:6,background:t.ib,color:t.text,fontSize:18,textAlign:"center",fontFamily:"inherit"}}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(8, 1fr)",gap:4,marginBottom:14}}>
+        {presets.map(e=>(<button key={e} onClick={()=>{haptic(5);onSelect(e)}} style={{aspectRatio:"1",border:current===e?`2px solid ${t.ac}`:`1px solid ${t.cb}`,borderRadius:6,background:current===e?`${t.ac}15`:t.bg,fontSize:18,cursor:"pointer",WebkitTapHighlightColor:"transparent",padding:0,lineHeight:1}}>{e}</button>))}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <Btn t={t} onClick={onReset}>↶ ค่าเริ่มต้น</Btn>
+        <div style={{flex:1}}/>
+        <Btn t={t} onClick={onClose}>ยกเลิก</Btn>
+        <Btn primary t={t} disabled={!val.trim()} onClick={()=>{haptic(10);onSelect(val.trim())}}>บันทึก</Btn>
+      </div>
+    </div>
+  </div>);
+}
+
 function EnvelopesPage({data,persist,t}){
   const budgets=data.budgets||{};
+  const emojiOverrides=useMemo(()=>data.categoryEmojis||{},[data.categoryEmojis]);
   const tm=mk(td());
-  // Use enriched categories — includes user CFD items + new groups (fixed/variable/saving)
-  const allCats=useMemo(()=>enrichedCategories("expense",data?.cfItems),[data?.cfItems]);
+  // Use enriched categories — includes user CFD items + new groups + custom emojis
+  const allCats=useMemo(()=>enrichedCategories("expense",data?.cfItems,emojiOverrides),[data?.cfItems,emojiOverrides]);
+  const[collapsed,setCollapsed]=useState({});
+  const[emojiEditCat,setEmojiEditCat]=useState(null);
+  const toggleSec=k=>setCollapsed(p=>({...p,[k]:!p[k]}));
+  const setCategoryEmoji=(catKey,emoji)=>{
+    const next={...emojiOverrides};
+    if(emoji)next[catKey]=emoji;else delete next[catKey];
+    persist({...data,categoryEmojis:next});
+  };
   const spent={};data.transactions.filter(tx=>tx.type==="expense"&&mk(tx.date)===tm).forEach(tx=>{spent[tx.category]=(spent[tx.category]||0)+tx.amount});
   const monthInc=data.transactions.filter(tx=>tx.type==="income"&&mk(tx.date)===tm).reduce((s,tx)=>s+tx.amount,0);
   const totalAlloc=allCats.reduce((s,c)=>s+(+budgets[c.v]||0),0);
@@ -933,25 +981,37 @@ function EnvelopesPage({data,persist,t}){
     {sections.map(sec=>{
       const sectionCats=allCats.filter(c=>c.g===sec.key);
       if(sectionCats.length===0)return null;
+      // Sort: allocated > 0 first (by amount desc), then unallocated
+      const sortedCats=[...sectionCats].sort((a,b)=>{
+        const bA=+budgets[a.v]||0;const bB=+budgets[b.v]||0;
+        if(bA>0&&bB===0)return -1;
+        if(bA===0&&bB>0)return 1;
+        if(bA>0)return bB-bA;
+        return 0;
+      });
       const sectionAlloc=sectionCats.reduce((s,c)=>s+(+budgets[c.v]||0),0);
       const sectionSpent=sectionCats.reduce((s,c)=>s+(spent[c.v]||0),0);
       const sectionPct=sectionAlloc>0?(sectionSpent/sectionAlloc*100):0;
+      const allocCount=sectionCats.filter(c=>(+budgets[c.v]||0)>0).length;
+      // Auto-collapse if no allocations + user hasn't manually toggled
+      const isCollapsed=collapsed[sec.key]??(allocCount===0);
       return(<div key={sec.key} style={{background:t.card,border:`1px solid ${sec.color}30`,borderRadius:14,overflow:"hidden"}}>
-        {/* Section header */}
-        <div style={{padding:"12px 14px",background:`linear-gradient(135deg, ${sec.color}18, ${sec.color}05)`,borderBottom:`1px solid ${sec.color}25`,display:"flex",alignItems:"center",gap:10}}>
+        {/* Section header (clickable) */}
+        <button onClick={()=>{haptic(5);toggleSec(sec.key)}} style={{padding:"12px 14px",background:`linear-gradient(135deg, ${sec.color}18, ${sec.color}05)`,borderBottom:isCollapsed?"none":`1px solid ${sec.color}25`,display:"flex",alignItems:"center",gap:10,width:"100%",border:"none",cursor:"pointer",WebkitTapHighlightColor:"transparent",textAlign:"left"}}>
           <div style={{fontSize:24}}>{sec.icon}</div>
-          <div style={{flex:1}}>
+          <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:700,color:sec.color}}>{sec.label}</div>
-            <div style={{fontSize:9,color:t.tm}}>{sec.desc} · {sectionCats.length} หมวด</div>
+            <div style={{fontSize:9,color:t.tm}}>{sec.desc} · {sectionCats.length} หมวด · {allocCount>0?`${allocCount} จัดสรรแล้ว`:"ยังไม่จัดสรร"}</div>
           </div>
-          {sectionAlloc>0&&(<div style={{textAlign:"right"}}>
+          {sectionAlloc>0&&(<div style={{textAlign:"right",marginRight:6}}>
             <div style={{fontSize:13,fontWeight:700,color:sec.color}}>{fB(sectionAlloc)}</div>
-            <div style={{fontSize:9,color:t.tm}}>ใช้ไป {fB(sectionSpent)} ({sectionPct.toFixed(0)}%)</div>
+            <div style={{fontSize:9,color:t.tm}}>ใช้ {fB(sectionSpent)} ({sectionPct.toFixed(0)}%)</div>
           </div>)}
-        </div>
+          <span style={{fontSize:14,color:t.tm,transition:"transform .2s",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}>▼</span>
+        </button>
         {/* Envelopes grid */}
-        <div style={{padding:12,display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
-          {sectionCats.map(c=>{
+        {!isCollapsed&&<div style={{padding:12,display:"grid",gridTemplateColumns:t.m?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+          {sortedCats.map(c=>{
             const b=+budgets[c.v]||0;const s=spent[c.v]||0;const remain=b-s;const pct=b>0?(s/b*100):0;
             const status=b===0?"empty":pct>=100?"over":pct>=80?"low":"ok";
             const col=status==="over"?t.r:status==="low"?t.am:status==="ok"?t.g:t.tm;
@@ -960,7 +1020,10 @@ function EnvelopesPage({data,persist,t}){
               <div style={{position:"absolute",left:0,right:0,bottom:0,height:`${100-fillH}%`,background:`${col}10`,transition:"height .3s",pointerEvents:"none"}}/>
               <div style={{position:"relative"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                  <div style={{width:32,height:32,borderRadius:8,background:`${col}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{c.i}</div>
+                  <button onClick={()=>{haptic(5);setEmojiEditCat(c)}} title="แตะเพื่อเปลี่ยน emoji" style={{width:32,height:32,borderRadius:8,background:`${col}20`,border:"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,cursor:"pointer",WebkitTapHighlightColor:"transparent",position:"relative",padding:0}}>
+                    {c.i}
+                    <span style={{position:"absolute",bottom:-2,right:-2,width:14,height:14,borderRadius:"50%",background:t.card,border:`1px solid ${t.cb}`,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center"}}>✏</span>
+                  </button>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.l}</div>
                   </div>
@@ -983,9 +1046,17 @@ function EnvelopesPage({data,persist,t}){
               </div>
             </div>);
           })}
-        </div>
+        </div>}
       </div>);
     })}
+    {emojiEditCat&&<EmojiPicker
+      current={emojiOverrides[emojiEditCat.v]}
+      defaultEmoji={EC.find(e=>e.v===emojiEditCat.v)?.i||emojiEditCat.i}
+      t={t}
+      onSelect={emoji=>{setCategoryEmoji(emojiEditCat.v,emoji);setEmojiEditCat(null);haptic(15)}}
+      onReset={()=>{setCategoryEmoji(emojiEditCat.v,null);setEmojiEditCat(null);haptic(10)}}
+      onClose={()=>setEmojiEditCat(null)}
+    />}
   </div>);
 }
 
@@ -2264,14 +2335,14 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
       if(minAmt&&tx.amount<+minAmt)return false;
       if(maxAmt&&tx.amount>+maxAmt)return false;
       if(q){
-        const cats=enrichedCategories(tx.type,data?.cfItems);
+        const cats=enrichedCategories(tx.type,data?.cfItems,data?.categoryEmojis);
         const cat=cats.find(c=>c.v===tx.category);
         const hay=`${tx.note||""} ${cat?.l||""} ${cat?.v||""}`.toLowerCase();
         if(!hay.includes(q))return false;
       }
       return true;
     }).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  },[data.transactions,data?.cfItems,filter,catFilter,from,to,minAmt,maxAmt,search]);
+  },[data.transactions,data?.cfItems,data?.categoryEmojis,filter,catFilter,from,to,minAmt,maxAmt,search]);
   const sumInc=filtered.filter(tx=>tx.type==="income").reduce((s,tx)=>s+tx.amount,0);
   const sumExp=filtered.filter(tx=>tx.type==="expense").reduce((s,tx)=>s+tx.amount,0);
   const hasFilter=filter!=="all"||search||catFilter!=="all"||dateRange!=="month"||minAmt||maxAmt;
@@ -2281,7 +2352,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
     if(!filtered.length){window.alert("ไม่มีรายการให้ส่งออก");return;}
     const esc=v=>{const s=String(v??"").replace(/"/g,'""');return /[",\n]/.test(s)?`"${s}"`:s};
     const rows=[["วันที่","ประเภท","หมวดหมู่","จำนวนเงิน","โน้ต"]];
-    filtered.forEach(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category);rows.push([tx.date,tx.type==="income"?"รายรับ":"รายจ่าย",cat?.l||tx.category,tx.amount,tx.note||""])});
+    filtered.forEach(tx=>{const cats=enrichedCategories(tx.type,data?.cfItems,data?.categoryEmojis);const cat=cats.find(c=>c.v===tx.category);rows.push([tx.date,tx.type==="income"?"รายรับ":"รายจ่าย",cat?.l||tx.category,tx.amount,tx.note||""])});
     rows.push([]);
     rows.push(["สรุป",`${filtered.length} รายการ`,"","",""]);
     rows.push(["รายรับรวม","","",sumInc,""]);
@@ -2406,7 +2477,7 @@ function TxnPage({data,stats,onAdd,onEdit,onDel,onBulkDel,t}){
           <span style={{fontSize:11,color:t.ts}}>เลือกทั้งหมด ({filtered.length} รายการ)</span>
         </div>)}
         {filtered.map((tx,i)=>{
-        const isI=tx.type==="income";const cats=enrichedCategories(tx.type,data?.cfItems);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
+        const isI=tx.type==="income";const cats=enrichedCategories(tx.type,data?.cfItems,data?.categoryEmojis);const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
         const checked=selIds.has(tx.id);
         const row=(<div onClick={selMode?()=>toggleSel(tx.id):undefined} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${t.cb}`:"none",cursor:selMode?"pointer":"default",background:selMode&&checked?`${t.ac}10`:"transparent"}}>
           {selMode&&<input type="checkbox" checked={checked} onChange={()=>toggleSel(tx.id)} onClick={e=>e.stopPropagation()} style={{width:16,height:16,accentColor:t.ac,cursor:"pointer",flexShrink:0}}/>}
@@ -4930,7 +5001,7 @@ function RecentTxns({data,t,onMore,onEdit}){
     </div>
     <div style={{display:"flex",flexDirection:"column",gap:1}}>
       {recent.map(tx=>{
-        const cats=enrichedCategories(tx.type,data?.cfItems);
+        const cats=enrichedCategories(tx.type,data?.cfItems,data?.categoryEmojis);
         const cat=cats.find(c=>c.v===tx.category)||cats[cats.length-1];
         const isToday=tx.date===td();
         const isI=tx.type==="income";

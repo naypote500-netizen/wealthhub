@@ -143,21 +143,23 @@ export function generateInsight(data,streak){
  * Returns built-in EC/IC categories + user-added CFD items (those NOT in
  * CF_DEFAULTS, since defaults are already covered conceptually by EC/IC).
  * Custom items get default emoji + g (group) by section. */
-export function enrichedCategories(type,cfItems){
+export function enrichedCategories(type,cfItems,emojiOverrides){
+  const ovr=emojiOverrides||{};
+  const applyOvr=arr=>arr.map(c=>ovr[c.v]?{...c,i:ovr[c.v]}:c);
   if(type==="income"){
     const customInflow=((cfItems?.inflow)||[]).filter(c=>!IC.some(b=>b.v===c.k)&&!CF_DEFAULTS.inflow.some(d=>d.k===c.k));
-    return[...IC,...customInflow.map(c=>({v:c.k,l:c.l,i:"💰",custom:true}))];
+    return applyOvr([...IC,...customInflow.map(c=>({v:c.k,l:c.l,i:"💰",custom:true}))]);
   }
   const isCustom=(c,sec)=>!EC.some(b=>b.v===c.k)&&!CF_DEFAULTS[sec].some(d=>d.k===c.k);
   const customFixed=((cfItems?.fixed)||[]).filter(c=>isCustom(c,"fixed"));
   const customVariable=((cfItems?.variable)||[]).filter(c=>isCustom(c,"variable"));
   const customSaving=((cfItems?.saving)||[]).filter(c=>isCustom(c,"saving"));
-  return[
+  return applyOvr([
     ...EC,
     ...customFixed.map(c=>({v:c.k,l:c.l,i:"🏠",g:"fixed",custom:true})),
     ...customVariable.map(c=>({v:c.k,l:c.l,i:"💸",g:"variable",custom:true})),
     ...customSaving.map(c=>({v:c.k,l:c.l,i:"💰",g:"saving",custom:true})),
-  ];
+  ]);
 }
 
 /* ═══ TXN → CASH FLOW DETAIL (CFD) MAPPER ═══
@@ -525,6 +527,7 @@ export function ld(){
       insights:{...DF.insights,...(d.insights||{})},
       targetAllocation:{...DF.targetAllocation,...(d.targetAllocation||{})},
       assetTrades:d.assetTrades||[],
+      categoryEmojis:{...DF.categoryEmojis,...(d.categoryEmojis||{})},
     };
   }catch{return null}
 }

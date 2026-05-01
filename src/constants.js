@@ -180,6 +180,7 @@ export const DF={
   targetAllocation:{}, // 🎯 {stock_th:30, stock_us:20, crypto:10, ...} sum to 100
   assetTrades:[], // 💰 [{id,assetId,type:"buy"|"sell",units,price,currency,date,note}]
   security:{pinHash:"",autoLockMin:5}, // 🔒 PIN-locked app entry
+  categoryEmojis:{}, // 🎨 user emoji overrides {food:"🍕", rent:"🏡", ...}
   taxYear:{
     year:new Date().getFullYear(),
     salary:0, // monthly gross
