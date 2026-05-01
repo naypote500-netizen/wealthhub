@@ -258,6 +258,91 @@ export function aggregateActualCF(txns,recurringRules=[],cfItems=null){
   return result;
 }
 
+/* ═══ PORTFOLIO HELPERS ═══ */
+
+/* FIFO average cost from trades. Returns {units, avgCost} for an asset.
+ * Sells consume oldest buy lots first. */
+export function computeAvgCostFromTrades(trades){
+  if(!trades||!trades.length)return{units:0,avgCost:0,realizedPL:0};
+  const sorted=[...trades].sort((a,b)=>a.date.localeCompare(b.date));
+  const lots=[]; // [{units, price}]
+  let realizedPL=0;
+  for(const tr of sorted){
+    const u=+tr.units||0;
+    const p=+tr.price||0;
+    if(u<=0)continue;
+    if(tr.type==="buy"){
+      lots.push({units:u,price:p});
+    }else if(tr.type==="sell"){
+      let toSell=u;
+      while(toSell>0&&lots.length>0){
+        const lot=lots[0];
+        const consumed=Math.min(toSell,lot.units);
+        realizedPL+=consumed*(p-lot.price);
+        lot.units-=consumed;
+        toSell-=consumed;
+        if(lot.units<=0.0000001)lots.shift();
+      }
+    }
+  }
+  const totalUnits=lots.reduce((s,l)=>s+l.units,0);
+  const totalCost=lots.reduce((s,l)=>s+l.units*l.price,0);
+  return{
+    units:+totalUnits.toFixed(8),
+    avgCost:totalUnits>0?+(totalCost/totalUnits).toFixed(4):0,
+    realizedPL:+realizedPL.toFixed(2),
+  };
+}
+
+/* Diversification Score 0-100 from allocation array.
+ * Factors: type spread, single-asset concentration, currency mix. */
+export function diversificationScore(allocation){
+  if(!allocation||!allocation.length)return{score:0,issues:[],strengths:[]};
+  const total=allocation.reduce((s,a)=>s+a.value,0);
+  if(total===0)return{score:0,issues:["พอร์ตว่างเปล่า"],strengths:[]};
+  // Asset type spread
+  const types=new Set(allocation.map(a=>a.type));
+  const typeCount=types.size;
+  // Single concentration
+  const max=Math.max(...allocation.map(a=>a.value));
+  const maxPct=(max/total)*100;
+  // Currency mix
+  const byCurrency={};
+  allocation.forEach(a=>{const c=a.currency||"THB";byCurrency[c]=(byCurrency[c]||0)+a.value});
+  const currencies=Object.keys(byCurrency).length;
+  // Crypto concentration
+  const cryptoVal=allocation.filter(a=>a.type==="crypto").reduce((s,a)=>s+a.value,0);
+  const cryptoPct=(cryptoVal/total)*100;
+  // Score components
+  let typeScore=0;
+  if(typeCount>=5)typeScore=30;
+  else if(typeCount>=3)typeScore=20;
+  else if(typeCount>=2)typeScore=10;
+  let concScore=30;
+  if(maxPct>=70)concScore=5;
+  else if(maxPct>=50)concScore=15;
+  else if(maxPct>=30)concScore=25;
+  let curScore=0;
+  if(currencies>=3)curScore=20;
+  else if(currencies===2)curScore=15;
+  else curScore=8;
+  let cryptoScore=20;
+  if(cryptoPct>=40)cryptoScore=5;
+  else if(cryptoPct>=20)cryptoScore=12;
+  const score=Math.min(100,typeScore+concScore+curScore+cryptoScore);
+  // Insights
+  const issues=[];
+  const strengths=[];
+  if(typeCount>=4)strengths.push(`มี ${typeCount} ประเภท asset — กระจายดี`);
+  else issues.push(`มีแค่ ${typeCount} ประเภท asset — กระจายเพิ่มได้`);
+  if(maxPct>=50){const top=allocation.find(a=>a.value===max);issues.push(`${top.name} = ${maxPct.toFixed(0)}% ของพอร์ต — สูงเกินไป`);}
+  else if(maxPct<30)strengths.push("ไม่มี asset ใหญ่เกินไป");
+  if(cryptoPct>=20)issues.push(`Crypto ${cryptoPct.toFixed(0)}% — สูงกว่ามาตรฐาน (<20%)`);
+  if(currencies===1)issues.push("FX: ลงทุนเฉพาะ THB — เพิ่มสกุลอื่นเพื่อกระจายความเสี่ยง");
+  else if(currencies>=2)strengths.push(`${currencies} สกุลเงิน — กระจาย FX risk`);
+  return{score:Math.round(score),issues,strengths,typeCount,maxPct:Math.round(maxPct),cryptoPct:Math.round(cryptoPct),currencies};
+}
+
 /* Today as `YYYY-MM-DD` (timezone-aware: Bangkok = UTC+7) */
 export const td=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
 
@@ -354,6 +439,8 @@ export function ld(){
       cfItems:d.cfItems||null,
       taxYear:{...DF.taxYear,...(d.taxYear||{}),deductions:{...DF.taxYear.deductions,...(d.taxYear?.deductions||{})}},
       insights:{...DF.insights,...(d.insights||{})},
+      targetAllocation:{...DF.targetAllocation,...(d.targetAllocation||{})},
+      assetTrades:d.assetTrades||[],
     };
   }catch{return null}
 }

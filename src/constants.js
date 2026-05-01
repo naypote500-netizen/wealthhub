@@ -177,6 +177,8 @@ export const DF={
   insights:{weeklyDismissed:[]},
   roundup:{enabled:false,roundTo:10,goalId:""}, // 🪙 ปัดยอดขึ้นเข้า goal
   preferences:{focus:[]}, // 🪄 ["expense","invest","saving","tax","debt"]
+  targetAllocation:{}, // 🎯 {stock_th:30, stock_us:20, crypto:10, ...} sum to 100
+  assetTrades:[], // 💰 [{id,assetId,type:"buy"|"sell",units,price,currency,date,note}]
   taxYear:{
     year:new Date().getFullYear(),
     salary:0, // monthly gross

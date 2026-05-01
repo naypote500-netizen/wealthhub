@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, LineChart, Line, Legend, ReferenceLine, LabelList } from "recharts";
 import { L, Dk, Paper, Cream, Linen, PC } from "./theme";
 import { AT, EC, IC, CF_DEFAULTS, NAV, SK, DF, BADGES, BADGE_CATS, STREAK_BOXES, BOX_MILESTONES } from "./constants";
-import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF, enrichedCategories } from "./utils";
+import { uid, fB, fP, td, tdBkk, mk, fm, ld, sv, processRecurring, haptic, calcStreak, addDays, badgesEarned, calcAchievementStats, isoWeekKey, weekRange, summarizeRange, projectEOM, compareCategorySpend, roundupAmount, parseSlip, generateInsight, aggregateActualCF, enrichedCategories, computeAvgCostFromTrades, diversificationScore } from "./utils";
 
 /* ═══ COMPONENTS ═══ */
 function Sidebar({page,setPage,theme,setTheme,t,isMobile,open,onClose,onLogout,userEmail}){
@@ -4243,6 +4243,291 @@ function SpendingComparisonCard({data,t}){
   </div>);
 }
 
+/* ═══ TRADE FORM ═══ Buy/sell trade entry */
+function TradeForm({initial,asset,onSave,onCancel,t}){
+  const[f,set]=useF(initial||{type:"buy",units:"",price:String(asset?.currentPrice||""),date:td(),note:""});
+  const ok=+f.units>0&&+f.price>0;
+  const cost=(+f.units||0)*(+f.price||0);
+  const cur=asset?.currency||"THB";
+  const sym=cur==="USD"?"$":"฿";
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",gap:6}}>{["buy","sell"].map(tp=>(<button key={tp} onClick={()=>set("type",tp)} style={{flex:1,padding:10,border:f.type===tp?"none":`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:600,background:f.type===tp?(tp==="buy"?t.g:t.r):"transparent",color:f.type===tp?"#fff":t.ts}}>{tp==="buy"?"🟢 ซื้อ":"🔴 ขาย"}</button>))}</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Inp label="จำนวนหน่วย" t={t} type="number" step="any" value={f.units} onChange={e=>set("units",e.target.value)}/>
+      <Inp label={`ราคา/หน่วย (${cur})`} t={t} type="number" step="any" value={f.price} onChange={e=>set("price",e.target.value)}/>
+    </div>
+    <Inp label="วันที่" t={t} type="date" value={f.date} onChange={e=>set("date",e.target.value)}/>
+    <Inp label="โน้ต (ไม่บังคับ)" t={t} value={f.note} onChange={e=>set("note",e.target.value)} placeholder="เหตุผล / DCA / Earnings ฯลฯ"/>
+    <div style={{padding:"10px 12px",background:t.bg,borderRadius:8,fontSize:12,color:t.text,display:"flex",justifyContent:"space-between"}}>
+      <span style={{color:t.tm}}>{f.type==="buy"?"ต้นทุนรวม":"รับเข้า"}</span>
+      <b>{sym}{cost.toLocaleString("th-TH",{maximumFractionDigits:2})}</b>
+    </div>
+    <div style={{display:"flex",gap:6}}><Btn primary t={t} disabled={!ok} onClick={()=>{haptic(15);onSave(f)}} style={{flex:1}}>{initial?"💾 บันทึก":"✓ เพิ่ม"}</Btn>{onCancel&&<Btn t={t} onClick={onCancel}>ยกเลิก</Btn>}</div>
+  </div>);
+}
+
+/* ═══ ASSET DETAIL MODAL ═══ Trade log + add/edit/del per asset */
+function AssetDetailModal({asset,trades,t,onAddTrade,onDelTrade,onClose}){
+  const[showForm,setShowForm]=useState(false);
+  if(!asset)return null;
+  const sortedTrades=[...trades].sort((a,b)=>b.date.localeCompare(a.date));
+  const{units:liveUnits,avgCost:liveAvg,realizedPL}=computeAvgCostFromTrades(trades);
+  const cur=asset.currency||"THB";
+  const sym=cur==="USD"?"$":"฿";
+  const totalBuys=trades.filter(t=>t.type==="buy").reduce((s,t)=>s+(+t.units||0)*(+t.price||0),0);
+  const totalSells=trades.filter(t=>t.type==="sell").reduce((s,t)=>s+(+t.units||0)*(+t.price||0),0);
+  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {/* Summary bar */}
+    {trades.length>0&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{padding:10,background:t.bg,borderRadius:8}}><div style={{fontSize:9,color:t.tm}}>ถือปัจจุบัน (FIFO)</div><div style={{fontSize:14,fontWeight:700,color:t.text}}>{liveUnits} @ {sym}{liveAvg}</div></div>
+      <div style={{padding:10,background:t.bg,borderRadius:8}}><div style={{fontSize:9,color:t.tm}}>Realized P&L</div><div style={{fontSize:14,fontWeight:700,color:realizedPL>=0?t.g:t.r}}>{realizedPL>=0?"+":""}{sym}{realizedPL.toLocaleString("th-TH",{maximumFractionDigits:2})}</div></div>
+    </div>)}
+    {/* Add trade button */}
+    {!showForm&&<Btn primary t={t} onClick={()=>setShowForm(true)} style={{width:"100%"}}>+ บันทึกซื้อ-ขาย</Btn>}
+    {showForm&&<div style={{padding:12,border:`1px solid ${t.ac}40`,borderRadius:10,background:`${t.ac}05`}}>
+      <TradeForm asset={asset} t={t} onCancel={()=>setShowForm(false)} onSave={f=>{onAddTrade(f);setShowForm(false)}}/>
+    </div>}
+    {/* Trade list */}
+    <div>
+      <div style={{fontSize:12,fontWeight:600,color:t.text,marginBottom:8}}>📜 ประวัติซื้อ-ขาย ({trades.length})</div>
+      {trades.length===0?<div style={{padding:20,textAlign:"center",color:t.tm,fontSize:11,border:`1px dashed ${t.cb}`,borderRadius:8}}>ยังไม่มีประวัติ — กด "+ บันทึกซื้อ-ขาย" เพื่อเริ่ม<br/><span style={{fontSize:10,opacity:0.7}}>(ตอนนี้ใช้ avg cost ที่กรอกไว้: {asset.units} @ {sym}{asset.avgCost})</span></div>:
+      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>{sortedTrades.map(tr=>(<div key={tr.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:t.bg,borderRadius:8,border:`1px solid ${t.cb}`}}>
+        <div style={{width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:tr.type==="buy"?`${t.g}20`:`${t.r}20`,color:tr.type==="buy"?t.g:t.r}}>{tr.type==="buy"?"🟢":"🔴"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:600}}>{tr.type==="buy"?"ซื้อ":"ขาย"} {tr.units} @ {sym}{tr.price}</div>
+          <div style={{fontSize:9,color:t.tm}}>{new Date(tr.date).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"})}{tr.note?` · ${tr.note}`:""}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:12,fontWeight:600,color:tr.type==="buy"?t.r:t.g}}>{tr.type==="buy"?"-":"+"}{sym}{((+tr.units||0)*(+tr.price||0)).toLocaleString("th-TH",{maximumFractionDigits:0})}</div>
+        </div>
+        <button onClick={()=>{if(window.confirm("ลบรายการนี้?"))onDelTrade(tr.id)}} style={{fontSize:11,padding:"3px 7px",border:`1px solid ${t.r}40`,borderRadius:5,background:"transparent",cursor:"pointer",color:t.r}}>✕</button>
+      </div>))}</div>}
+    </div>
+    {trades.length>0&&(<div style={{padding:10,background:t.bg,borderRadius:8,fontSize:11,color:t.tm,lineHeight:1.6}}>
+      💰 ซื้อรวม {trades.filter(t=>t.type==="buy").length} ครั้ง · {sym}{totalBuys.toLocaleString("th-TH",{maximumFractionDigits:0})}<br/>
+      💵 ขายรวม {trades.filter(t=>t.type==="sell").length} ครั้ง · {sym}{totalSells.toLocaleString("th-TH",{maximumFractionDigits:0})}
+    </div>)}
+    <Btn t={t} onClick={onClose}>ปิด</Btn>
+  </div>);
+}
+
+/* ═══ PORTFOLIO TREEMAP ═══
+ * CSS-flex treemap. Boxes sized by value, colored by P&L%.
+ * Layout: row of variable-width boxes (proportional to value).
+ * For >5 assets, top 5 + "อื่นๆ" combined. */
+function PortfolioTreemap({allocation,t,onAssetClick}){
+  if(!allocation?.length)return null;
+  const sorted=[...allocation].sort((a,b)=>b.value-a.value);
+  const total=sorted.reduce((s,a)=>s+a.value,0);
+  if(total===0)return null;
+  // Top 8 + grouping
+  const items=sorted.slice(0,8);
+  const others=sorted.slice(8);
+  if(others.length>0){
+    const otherVal=others.reduce((s,a)=>s+a.value,0);
+    const otherPL=others.reduce((s,a)=>s+a.pl,0);
+    const otherCost=others.reduce((s,a)=>s+a.cost,0);
+    items.push({id:"_others",name:`+${others.length} อื่นๆ`,value:otherVal,pl:otherPL,cost:otherCost,_grouped:true});
+  }
+  // Color by P&L%
+  const tileColor=a=>{
+    const pct=a.cost>0?(a.pl/a.cost)*100:0;
+    if(pct>=10)return"#10b981";
+    if(pct>=3)return"#34d399";
+    if(pct>=-3)return"#94a3b8";
+    if(pct>=-10)return"#f87171";
+    return"#dc2626";
+  };
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+      <div style={{fontSize:13,fontWeight:600}}>🗺️ Performance Map</div>
+      <div style={{fontSize:9,color:t.tm}}>ขนาด = มูลค่า · สี = ผลตอบแทน</div>
+    </div>
+    <div style={{display:"flex",gap:3,height:140,borderRadius:8,overflow:"hidden"}}>
+      {items.map(a=>{
+        const pct=(a.value/total)*100;
+        const plPct=a.cost>0?(a.pl/a.cost)*100:0;
+        const c=tileColor(a);
+        const isClickable=!a._grouped&&onAssetClick;
+        return(<div key={a.id} onClick={isClickable?()=>onAssetClick(a):undefined} style={{flex:`${pct} 1 0`,minWidth:38,background:c,padding:"8px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:isClickable?"pointer":"default",overflow:"hidden",transition:"opacity .15s"}} onMouseEnter={isClickable?e=>{e.currentTarget.style.opacity="0.85"}:undefined} onMouseLeave={isClickable?e=>{e.currentTarget.style.opacity="1"}:undefined}>
+          <div style={{fontSize:10,color:"#fff",fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.name}</div>
+          <div>
+            <div style={{fontSize:11,color:"#fff",fontWeight:700}}>{plPct>=0?"+":""}{plPct.toFixed(1)}%</div>
+            <div style={{fontSize:8,color:"rgba(255,255,255,0.8)"}}>{pct.toFixed(0)}%</div>
+          </div>
+        </div>);
+      })}
+    </div>
+    <div style={{display:"flex",justifyContent:"center",gap:10,marginTop:8,fontSize:9,color:t.tm,flexWrap:"wrap"}}>
+      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#10b981",borderRadius:2}}/>+10%↑</span>
+      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#34d399",borderRadius:2}}/>+3-10%</span>
+      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#94a3b8",borderRadius:2}}/>±3%</span>
+      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#f87171",borderRadius:2}}/>-3-10%</span>
+      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#dc2626",borderRadius:2}}/>-10%↓</span>
+    </div>
+  </div>);
+}
+
+/* ═══ BEST/WORST PERFORMER ═══ */
+function BestWorstCard({allocation,t}){
+  if(!allocation?.length||allocation.length<2)return null;
+  const withPct=allocation.filter(a=>a.cost>0).map(a=>({...a,plPct:(a.pl/a.cost)*100}));
+  if(withPct.length<2)return null;
+  const sorted=[...withPct].sort((a,b)=>b.plPct-a.plPct);
+  const best=sorted[0];
+  const worst=sorted[sorted.length-1];
+  return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+    <div style={{background:`linear-gradient(135deg, ${t.g}18, ${t.g}05)`,border:`1px solid ${t.g}40`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><span style={{fontSize:18}}>🏆</span><span style={{fontSize:10,fontWeight:700,color:t.g,letterSpacing:0.4}}>BEST</span></div>
+      <div style={{fontSize:13,fontWeight:700,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{best.name}</div>
+      <div style={{fontSize:18,fontWeight:800,color:t.g,marginTop:2}}>+{best.plPct.toFixed(1)}%</div>
+      <div style={{fontSize:10,color:t.tm,marginTop:2}}>+{fB(best.pl)}</div>
+    </div>
+    <div style={{background:`linear-gradient(135deg, ${t.r}18, ${t.r}05)`,border:`1px solid ${t.r}40`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><span style={{fontSize:18}}>📉</span><span style={{fontSize:10,fontWeight:700,color:t.r,letterSpacing:0.4}}>WORST</span></div>
+      <div style={{fontSize:13,fontWeight:700,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{worst.name}</div>
+      <div style={{fontSize:18,fontWeight:800,color:worst.plPct>=0?t.g:t.r,marginTop:2}}>{worst.plPct>=0?"+":""}{worst.plPct.toFixed(1)}%</div>
+      <div style={{fontSize:10,color:t.tm,marginTop:2}}>{worst.pl>=0?"+":""}{fB(worst.pl)}</div>
+    </div>
+  </div>);
+}
+
+/* ═══ DIVERSIFICATION SCORE ═══ */
+function DiversificationCard({allocation,t}){
+  const result=useMemo(()=>diversificationScore(allocation),[allocation]);
+  if(!allocation?.length)return null;
+  const{score,issues,strengths}=result;
+  const tier=score>=80?{l:"ดีเยี่ยม",c:t.g,e:"💎"}:score>=60?{l:"ดี",c:t.tl,e:"👍"}:score>=40?{l:"ปานกลาง",c:t.am,e:"⚠️"}:{l:"ต้องปรับปรุง",c:t.r,e:"🚨"};
+  const dash=Math.min(100,score)/100*314;
+  return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14,display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+    <div style={{position:"relative",width:120,height:120,flexShrink:0}}>
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="50" stroke={t.cb} strokeWidth="10" fill="none"/>
+        <circle cx="60" cy="60" r="50" stroke={tier.c} strokeWidth="10" fill="none" strokeLinecap="round" strokeDasharray={`${dash} 314`} transform="rotate(-90 60 60)"/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <div style={{fontSize:11,marginBottom:2}}>{tier.e}</div>
+        <div style={{fontSize:24,fontWeight:800,color:tier.c,lineHeight:1}}>{score}</div>
+        <div style={{fontSize:9,color:t.tm,marginTop:1}}>/ 100</div>
+      </div>
+    </div>
+    <div style={{flex:1,minWidth:200}}>
+      <div style={{fontSize:11,color:t.tm,fontWeight:600}}>🌐 คะแนนการกระจายความเสี่ยง</div>
+      <div style={{fontSize:18,fontWeight:700,color:tier.c,marginTop:2}}>{tier.l}</div>
+      {strengths.length>0&&<div style={{fontSize:10,color:t.g,marginTop:8,lineHeight:1.5}}>{strengths.slice(0,2).map((s,i)=>(<div key={i}>✓ {s}</div>))}</div>}
+      {issues.length>0&&<div style={{fontSize:10,color:t.r,marginTop:6,lineHeight:1.5}}>{issues.slice(0,2).map((s,i)=>(<div key={i}>⚠ {s}</div>))}</div>}
+    </div>
+  </div>);
+}
+
+/* ═══ TARGET ALLOCATION + REBALANCE ═══ */
+const ASSET_TYPE_COLORS={stock_th:"#3B82F6",stock_us:"#8B5CF6",crypto:"#F59E0B",gold:"#FCD34D",fund:"#10B981",bond:"#06B6D4",property:"#A78BFA",other:"#94A3B8"};
+function TargetAllocationCard({data,allocation,persist,t}){
+  const target=data.targetAllocation||{};
+  const totalValue=allocation.reduce((s,a)=>s+a.value,0);
+  // Actual % by type
+  const actualByType=useMemo(()=>{
+    const m={};
+    allocation.forEach(a=>{m[a.type]=(m[a.type]||0)+a.value});
+    const result={};
+    Object.keys(m).forEach(k=>{result[k]=totalValue>0?(m[k]/totalValue)*100:0});
+    return result;
+  },[allocation,totalValue]);
+  // All types: union of target + actual
+  const allTypes=[...new Set([...Object.keys(target),...Object.keys(actualByType)])];
+  const[edit,setEdit]=useState(false);
+  const[draftTarget,setDraftTarget]=useState({...target});
+  const draftTotal=Object.values(draftTarget).reduce((s,v)=>s+(+v||0),0);
+  const startEdit=()=>{setDraftTarget({...target});setEdit(true)};
+  const saveEdit=()=>{
+    const cleaned={};
+    Object.entries(draftTarget).forEach(([k,v])=>{const n=+v||0;if(n>0)cleaned[k]=n});
+    persist({...data,targetAllocation:cleaned});
+    setEdit(false);haptic(15);
+  };
+  // Rebalance plan: difference between target and actual in $
+  const rebalancePlan=allTypes.filter(k=>(target[k]||0)>0).map(k=>{
+    const targetPct=target[k]||0;
+    const actualPct=actualByType[k]||0;
+    const targetVal=(targetPct/100)*totalValue;
+    const actualVal=(actualPct/100)*totalValue;
+    const diff=targetVal-actualVal;
+    return{type:k,targetPct,actualPct,diff};
+  }).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+  const hasMajorDrift=rebalancePlan.some(r=>Math.abs(r.targetPct-r.actualPct)>=5);
+  if(Object.keys(target).length===0&&!edit){
+    return(<div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:30}}>🎯</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600,color:t.text}}>ตั้งเป้าหมาย Asset Allocation</div>
+          <div style={{fontSize:11,color:t.tm,marginTop:2,lineHeight:1.4}}>กำหนดสัดส่วนพอร์ตที่อยากให้เป็น เช่น หุ้น 60% / Crypto 10% / ทอง 10% / Bond 20% — ระบบจะเตือนเมื่อสัดส่วนเบี้ยว</div>
+        </div>
+        <Btn primary t={t} onClick={startEdit}>+ ตั้งเป้า</Btn>
+      </div>
+    </div>);
+  }
+  if(edit){
+    return(<div style={{background:t.card,border:`1px solid ${t.ac}40`,borderRadius:12,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:700,color:t.text}}>🎯 ตั้งเป้าหมาย Asset Allocation</div>
+        <div style={{fontSize:11,fontWeight:600,color:draftTotal===100?t.g:draftTotal>100?t.r:t.am}}>{draftTotal.toFixed(0)}/100%</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {AT.map(typ=>{
+          const v=draftTarget[typ.v]||"";
+          return(<div key={typ.v} style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:18,width:24,textAlign:"center"}}>{typ.i}</span>
+            <span style={{flex:1,fontSize:12,color:t.text}}>{typ.l}</span>
+            <input type="number" min="0" max="100" value={v} onChange={e=>setDraftTarget(p=>({...p,[typ.v]:e.target.value}))} style={{width:70,padding:"6px 8px",border:`1px solid ${t.ibr}`,borderRadius:6,background:t.ib,color:t.text,fontSize:12,textAlign:"right"}}/>
+            <span style={{fontSize:11,color:t.tm,width:14}}>%</span>
+          </div>);
+        })}
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <Btn t={t} onClick={()=>setEdit(false)} style={{flex:1}}>ยกเลิก</Btn>
+        <Btn primary t={t} disabled={draftTotal!==100} onClick={saveEdit} style={{flex:2}}>{draftTotal===100?"✓ บันทึก":draftTotal>100?"เกิน 100%":"ต้องครบ 100%"}</Btn>
+      </div>
+    </div>);
+  }
+  return(<div style={{background:t.card,border:`1px solid ${hasMajorDrift?t.am+"60":t.cb}`,borderRadius:12,padding:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{fontSize:13,fontWeight:600,color:t.text}}>🎯 Asset Allocation Target</div>
+      <button onClick={startEdit} style={{fontSize:11,color:t.ac,background:"none",border:"none",cursor:"pointer"}}>✏ แก้ไข</button>
+    </div>
+    {hasMajorDrift&&<div style={{padding:"6px 10px",background:`${t.am}15`,border:`1px solid ${t.am}40`,borderRadius:8,fontSize:11,color:t.am,fontWeight:600,marginBottom:10}}>⚠️ พอร์ตของคุณเบี้ยวจากเป้า — พิจารณา rebalance</div>}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {rebalancePlan.map(r=>{
+        const typ=AT.find(t2=>t2.v===r.type)||{i:"📦",l:r.type};
+        const drift=r.actualPct-r.targetPct;
+        const driftColor=Math.abs(drift)<5?t.tm:Math.abs(drift)<10?t.am:t.r;
+        const c=ASSET_TYPE_COLORS[r.type]||t.tm;
+        return(<div key={r.type}>
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:11,marginBottom:3}}>
+            <span style={{fontSize:14}}>{typ.i}</span>
+            <span style={{flex:1,fontWeight:500}}>{typ.l}</span>
+            <span style={{color:t.tm,fontSize:10}}>เป้า {r.targetPct.toFixed(0)}% • จริง {r.actualPct.toFixed(1)}%</span>
+            <span style={{color:driftColor,fontWeight:600,fontSize:10,minWidth:50,textAlign:"right"}}>{drift>=0?"+":""}{drift.toFixed(1)}%</span>
+          </div>
+          <div style={{position:"relative",height:8,background:t.bg,borderRadius:4,overflow:"hidden"}}>
+            <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${Math.min(100,r.actualPct)}%`,background:c,opacity:0.6}}/>
+            <div style={{position:"absolute",left:`${Math.min(100,r.targetPct)}%`,top:-2,bottom:-2,width:2,background:t.text}}/>
+          </div>
+        </div>);
+      })}
+    </div>
+    {hasMajorDrift&&(<div style={{marginTop:12,paddingTop:10,borderTop:`1px dashed ${t.cb}`}}>
+      <div style={{fontSize:11,fontWeight:600,color:t.text,marginBottom:6}}>🔄 แผน Rebalance</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:11}}>
+        {rebalancePlan.filter(r=>Math.abs(r.diff)>=totalValue*0.02).slice(0,5).map(r=>{const typ=AT.find(t2=>t2.v===r.type)||{l:r.type};return(<div key={r.type} style={{display:"flex",justifyContent:"space-between"}}>
+          <span style={{color:t.text}}>{typ.l}</span>
+          <span style={{color:r.diff>0?t.g:t.r,fontWeight:600}}>{r.diff>0?`เพิ่ม ${fB(r.diff)}`:`ลด ${fB(Math.abs(r.diff))}`}</span>
+        </div>)})}
+      </div>
+    </div>)}
+  </div>);
+}
+
 /* ═══ QUICK ACTION BUTTON ═══ Big tap target with icon + label */
 function QuickAction({icon,label,color,onClick}){
   return(<button onClick={()=>{haptic(5);onClick()}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 4px",border:`1px solid ${color}30`,borderRadius:12,background:`linear-gradient(135deg, ${color}12, ${color}05)`,cursor:"pointer",WebkitTapHighlightColor:"transparent",minHeight:72}}>
@@ -4616,7 +4901,32 @@ function WealthHub(){
 
   const addAsset=f=>{haptic(15);persist({...data,assets:[...data.assets,{...f,id:uid(),units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}]});setModal(null)};
   const updateAsset=(id,f)=>{haptic(15);persist({...data,assets:data.assets.map(a=>a.id===id?{...a,...f,units:+f.units,avgCost:+f.avgCost,currentPrice:+f.currentPrice}:a)});setModal(null)};
-  const delAsset=id=>{const a=data.assets.find(x=>x.id===id);deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id)}))};
+  const delAsset=id=>{const a=data.assets.find(x=>x.id===id);deleteWithUndo(a?.name,d=>({...d,assets:d.assets.filter(x=>x.id!==id),assetTrades:(d.assetTrades||[]).filter(tr=>tr.assetId!==id)}))};
+  // 💰 Trade log: add/del + auto-sync asset.units & asset.avgCost from FIFO
+  const syncAssetFromTrades=(assetId,nextTrades,currentData)=>{
+    const result=computeAvgCostFromTrades(nextTrades.filter(tr=>tr.assetId===assetId));
+    return currentData.assets.map(a=>{
+      if(a.id!==assetId)return a;
+      // Only override if there are trades — keep manual entry as fallback
+      const hasTrades=nextTrades.some(tr=>tr.assetId===assetId);
+      return hasTrades?{...a,units:result.units,avgCost:result.avgCost}:a;
+    });
+  };
+  const addAssetTrade=(assetId,f)=>{
+    haptic(15);
+    const trade={id:uid(),assetId,type:f.type,units:+f.units,price:+f.price,date:f.date,note:f.note||""};
+    const nextTrades=[...(data.assetTrades||[]),trade];
+    const nextAssets=syncAssetFromTrades(assetId,nextTrades,data);
+    persist({...data,assetTrades:nextTrades,assets:nextAssets});
+  };
+  const delAssetTrade=tradeId=>{
+    const tr=(data.assetTrades||[]).find(x=>x.id===tradeId);
+    if(!tr)return;
+    haptic(10);
+    const nextTrades=(data.assetTrades||[]).filter(x=>x.id!==tradeId);
+    const nextAssets=syncAssetFromTrades(tr.assetId,nextTrades,data);
+    persist({...data,assetTrades:nextTrades,assets:nextAssets});
+  };
   // Goal auto-link: income with goalId → adds to saved; expense with goalId → subtracts from saved
   const goalDelta=(f,sign=1)=>{
     if(!f.goalId)return null;
@@ -4912,8 +5222,13 @@ function WealthHub(){
           {priceRefresh.msg&&<span style={{fontSize:11,color:t.g,padding:"4px 10px",background:`${t.g}15`,borderRadius:6}}>✅ {priceRefresh.msg}</span>}
           {priceRefresh.err&&<span style={{fontSize:11,color:t.r,padding:"4px 10px",background:`${t.r}15`,borderRadius:6}}>⚠️ {priceRefresh.err}</span>}
         </div>)}
-        {data.assets.length===0?<Empty icon="📊" title="ยังไม่มีสินทรัพย์" sub="เพิ่มหุ้น กองทุน คริปโต" action="+ เพิ่ม" onAction={()=>setModal({type:"addAsset"})} t={t}/>:(
-          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>)}
+        {data.assets.length===0?<Empty icon="📊" title="ยังไม่มีสินทรัพย์" sub="เพิ่มหุ้น กองทุน คริปโต" action="+ เพิ่ม" onAction={()=>setModal({type:"addAsset"})} t={t}/>:(<>
+          <BestWorstCard allocation={stats.allocation} t={t}/>
+          <PortfolioTreemap allocation={stats.allocation} t={t} onAssetClick={a=>setModal({type:"assetDetail",asset:a})}/>
+          <DiversificationCard allocation={stats.allocation} t={t}/>
+          <TargetAllocationCard data={data} allocation={stats.allocation} persist={persist} t={t}/>
+          <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:640}}><thead><tr style={{borderBottom:`1px solid ${t.cb}`}}>{["สินทรัพย์","สกุล","จำนวน","ต้นทุน","ราคา","มูลค่า(฿)","P&L","%",""].map((h,i)=>(<th key={i} style={{padding:"10px",textAlign:"left",fontSize:10,color:t.tm,fontWeight:500,background:t.thBg}}>{h}</th>))}</tr></thead><tbody>{stats.allocation.map(a=>{const tp2=AT.find(at=>at.v===a.type)||AT[7];const cur=a.currency||"THB";const sym=cur==="USD"?"$":"฿";const tradeCount=(data.assetTrades||[]).filter(tr=>tr.assetId===a.id).length;return(<tr key={a.id} style={{borderBottom:`1px solid ${t.cb}`}}><td style={{padding:10,fontWeight:500}}>{tp2.i} {a.name}{tradeCount>0&&<span title={`${tradeCount} ธุรกรรม`} style={{marginLeft:6,fontSize:9,color:t.ac,background:`${t.ac}15`,padding:"1px 5px",borderRadius:3}}>📜{tradeCount}</span>}</td><td style={{padding:10}}><Badge color={cur==="USD"?t.ac:t.tl}>{cur}</Badge></td><td style={{padding:10}}>{a.units}</td><td style={{padding:10}}>{sym}{a.avgCost}</td><td style={{padding:10}}>{sym}{a.currentPrice}</td><td style={{padding:10,fontWeight:500}}>{fB(a.value)}</td><td style={{padding:10}}><Badge color={a.pl>=0?t.g:t.r}>{a.pl>=0?"▲":"▼"}{fB(a.pl)}</Badge></td><td style={{padding:10}}>{Math.round(a.pct)}%</td><td style={{padding:10}}><div style={{display:"flex",gap:3}}><button onClick={()=>setModal({type:"assetDetail",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.ac}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ac}} title="ประวัติซื้อ-ขาย">📜</button><button onClick={()=>setModal({type:"editAsset",asset:a})} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.cb}`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.ts}}>แก้ไข</button><button onClick={()=>{if(window.confirm(`ลบ ${a.name}?\n(ประวัติซื้อ-ขายของ asset นี้จะถูกลบด้วย)`))delAsset(a.id)}} style={{fontSize:10,padding:"2px 6px",border:`1px solid ${t.r}40`,borderRadius:3,background:"transparent",cursor:"pointer",color:t.r}}>ลบ</button></div></td></tr>)})}</tbody></table></div>
+        </>)}
       </div>)}
 
       {page==="txn"&&<TxnPage data={data} stats={stats} onAdd={()=>setModal({type:"addTxn"})} onEdit={tx=>setModal({type:"editTxn",txn:tx})} onDel={delTxn} onBulkDel={bulkDelTxn} t={t}/>}
@@ -4979,6 +5294,7 @@ function WealthHub(){
     </div>
 
     <Modal open={modal?.type==="addAsset"||modal?.type==="editAsset"} onClose={()=>setModal(null)} title={modal?.type==="editAsset"?"แก้ไข":"เพิ่มสินทรัพย์"} t={t}><AssetForm initial={modal?.asset} onSave={f=>modal?.type==="editAsset"?updateAsset(modal.asset.id,f):addAsset(f)} onCancel={()=>setModal(null)} t={t} rate={rate}/></Modal>
+    <Modal open={modal?.type==="assetDetail"} onClose={()=>setModal(null)} title={`📜 ${modal?.asset?.name||"สินทรัพย์"}`} t={t}>{modal?.asset&&<AssetDetailModal asset={data.assets.find(a=>a.id===modal.asset.id)||modal.asset} trades={(data.assetTrades||[]).filter(tr=>tr.assetId===modal.asset.id)} t={t} onAddTrade={f=>addAssetTrade(modal.asset.id,f)} onDelTrade={delAssetTrade} onClose={()=>setModal(null)}/>}</Modal>
     <Modal open={modal?.type==="addTxn"} onClose={()=>setModal(null)} title="บันทึกรายรับ/รายจ่าย" t={t}><TxnForm onSave={addTxn} onCancel={()=>setModal(null)} t={t} initialDate={modal?.date} initialType={modal?.txnType} data={data}/></Modal>
     <Modal open={modal?.type==="editTxn"} onClose={()=>setModal(null)} title="✏️ แก้ไขรายการ" t={t}>{modal?.txn&&<TxnForm onSave={f=>updateTxn(modal.txn.id,f)} onCancel={()=>setModal(null)} t={t} initial={modal.txn} data={data}/>}</Modal>
     <Modal open={modal?.type==="addGoal"||modal?.type==="editGoal"} onClose={()=>setModal(null)} title={modal?.type==="editGoal"?"แก้ไข":"ตั้งเป้าหมาย"} t={t}><GoalForm initial={modal?.goal} onSave={f=>modal?.type==="editGoal"?updateGoal(modal.goal.id,f):addGoal(f)} onCancel={()=>setModal(null)} t={t}/></Modal>
