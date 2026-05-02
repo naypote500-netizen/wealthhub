@@ -260,6 +260,55 @@ export function aggregateActualCF(txns,recurringRules=[],cfItems=null){
   return result;
 }
 
+/* ═══ LOCAL NOTIFICATIONS ═══
+ * Browser-native notifications. Works while tab open or PWA installed.
+ * No backend needed — PWA service worker takes over when installed. */
+export function canNotify(){return typeof window!=="undefined"&&"Notification" in window}
+export function notifPermission(){return canNotify()?Notification.permission:"unsupported"}
+export async function requestNotifPermission(){
+  if(!canNotify())return "unsupported";
+  if(Notification.permission==="granted")return "granted";
+  try{return await Notification.requestPermission()}catch{return "denied"}
+}
+export function sendNotification(title,opts={}){
+  if(!canNotify()||Notification.permission!=="granted")return false;
+  try{
+    new Notification(title,{
+      icon:"/logo192.png",
+      badge:"/logo192.png",
+      ...opts,
+    });
+    return true;
+  }catch(e){console.error("[notify]",e);return false}
+}
+/* Daily checks: streak risk, bills due tomorrow, anomalies pending */
+export function checkPendingNotifs(data,streak){
+  if(!canNotify()||Notification.permission!=="granted")return[];
+  const out=[];
+  const today=td();
+  const hr=new Date().getHours();
+  // 1. Streak risk (after 18:00 if not logged today + has streak)
+  if(streak?.current>0&&!streak?.hasToday&&hr>=18){
+    out.push({key:`streak-risk-${today}`,title:"🔥 อย่าให้ Streak หาย!",body:`Streak ${streak.current} วันของคุณกำลังจะหายตอนเที่ยงคืน — บันทึกรายการสักนิด`});
+  }
+  // 2. Subscription due today
+  const dayNum=new Date().getDate();
+  (data?.recurring||[]).filter(r=>r.active&&r.type==="expense"&&Math.min(+r.dayOfMonth||1,28)===dayNum).forEach(r=>{
+    out.push({key:`sub-${r.id}-${today}`,title:`⏰ ${r.name} ตัดวันนี้`,body:`฿${(+r.amount||0).toLocaleString()} จะถูกหักจากบัญชีของคุณ`});
+  });
+  // 3. Goal close to deadline (within 7 days, not complete)
+  (data?.goals||[]).forEach(g=>{
+    if(!g.deadline)return;
+    if((+g.saved||0)>=(+g.target||0))return;
+    const daysLeft=Math.ceil((new Date(g.deadline+"T00:00:00")-new Date(today+"T00:00:00"))/86400000);
+    if(daysLeft>0&&daysLeft<=7){
+      const remain=(+g.target||0)-(+g.saved||0);
+      out.push({key:`goal-${g.id}-${today}`,title:`🎯 ${g.name} — เหลือ ${daysLeft} วัน`,body:`เหลือ ฿${Math.round(remain).toLocaleString()} ที่ต้องออม`});
+    }
+  });
+  return out;
+}
+
 /* ═══ PIN LOCK ═══
  * Per-device hash stored in localStorage (key: wh-pin-hash).
  * Not synced to Supabase — security tied to the device. */
